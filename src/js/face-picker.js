@@ -200,7 +200,9 @@ async function applyFace(p, k) {
     const main = npc === o.speaker;
     const ap = (o.also_present || []).find(x => x.name === npc) || {};
     const kk = k || castFor(main ? { ...speakerOf(o), name: npc } : presentOf({ ...ap, name: npc }));
-    const im = kk ? pickEmotion(kk, normEmo(main ? o.emotion : ap.emotion), main ? o.speaker_look : []) : null;
+    const im = kk
+      ? pickEmotion(kk, normEmo(main ? o.emotion : ap.emotion), main ? o.speaker_look : [], (main ? o : ap).situation)
+      : null;
     if (!Array.isArray(t.img.chars)) t.img.chars = t.img.char ? [{ id: t.img.char, npc: o.speaker || '' }] : [];
     const e = t.img.chars.find(c => c.npc === npc);
     if (e) {

@@ -8,7 +8,7 @@ import { platform } from './db.js';
 import { NEW_SAVES, turnStore } from './turn-store.js';
 import { app, currentRun, exclusive } from './app.js';
 import { critOf, rollGrade, rule } from './rules.js';
-import { aliasOut } from './people.js';
+import { aliasOut, lastStoryReply } from './people.js';
 import { cueDeath, cueDoom, cueFanfare, cueItem, cueQuest, cueRealm, cueReveal, cueSkill } from './sound.js';
 import { ensureSample } from './boot.js';
 import { imgUrl, pickEmotion } from './images.js';
@@ -22,9 +22,10 @@ import { applyOut } from './apply.js';
 import { callNarrator, peekReply, pl, plLabel } from './prompt.js';
 import { applyErratum, upholdObjection } from './reroll.js';
 import { maybeSummarize } from './summaries.js';
+import { extMask } from './world-ext.js';
 
 function offeredChoices() {
-  const lastAi = [...app.turns].reverse().find(t => t.kind === 'ai' && t.out && !t.out.judge);
+  const lastAi = lastStoryReply();
   return (lastAi && lastAi.out.choices) || [];
 }
 function makeRoll(text) {
@@ -288,7 +289,7 @@ function streamedReply(turn, cmd) {
     if (!document.getElementById('livePrev')) return; // the live box is not on screen
     const f = peekReply(text);
     if (!screen && !turn.preview && f.sceneReady) {
-      turn.preview = pickPreview(f);
+      turn.preview = pickPreview(f, turn);
       turn.previewNpc = String(f.speaker || '');
     }
     showLiveReply(turn, f);
@@ -296,12 +297,14 @@ function streamedReply(turn, cmd) {
 }
 // The banner and face a streaming reply asks for. A speaker who still needs a face gets an AI pick started now; it is
 // used at the end of this turn if it is done, otherwise from their next appearance.
-function pickPreview(f) {
+function pickPreview(f, turn) {
   const img = {};
   const place = resolveScene(f.scene, f.time || app.state.clock.time, app.state.clock.place || '');
   if (place) img.scene = pick(place).id;
   const person = presentOf({ ...f, name: f.speaker }); // peekReply names the speaker's fields without the speaker_ prefix
   if (!person.name || f.hidden) return img;
+  // the prompt offered open roles: a newcomer's speaker_cast may still be on its way, so their face waits for the reply
+  if (turn.openRoles && !app.state.cast[person.name]) return img;
   if (aiWillPick(person)) {
     startAiPick(person);
     return img;
@@ -431,7 +434,7 @@ function maskReply(out, cmd, turn) {
     out.level_ups = [];
     out.evolve_skills = [];
     out.add_skills = [];
-    const prevAi = [...app.turns].reverse().find(t => t.kind === 'ai' && t.out && !t.out.judge);
+    const prevAi = lastStoryReply();
     out.choices = prevAi ? prevAi.out.choices || [] : [];
   }
   if (cmdIs(cmd, 'screen')) {
@@ -446,7 +449,7 @@ function maskReply(out, cmd, turn) {
     out.remove_skills = [];
     out.title = null;
     out.dead = false;
-    out.murim = null;
+    extMask(out);
     out.money_unit = null;
     if (out.clock) out.clock.days_passed = 0;
     if (out.memory) out.memory = { lore: out.memory.lore || [] };

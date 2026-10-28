@@ -12,7 +12,7 @@ window.claude={use:async(n)=>{
    f.json=async(p,o)=>{ window.__lastPrompt=p;
      return {admin:'',narration:'객잔에서 검객이 당신을 본다.',system:[],choices:['인사한다','무시한다'],stat_changes:{hp:-1},
        clock:{date:'대명력 31년 3월 15일',time:'13:00',weather:'비',place:'낙양 객잔',days_passed:400},
-       murim:{realm_up:true,neigong:5,alias:'비객',arts:{'검법':'매화검법'}},
+       ladder_up:true,standing:{epithet:'비객'},murim:{neigong:5,arts:{'검법':'매화검법'}},
        scene:'inn_night',speaker:'백리운',speaker_gender:'male',speaker_role:'검객',emotion:'smile',memory:{},dead:false};};
    return f;}
  return null;}};
@@ -27,14 +27,14 @@ test('smoke2', async ({ game }) => {
   await startLife(pg, { world: 'murim', dice: false });
   const s0 = JSON.parse(
     await pg.evaluate(
-      'JSON.stringify({murim:DR.app.state.murim,day:DR.app.state.clock.day,age:DR.app.state.stats.age,lim:DR.LIMITS.move,top:DR.REALMS.length-1})',
+      'JSON.stringify({murim:DR.app.state.murim,ladder:DR.app.state.ladder,day:DR.app.state.clock.day,age:DR.app.state.stats.age,lim:DR.LIMITS.move,top:DR.REALMS.length-1})',
     ),
   );
   await pg.fill('#input', '객잔에 들어간다');
   await pg.press('#input', 'Enter');
   await pg.waitForTimeout(500);
   let r = await pg.evaluate(
-    'JSON.stringify({cast:DR.app.state.cast,murim:DR.app.state.murim,clock:DR.app.state.clock,age:DR.app.state.stats.age,lastImg:DR.app.turns[DR.app.turns.length-1].img})',
+    'JSON.stringify({cast:DR.app.state.cast,murim:DR.app.state.murim,ladder:DR.app.state.ladder,standing:DR.app.state.standing,clock:DR.app.state.clock,age:DR.app.state.stats.age,lastImg:DR.app.turns[DR.app.turns.length-1].img})',
   );
   console.log(r);
   r = JSON.parse(r);
@@ -44,10 +44,10 @@ test('smoke2', async ({ game }) => {
   check(errs, 'the speaker 백리운 gets the male face', same(r.cast, { 백리운: 'male1' }));
   check(
     errs,
-    'murim: one realm step, +5 years of neigong, alias and art recorded',
-    M.realm === Math.min(M0.realm + 1, s0.top) &&
+    'murim: one realm step, +5 years of neigong, epithet and art recorded',
+    r.ladder === Math.min(s0.ladder + 1, s0.top) &&
       M.neigong === M0.neigong + Math.min(5, s0.lim.neigong) &&
-      M.alias === '비객' &&
+      r.standing.epithet === '비객' &&
       M.arts.sword === '매화검법', // the Korean slot name in a reply is stored as its enum
   );
   const day = s0.day + Math.min(400, s0.lim.days);

@@ -51,6 +51,7 @@ export function buildTagsJson(imgs, names) {
         if (m.tier) s.tier = m.tier;
         if (m.charName) s.name = m.charName;
         if (m.aliases && m.aliases.length) s.aliases = m.aliases;
+        if (m.profile) s.profile = m.profile;
         const cover = m.cover ? imgs.findIndex(y => y.id === m.cover) : -1;
         if (cover >= 0) s.cover = names[cover]; // by file name: ids are this install's
         out.sets[k] = s;

@@ -6,7 +6,6 @@ import {
   CMDS,
   currencyOf,
   moneyFor,
-  initMurim,
   ORIGINS,
   RACES,
   rollEntry,
@@ -36,6 +35,7 @@ import { leaveOpenSave, pushTurn, showPlay } from './persistence.js';
 import { lifeExtra, runTurn } from './turn.js';
 import { fillTemplate, pr } from './prompt.js';
 import { chooseUiLang } from './settings-sheet.js';
+import { extStart } from './world-ext.js';
 
 const TALENT_MAX = 5;
 let tierLocked = false;
@@ -583,7 +583,7 @@ async function beginLife() {
     relations: {},
     cast: {},
     clock: { day: 0, date: '', time: '', weather: '', place: '' },
-    murim: life.world.id === 'murim' ? initMurim(life.originTier) : null,
+    ...extStart(life.world.id, life.originTier),
     summaries: inherit ? app.state.summaries : [],
     summarizedUpto: inherit ? app.state.summarizedUpto : -1,
     stateNote: '',

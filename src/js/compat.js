@@ -1,8 +1,9 @@
 /* ============ compat: old saves brought up to date ============ */
-import { currencyOf, initMurim, normGender, rollSubStats, WORLD_ALIAS, WORLDS, worldIn } from './data.js';
+import { currencyOf, normGender, rollSubStats, WORLD_ALIAS, WORLDS, worldIn } from './data.js';
 import { artsToEnums, fromLegacy, LEGACY } from './enums.js';
 import { dedupeQuests, snapshotRules } from './rules.js';
 import { okLang } from './i18n.js';
+import { extFill } from './world-ext.js';
 
 export function compat(st) {
   st.cast = st.cast || {};
@@ -27,10 +28,20 @@ export function compat(st) {
   if (st.stats && st.stats.str === undefined) Object.assign(st.stats, rollSubStats(st.life ? st.life.originTier : 'C'));
   if (st.stats && st.stats.con === undefined) st.stats.con = rollSubStats(st.life ? st.life.originTier : 'C').con;
   st.clock = st.clock || { day: 0, date: '', time: '', weather: '', place: '' };
-  if (st.life && st.life.world.id === 'murim' && !st.murim) st.murim = initMurim(st.life.originTier);
+  murimStanding(st);
+  extFill(st);
   if (!okLang(st.lang)) st.lang = langOfLife(st.life);
   toEnums(st);
   return st;
+}
+// before v2.12 the realm and the standing lived in state.murim
+const OLD_STANDING = { faction: 'faction', rank: 'position', alias: 'epithet', constitution: 'trait' };
+function murimStanding(st) {
+  const M = st.murim;
+  if (!M || typeof M.realm !== 'number') return;
+  st.ladder = M.realm;
+  st.standing = Object.fromEntries(Object.entries(OLD_STANDING).map(([a, b]) => [b, M[a] || '']));
+  st.murim = { neigong: M.neigong, arts: M.arts };
 }
 // Saves from before v2.6 followed the settings' story language. The world's name was written in the story language
 // (never typed by the player), so it tells which one the save was played in; saves older than v2.5 are Korean.

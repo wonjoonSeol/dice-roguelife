@@ -7,8 +7,9 @@ import { logErr } from './diag.js';
 import { T } from './i18n.js';
 import { LIMITS } from './limits.js';
 import { charSets, charSetsAll, fitsWorld, genderOf, imagesVer, pickEmotion } from './images.js';
+import { worldExt } from './world-ext.js';
 
-function namedSetFor(name) {
+export function namedSetFor(name) {
   const n = normName(name);
   if (!n) return null;
   const sets = charSets();
@@ -255,9 +256,9 @@ export function takePromoted() {
   promotedNames = [];
   return names;
 }
-// A person to cast, as a reply describes them: { name, gender, role, weight, look }. gender is normalized
+// A person to cast, as a reply describes them: { name, gender, role, weight, look, cast }. gender is normalized
 // (normGender); weight is extra, minor or major (anything else counts as minor); look is a list (or a comma string) of
-// look words and identity tags (faction:사천당가).
+// look words and identity tags (faction:사천당가); cast is the key of an open role the reply gives them.
 
 // the people a reply names, in that shape
 export const speakerOf = o => ({
@@ -266,6 +267,7 @@ export const speakerOf = o => ({
   role: o.speaker_role,
   weight: o.speaker_weight,
   look: o.speaker_look,
+  cast: o.speaker_cast,
 });
 export const presentOf = p => ({
   name: String(p.name || '').slice(0, LIMITS.text.name),
@@ -273,9 +275,18 @@ export const presentOf = p => ({
   role: p.role,
   weight: p.weight,
   look: p.look,
+  cast: p.cast,
 });
 
 const metaOf = k => app.setMeta[k] || {};
+// a set nobody gets by chance: a named character's face, or in a world that offers them an open role (a profile without
+// a name), which only a reply's speaker_cast hands out
+const reserved = k => !!(metaOf(k).charName || isOpenRole(k));
+// an open role in this life's world: a set with a profile and no fixed name, still usable, where the world offers them
+export function isOpenRole(k) {
+  const m = metaOf(k);
+  return !!(worldExt().profiles && m.profile && !m.charName && !retiredSets().has(k) && fitsWorld(m, worldId()));
+}
 const worldId = () => app.state.life.world.id;
 const genderKey = gender => (gender === 'female' || gender === 'male' ? gender : null);
 // a set may dress someone of gender g: unlabeled sets fit anyone. A set labeled other (기타: beasts, spirits) is never
@@ -354,7 +365,7 @@ function wearable(who) {
     W = app.state.castW || {};
   const retired = retiredSets();
   return k => {
-    if (!fitsWorld(metaOf(k), w) || retired.has(k) || metaOf(k).charName) return false;
+    if (!fitsWorld(metaOf(k), w) || retired.has(k) || reserved(k)) return false;
     if (!fitsGender(k, g)) return false;
     if (isGeneric(k)) return true;
     const o = holders(k, who.name);
@@ -391,14 +402,16 @@ function bestGeneric(who) {
   return pick(gen.filter(k => sc(k) === top));
 }
 const AI_PENDING = {}; // name -> Promise<key|'none'|null>, started while the reply is still streaming
-function isNewLead({ name, weight }) {
+function isNewLead(who) {
+  const { name, weight } = who;
   return (
     !!name &&
     !app.state.cast[name] &&
     !(app.state.deadNpc || {})[name] &&
     !namedSetFor(name) &&
     !(app.state.noFace || []).includes(name) &&
-    normWeight(weight) !== 'extra'
+    normWeight(weight) !== 'extra' &&
+    !openRole(who)
   );
 }
 export let startAiPick = function startAiPick(c) {
@@ -503,7 +516,30 @@ function castFor0(who) {
   const { name } = who;
   if ((app.state.noFace || []).includes(name)) return null;
   if (app.state.deadNpc && app.state.deadNpc[name]) return app.state.deadNpc[name].set || null;
-  return keptFace(who) || namedFace(who) || (normWeight(who.weight) === 'extra' ? castExtra(who) : castLead(who));
+  return (
+    keptFace(who) ||
+    roleFace(who) || // the reply's own claim beats a named set that shares the name
+    namedFace(who) ||
+    (normWeight(who.weight) === 'extra' ? castExtra(who) : castLead(who))
+  );
+}
+// an open role the narrator gave them (speaker_cast): a free, unnamed set with a profile, in a world that offers them
+const castKey = who =>
+  String(who.cast || '')
+    .trim()
+    .replace(/^#/, ''); // the roster shows it as #key
+const openRole = who => {
+  const k = castKey(who);
+  return !!(
+    k &&
+    charSets()[k] &&
+    isOpenRole(k) &&
+    fitsGender(k, genderKey(who.gender)) &&
+    !holders(k, who.name).length
+  );
+};
+function roleFace(who) {
+  return openRole(who) ? assign(who.name, castKey(who), { look: [], role: [], open: true }) : null;
 }
 // the face they already wear, unless it left this world or they rose from a shared extra's face to a part of their own
 function keptFace(who) {
@@ -535,7 +571,7 @@ function castExtra(who) {
   const share = Object.keys(charSets()).filter(
     k =>
       (isGeneric(k) || setTier(k) === 'extra') &&
-      !metaOf(k).charName &&
+      !reserved(k) &&
       !retired.has(k) &&
       fitsWorld(metaOf(k), w) &&
       fitsGender(k, g),
@@ -567,7 +603,7 @@ function castLead(who) {
     want = normWeight(who.weight);
   const used = new Set(Object.values(app.state.cast));
   let pool = Object.keys(charSets()).filter(
-    k => !isGeneric(k) && !used.has(k) && !metaOf(k).charName && fitsWorld(metaOf(k), w),
+    k => !isGeneric(k) && !used.has(k) && !reserved(k) && fitsWorld(metaOf(k), w),
   );
   if (g) pool = pool.filter(k => fitsGender(k, g)).sort((a, b) => (genderOf(b) === g) - (genderOf(a) === g));
   if (!pool.length && want === 'minor') pool = sharedForMinor(g, w);
@@ -611,7 +647,7 @@ function sharedForMinor(g, w) {
     .filter(
       k =>
         !isGeneric(k) &&
-        !metaOf(k).charName &&
+        !reserved(k) &&
         !retired.has(k) &&
         fitsWorld(metaOf(k), w) &&
         fitsGender(k, g) &&

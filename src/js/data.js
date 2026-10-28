@@ -421,19 +421,6 @@ export const EMO_FB = {
   surprise: 'neutral',
   anger: 'serious',
 };
-export const REALMS = [
-  N_('Unranked'),
-  N_('Third-rate'),
-  N_('Second-rate'),
-  N_('First-rate'),
-  N_('Peak'),
-  N_('Transcendent'),
-  N_('Harmony'),
-  N_('Mystic'),
-  N_('Life and Death'),
-];
-const REALM_START = { EX: 6, SSS: 4, S: 3, A: 2, B: 1 };
-const NEIGONG_START = { EX: 120, SSS: 60, S: 20, A: 10, B: 3 };
 const EMO_KO = {
   중립: 'neutral',
   기본: 'neutral',
@@ -525,17 +512,6 @@ export function powerGrade(p) {
                   : p >= 50
                     ? 'E'
                     : 'F';
-}
-export function initMurim(tier) {
-  return {
-    realm: REALM_START[tier] || 0,
-    neigong: NEIGONG_START[tier] || 0,
-    faction: '',
-    rank: '',
-    alias: '',
-    constitution: '',
-    arts: {},
-  };
 }
 export function rollTier() {
   let r = rnd() * 100;
