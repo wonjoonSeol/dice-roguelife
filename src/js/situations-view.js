@@ -3,7 +3,7 @@ import { $, clone, esc, toast } from './util.js';
 import { app } from './app.js';
 import { logErr } from './diag.js';
 import { IMGDOC, IMGX } from './library.js';
-import { charSetsAll, imgUrl } from './images.js';
+import { charSetsAll, imgById, imgUrl } from './images.js';
 import { answerDialog, askConfirm, openDialog } from './sheet.js';
 import {
   frameSits,
@@ -17,8 +17,9 @@ import {
   sitKey,
   sitLabel,
   sitTree,
+  sitVer,
 } from './situations.js';
-import { T } from './i18n.js';
+import { T, uiLang } from './i18n.js';
 
 const NEW = '+new'; // the picker's "create" option; no key starts with +
 const indent = depth => '&nbsp;'.repeat(depth * 3); // options keep no other spacing
@@ -62,15 +63,29 @@ export function sitDictHtml() {
 `;
 }
 
-// a frame's situations as chips, and the dictionary to pick from (no typing)
+// the dictionary's options in tree order, built once per dictionary and screen language
+let opts = { key: '', html: '' };
+function sitOptions() {
+  const key = sitVer() + ':' + uiLang();
+  if (opts.key !== key)
+    opts = {
+      key,
+      html: sitTree()
+        .map(([k, depth]) => `<option value="${esc(k)}">${indent(depth)}${esc(sitLabel(k))}</option>`)
+        .join(''),
+    };
+  return opts.html;
+}
+// a frame's situations as chips, and the dictionary to pick from (no typing), its own keys disabled
 export function sitPickerHtml(x) {
   const on = frameSits(x);
-  const free = sitTree().filter(([k]) => !on.includes(k));
-  return `<div class="seg sit-pick" data-sitid="${esc(x.id)}">${on.map(k => `<button type="button" class="chip-sm sit-chip${isAdultSit(k) ? ' adult' : ''}" data-sitdel="${esc(k)}" aria-pressed="true" title="${esc(k)}">${esc(sitLabel(k))} ✕</button>`).join('')}<select class="sit-add" data-sitadd aria-label="${T('Add a situation')}"><option value="">${T('+ Situation')}</option>${free.map(([k, depth]) => `<option value="${esc(k)}">${indent(depth)}${esc(sitLabel(k))}</option>`).join('')}<option value="${NEW}">${T('Create a new situation')}</option></select></div>`;
+  let list = sitOptions();
+  for (const k of on) list = list.replace(`<option value="${esc(k)}">`, `<option value="${esc(k)}" disabled>`);
+  return `<div class="seg sit-pick" data-sitid="${esc(x.id)}">${on.map(k => `<button type="button" class="chip-sm sit-chip${isAdultSit(k) ? ' adult' : ''}" data-sitdel="${esc(k)}" aria-pressed="true" title="${esc(k)}">${esc(sitLabel(k))} ✕</button>`).join('')}<select class="sit-add" data-sitadd aria-label="${T('Add a situation')}"><option value="">${T('+ Situation')}</option>${list}<option value="${NEW}">${T('Create a new situation')}</option></select></div>`;
 }
 const sitSummary = imgs => {
   const used = [...new Set(imgs.flatMap(frameSits))];
-  return used.length ? esc(used.map(k => sitLabel(k)).join(', ')) : T('none, every picture is plain');
+  return used.length ? esc(used.map(sitLabel).join(', ')) : T('none, every picture is plain');
 };
 // in a set card: every frame with its situations
 export function setSitsHtml(k, imgs) {
@@ -127,7 +142,7 @@ async function commit(ids, next) {
 }
 
 // The entry form, for a new entry or this one. Resolves the key it saved under, or null.
-export async function editSituation(key = '') {
+async function editSituation(key = '') {
   const d = sitDict(),
     e = d[key] || {};
   const field = (id, label, v, max) =>
@@ -268,22 +283,19 @@ export function bindSituations(box, { redraw, job }) {
     },
     true,
   );
-  const frameOf = el => app.images.find(i => i.id === el.closest('[data-sitid]').dataset.sitid);
+  const frameOf = el => imgById(el.closest('[data-sitid]').dataset.sitid);
   box.addEventListener('change', async e => {
     const sel = e.target.closest('[data-sitadd]');
     if (!sel || !sel.value) return;
     const x = frameOf(sel);
     if (!x) return;
-    let k = sel.value;
+    const v = sel.value;
     sel.value = '';
-    if (k === NEW) {
-      k = await editSituation();
-      if (!k) return;
-      await saveFrame(box, x, [...frameSits(x), k]);
-      redraw();
-      return;
-    }
+    const made = v === NEW; // a new entry goes in the dictionary first, then every picker shows it
+    const k = made ? await editSituation() : v;
+    if (!k) return;
     await saveFrame(box, x, [...frameSits(x), k]);
+    if (made) redraw();
   });
   box.addEventListener('click', e => {
     const chip = e.target.closest('[data-sitdel]');

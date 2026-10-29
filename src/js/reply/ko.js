@@ -41,5 +41,6 @@ export default {
     signature: /^(?:무공|대표무공|무기|능력|특기|기술|스킬)$/,
     ties: /^(?:관계|인간관계|인맥)$/,
     secret: /^비밀$/,
+    profile: /^(?:캐릭터설정|프로필|설정)$/, // a persona note's (new-life.js); a character list keeps it as a detail
   },
 };

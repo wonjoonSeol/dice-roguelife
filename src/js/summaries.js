@@ -1,10 +1,9 @@
 /* ============ memory: summaries ============ */
 import { noteIgnored, utf8Bytes } from './util.js';
-import { platform } from './db.js';
 import { turnStore } from './turn-store.js';
 import { app } from './app.js';
 import { persist } from './persistence.js';
-import { fillTemplate, pr, prFor, prLang, sentWindow, trackedLine, turnText } from './prompt.js';
+import { fillTemplate, pr, prFor, prLang, sampleJson, sentWindow, trackedLine, turnText } from './prompt.js';
 
 export async function maybeSummarize() {
   const lastI = app.state.next - 1;
@@ -24,7 +23,7 @@ export async function maybeSummarize() {
   try {
     const ctext = chunk.map(turnText).join('\n\n').slice(0, 40000);
     const nsent = Math.max(4, Math.min(12, Math.round(utf8Bytes(ctext) / 4000)));
-    const r = await platform.sample.json(
+    const r = await sampleJson(
       fillTemplate(prFor('summary'), {
         lang: prLang('summaryLang'),
         n: `${nsent}~${nsent + 2}`,
@@ -44,13 +43,10 @@ export async function maybeSummarize() {
     }
     if (app.state.summaries.length > 10) {
       const old = app.state.summaries.slice(0, 6);
-      const r2 = await platform.sample.json(
-        fillTemplate(pr('summaryMerge'), { list: old.map(x => '- ' + x.text).join('\n') }),
-        {
-          modelTier: 'quick',
-          cache: false,
-        },
-      );
+      const r2 = await sampleJson(fillTemplate(pr('summaryMerge'), { list: old.map(x => '- ' + x.text).join('\n') }), {
+        modelTier: 'quick',
+        cache: false,
+      });
       if (r2 && r2.summary)
         app.state.summaries = [
           {

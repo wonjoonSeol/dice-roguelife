@@ -6,7 +6,7 @@ import { uiLang } from './i18n.js';
 
 const PATH = 'config/situations';
 // i18n-ignore-start: the starting entries are library data, Korean with Japanese labels and English hints
-export const SIT_DEFAULTS = {
+const SIT_DEFAULTS = {
   battle: {
     label: '싸움',
     label_ja: '戦闘',
@@ -51,11 +51,10 @@ let ver = 0;
 let loaded = false; // false after a failed read: a save then would overwrite the stored dictionary with the defaults
 export const sitVer = () => ver;
 export const sitDict = () => app.situations || SIT_DEFAULTS;
-export const sitKeys = () => Object.keys(sitDict());
 
 const str = (v, n) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
 // one entry as stored: unknown fields drop, adult only when true; cleanDict checks the parent
-export function cleanSit(e) {
+function cleanSit(e) {
   const o = {};
   for (const f of ['label', 'label_ja']) if (str(e && e[f], SIT_MAX.label)) o[f] = str(e[f], SIT_MAX.label);
   for (const f of ['hint', 'hint_en']) if (str(e && e[f], SIT_MAX.hint)) o[f] = str(e[f], SIT_MAX.hint);
@@ -64,7 +63,7 @@ export function cleanSit(e) {
   return o;
 }
 // a parent must be another entry, and following parents must never come back around
-export function cleanDict(d) {
+function cleanDict(d) {
   const out = {};
   for (const [k, e] of Object.entries(d && typeof d === 'object' ? d : {})) {
     const key = sitKey(k);
@@ -133,8 +132,9 @@ export function sitTree() {
   return out;
 }
 // on screen: the Korean or Japanese label, the key itself in English
-export function sitLabel(k, lang = uiLang()) {
-  const e = sitDict()[k] || {};
+export function sitLabel(k) {
+  const e = sitDict()[k] || {},
+    lang = uiLang();
   return (lang === 'ko' ? e.label : lang === 'ja' ? e.label_ja || e.label : '') || k;
 }
 // for the narrator: a Korean story reads hint, the others hint_en

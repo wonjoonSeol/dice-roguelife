@@ -9,7 +9,7 @@ import { platform } from './db.js';
 import { app } from './app.js';
 import { storyLang } from './settings.js';
 import { logErr } from './diag.js';
-import { extractJson, fillTemplate, prIn } from './prompt.js';
+import { fillTemplate, prIn, sampleJson } from './prompt.js';
 import { closeSheet, openSheet } from './sheet.js';
 import { noteById, saveNoteCast } from './notes.js';
 import { otherTag } from './notes-view.js';
@@ -85,9 +85,10 @@ export function bindRosterEditor(root, worldId, me, onInput, imp = {}) {
     });
   show(true);
 }
-function rosterPreviewHtml(text, worldId, me) {
+// parsed: the text already read, when the caller needs it too
+function rosterPreviewHtml(text, worldId, me, parsed) {
   if (!text.trim()) return '';
-  const { people, notes } = parseRoster(text, me);
+  const { people, notes } = parsed || parseRoster(text, me);
   const ix = cardIndex(charSets(), worldId); // the cards of the world this list is for
   const faces = people.map(e => !!namedSetOf(namesOf(e), { ix, exact: true }));
   const chips = people
@@ -207,14 +208,10 @@ async function readCharacters(text, ctx, signal) {
   });
   let r = null;
   try {
-    r = await platform.sample.json(prompt, { modelTier: 'quick', cache: false, signal });
+    r = await sampleJson(prompt, { modelTier: 'quick', cache: false, signal });
   } catch (e) {
-    if (signal.aborted) throw e;
-    r = e && e.text ? extractJson(e.text) : null; // a reply with text around its JSON is read too, as the narrator's
-    if (!r) {
-      logErr('roster import', e);
-      throw e;
-    }
+    if (!signal.aborted) logErr('roster import', e);
+    throw e;
   }
   const str = v => (Array.isArray(v) ? v.join('\n') : typeof v === 'string' ? v : '');
   if (!r || typeof r !== 'object' || !('roster' in r)) {
@@ -255,16 +252,38 @@ function reviewImport(ctx, src, got, ac) {
   );
   const ta = $('#impRoster'),
     add = $('#impAdd');
+  // the list under the sheet doesn't change while it is open
+  const mine = new Set(parseRoster(ctx.list(), ctx.me).people.map(e => normName(e.name)));
   let joined = '',
-    n = 0;
-  const check = () => {
+    n = 0,
+    again = [],
+    full = '',
+    wait = 0;
+  // the imported list, read once a change and shared with the preview
+  const readList = () => {
+    clearTimeout(wait);
+    if (!ta.isConnected) return; // the sheet closed while typing paused
     const text = ta.value.trim();
+    const parsed = parseRoster(text, ctx.me);
     joined = joinRoster(ctx.list(), text);
-    $('#impPreview').innerHTML = rosterPreviewHtml(text, ctx.worldId, ctx.me);
-    const mine = new Set(parseRoster(ctx.list(), ctx.me).people.map(e => normName(e.name)));
-    const people = parseRoster(text, ctx.me).people;
-    n = people.length;
-    const again = people.filter(e => mine.has(normName(e.name))).map(e => e.name);
+    $('#impPreview').innerHTML = rosterPreviewHtml(text, ctx.worldId, ctx.me, parsed);
+    n = parsed.people.length;
+    again = parsed.people.filter(e => mine.has(normName(e.name))).map(e => e.name);
+    full =
+      joined.length > LIMITS.roster.text
+        ? T("That doesn't fit: the list holds up to {max} characters, and with these it would be {n}.", {
+            max: LIMITS.roster.text,
+            n: joined.length,
+          })
+        : parseRoster(joined, ctx.me).notes.some(x => x.why === 'over')
+          ? T("That doesn't fit: the list keeps up to {max} people, and with these there would be more.", {
+              max: LIMITS.roster.people,
+            })
+          : '';
+    fit();
+  };
+  // what the rest box adds to that: only its own length is checked again
+  const fit = () => {
     const long = src.into && $('#impCut').checked && src.after($('#impRest').value.trim()).length;
     const why =
       long > LIMITS.userNotes
@@ -276,32 +295,26 @@ function reviewImport(ctx, src, got, ac) {
               n: long,
             },
           )
-        : joined.length > LIMITS.roster.text
-          ? T("That doesn't fit: the list holds up to {max} characters, and with these it would be {n}.", {
-              max: LIMITS.roster.text,
-              n: joined.length,
-            })
-          : parseRoster(joined, ctx.me).notes.some(x => x.why === 'over')
-            ? T("That doesn't fit: the list keeps up to {max} people, and with these there would be more.", {
-                max: LIMITS.roster.people,
-              })
-            : '';
+        : full;
     $('#impFit').innerHTML =
       (again.length
         ? `<p class="muted field-note">${esc(T('Already in your list: {names}. Where a name comes twice, the later entry is kept.', { names: again.join(', ') }))}</p>`
         : '') + (why ? `<p class="field-note warn">${esc(why)} ${T('Shorten it above, then add.')}</p>` : '');
     add.disabled = !!why || !n;
   };
-  ta.oninput = check;
-  if (src.into) $('#impRest').oninput = $('#impCut').onchange = check;
-  check();
+  ta.oninput = () => {
+    clearTimeout(wait);
+    wait = setTimeout(readList, 150);
+  };
+  if (src.into) $('#impRest').oninput = $('#impCut').onchange = fit;
+  readList();
   $('#impCancel').onclick = () => {
     ac.abort();
     closeSheet();
   };
   if (got.kept) $('#impAgain').onclick = () => readFresh(ctx, src, $('#impAgain'), ac);
   add.onclick = async () => {
-    check();
+    readList();
     const busy = ctx.busy && ctx.busy();
     if (add.disabled || busy) return busy && toast(busy);
     const rest = cut && $('#impCut').checked ? $('#impRest').value.trim() : null;

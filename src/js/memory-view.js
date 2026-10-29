@@ -10,7 +10,7 @@ import { askConfirm } from './sheet.js';
 import { charSets } from './images.js';
 import { persist } from './persistence.js';
 import { seenSpan } from './reroll.js';
-import { bindOnePicker, oneInForm, renderNoteLibrary } from './notes-view.js';
+import { bindOnePicker, pickedStyle, renderNoteLibrary } from './notes-view.js';
 import { isScenario } from './rules.js';
 import { noteById, scenarioName, scenarioNote } from './notes.js';
 import { ADDON, STYLE } from './enums.js';
@@ -113,10 +113,8 @@ export function renderMemory() {
   bindChoice(box, '#memStyle', 'sty', async v => {
     const wrap = $('#mstyWrap');
     if (wrap) wrap.classList.toggle('hidden', v !== STYLE.NOTE);
-    if (v !== STYLE.NOTE) return setStyle(v);
-    const id = oneInForm('msty');
-    if (noteById(id)) return setStyle(v, id);
-    toast(T('Pick a note for the prose style'));
+    const s = pickedStyle('msty', v);
+    if (s) await setStyle(s.style, s.styleNoteId);
   });
   bindOnePicker('msty', id => noteById(id) && setStyle(STYLE.NOTE, id));
   box.querySelectorAll('.mem-addons [data-addon]').forEach(

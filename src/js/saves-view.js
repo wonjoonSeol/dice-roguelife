@@ -232,8 +232,7 @@ export async function importSaveFile(f) {
   const { saved, error } = plan.add.length ? await saveNotes(plan.add) : { saved: [], error: null };
   const lost = plan.add.filter(n => !saved.some(s => s.id === n.id));
   const here = id => (plan.map[id] && !lost.some(n => n.id === plan.map[id]) ? plan.map[id] : null);
-  const ticked = new Set((j.state.noteIds || []).map(String).map(here));
-  j.state.noteIds = plan.ids.filter(nid => !lost.some(n => n.id === nid) && ticked.has(nid));
+  j.state.noteIds = [...new Set((j.state.noteIds || []).map(String).map(here).filter(Boolean))];
   for (const k of own) j.state[k] = here(String(j.state[k]));
   const id = uid();
   const meta = Object.assign(

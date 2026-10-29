@@ -1,7 +1,7 @@
 /* ============ note library: the player's own notes, for every save ============ */
 import { noteIgnored, nowIso, uid, utf8Bytes } from './util.js';
 import { N_, T } from './i18n.js';
-import { thaw, userCol, userDoc } from './db.js';
+import { dget, thaw, userCol, userDoc } from './db.js';
 import { app } from './app.js';
 import { NOTE_TYPE, NOTE_TYPES, STYLE } from './enums.js';
 
@@ -12,7 +12,8 @@ import { NOTE_TYPE, NOTE_TYPES, STYLE } from './enums.js';
 export const NOTE_MAX = 32768; // UTF-8 bytes of one note's text
 export const NOTE_NAME_MAX = 60;
 export const NOTES_UNREAD = N_("Couldn't read your note library. Try again in a moment.");
-const noteDoc = id => userDoc(`notes/items/${id}`);
+const notePath = id => `notes/items/${id}`;
+const noteDoc = id => userDoc(notePath(id));
 const byName = (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 // a known type, else general (notes from before types had none)
 export const noteType = t => (NOTE_TYPES.includes(t) ? t : NOTE_TYPE.GENERAL);
@@ -90,7 +91,6 @@ export const styleNote = (st = app.state) =>
 // its name for the strip and the save card: the note's own, else the one it had when last seen
 export const scenarioName = (st = app.state) =>
   (scenarioNote(st) || {}).name || (st && st.scenarioName) || T('Scenario');
-// a new game starts with the notes of the save played last; the card has them, the library is not needed
 // how many saves tick this note: the open one by its state, the others by their cards (persistence.js cardFields)
 export function savesUsing(id) {
   const open = app.state && app.currentSave ? app.currentSave.id : null;
@@ -130,12 +130,10 @@ export async function saveNotes(list) {
 // Import characters' result kept on the note. The document is read first, so another device's newer text is not
 // written over; the note's text and updatedAt stay as they are
 export async function saveNoteCast(id, cast) {
-  const ref = noteDoc(id),
-    n = noteById(id);
-  const got = await ref.get();
-  const d = got.exists ? thaw(got.data()) : null;
+  const n = noteById(id);
+  const d = await dget(notePath(id));
   if (!n || !d || d.text !== n.text) return;
-  await ref.set({ ...d, cast });
+  await noteDoc(id).set({ ...d, cast });
   n.cast = cast;
 }
 export async function deleteNote(id) {
@@ -148,20 +146,17 @@ export const notesForFile = st =>
   [...new Set([scenarioNote(st), styleNote(st), ...pickedNotes(st)].filter(Boolean))].map(
     ({ id, name, text, type }) => ({ id, name, text, type }),
   );
-// An imported save's notes, planned before any write: { ids it ticks, notes to add, names too big, map: file id to
-// the id it gets here } (ARCHITECTURE.md)
+// An imported save's notes, planned before any write: { notes to add, names too big, map: file id to the id it gets
+// here } (ARCHITECTURE.md)
 export function planNotes(list, ids) {
   const given = new Map(
     (Array.isArray(list) ? list : [])
       .filter(n => n && n.id != null && typeof n.text === 'string')
       .map(n => [String(n.id), n]),
   );
-  const plan = { ids: [], add: [], big: [], map: {} };
+  const plan = { add: [], big: [], map: {} };
   const taken = new Set();
-  const use = (from, id) => {
-    plan.ids.push(id);
-    plan.map[from] = id;
-  };
+  const use = (from, id) => (plan.map[from] = id);
   for (const id of Array.isArray(ids) ? ids.map(String) : []) {
     if (plan.map[id]) continue; // a scenario note also ticked comes once
     if (noteById(id)) {
@@ -181,6 +176,5 @@ export function planNotes(list, ids) {
       use(id, add.id);
     }
   }
-  plan.ids = [...new Set(plan.ids)];
   return plan;
 }

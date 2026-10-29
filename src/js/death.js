@@ -8,7 +8,7 @@ import { cueScore } from './sound.js';
 import { persist, pushTurn } from './persistence.js';
 import { renderLog } from './log.js';
 import { sampleError } from './turn.js';
-import { fillTemplate, pl, pr, prLang, turnText } from './prompt.js';
+import { fillTemplate, pl, pr, prLang, sampleJson, turnText } from './prompt.js';
 import { askConfirm } from './sheet.js';
 import { T } from './i18n.js';
 
@@ -35,20 +35,24 @@ export async function runEnding() {
     return false;
   return exclusive(writeEnding);
 }
+// what the ledger and an ending card read: this life's summaries, and the last turns up to 8000 characters
+const lifeSummary = st =>
+  st.summaries
+    .filter(x => x.life === st.lifeNo)
+    .map(x => x.text)
+    .join(' ');
+const recentForLedger = () => app.turns.slice(-16).map(turnText).join('\n\n').slice(-8000);
 async function writeEnding() {
   const run = currentRun();
   toast(T('Writing the ending'));
   try {
     const st = app.state;
-    const o = await platform.sample.json(
+    const o = await sampleJson(
       fillTemplate(pr('scenarioEnding'), {
         scenario: st.scenarioName || st.life.world.name,
         name: st.life.name,
-        summary: st.summaries
-          .filter(x => x.life === st.lifeNo)
-          .map(x => x.text)
-          .join(' '),
-        recent: app.turns.slice(-16).map(turnText).join('\n\n').slice(-8000),
+        summary: lifeSummary(st),
+        recent: recentForLedger(),
         langLine: prLang('ledgerLang'),
       }),
       { modelTier: setting('tier'), cache: false },
@@ -91,8 +95,7 @@ async function writeLedger() {
   );
   const cap = TIERS[Math.min(TIERS.length - 1, Math.max(tierRank(best), tierRank('SSS')))];
   try {
-    const recent = app.turns.slice(-16).map(turnText).join('\n\n');
-    const o = await platform.sample.json(
+    const o = await sampleJson(
       fillTemplate(pr('ledger'), {
         name: app.state.life.name,
         cap,
@@ -104,11 +107,8 @@ async function writeLedger() {
         power: app.state.stats.power,
         title: app.state.title || pl('None'),
         skills: app.state.skills.map(k => k.name + '(' + k.grade + ')').join(', '),
-        summary: app.state.summaries
-          .filter(x => x.life === app.state.lifeNo)
-          .map(x => x.text)
-          .join(' '),
-        recent: recent.slice(-8000),
+        summary: lifeSummary(app.state),
+        recent: recentForLedger(),
         langLine: prLang('ledgerLang'),
       }),
       { modelTier: setting('tier'), cache: false },

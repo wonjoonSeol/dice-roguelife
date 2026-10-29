@@ -14,6 +14,7 @@ import {
   fitsWorld,
   genderOf,
   IMAGE_TYPES,
+  imagesChanged,
   imgById,
   imgUrl,
   inheritKeys,
@@ -25,6 +26,7 @@ import {
   setCover,
   setWorlds,
   showBigImage,
+  storyImages,
   withModern,
   withOpeningTags,
   worldChips,
@@ -33,20 +35,20 @@ import {
 import { legacyEncodings, readZip } from './zip.js';
 import { WORLD_EXT } from './world-ext.js';
 import { capTags, isGeneric, isIdTag, setIds, setTier, TIERS_CAST, toEnglishTags } from './casting.js';
-import { exportPack } from './images-export.js';
+import { baseName, exportPack } from './images-export.js';
 import { setStat, statText } from './stat.js';
 import { groupSimilar, similar, visualSig } from './image-sim.js';
 import { persist } from './persistence.js';
-import { fillTemplate, pr } from './prompt.js';
+import { fillTemplate, pr, sampleJson } from './prompt.js';
 import { N_, T, uiLang } from './i18n.js';
 import { GENDER, GENDER_LABEL } from './enums.js';
 import {
-  cleanSit,
   frameSits,
   saveSituations,
   setFrameSits,
   SIT_KEY_RE,
   sitDict,
+  sitHint,
   sitKey,
   sitKeyOf,
   sitLabel,
@@ -55,6 +57,7 @@ import {
 import { bindSituations, setSitsHtml, sitDictHtml, sitPickerHtml } from './situations-view.js';
 
 let imgFilter = 'all';
+const byOldest = (a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
 export async function renderImages() {
   const box = $('#imgBox');
   if (!box.dataset.zoom) {
@@ -134,7 +137,7 @@ function setListHtml(sets) {
       ...worldsOf(m),
       ...imgs.flatMap(x => x.tags || []),
       ...sits,
-      ...sits.map(s => sitLabel(s)),
+      ...sits.map(sitLabel),
     ]
       .filter(Boolean)
       .join(' ')
@@ -457,7 +460,7 @@ function bindSetCard(card) {
       (b.onclick = async () => {
         const t = b.dataset.stag;
         let fail = null;
-        for (const x of app.images.filter(i => i.kind === 'char' && (i.set || i.name) === k)) {
+        for (const x of storyImages().filter(i => i.kind === 'char' && (i.set || i.name) === k)) {
           if ((x.tags || []).includes(t)) {
             x.tags = x.tags.filter(v => v !== t);
             try {
@@ -484,7 +487,7 @@ function bindSetCard(card) {
       add.disabled = true;
       t = (await toEnglishTags([t]))[0];
       let fail = null;
-      for (const x of app.images.filter(i => i.kind === 'char' && (i.set || i.name) === k)) {
+      for (const x of storyImages().filter(i => i.kind === 'char' && (i.set || i.name) === k)) {
         x.tags = capTags([...(x.tags || []), t]);
         try {
           await IMGDOC(x.id).set(x);
@@ -534,7 +537,7 @@ function imgGrid() {
           .toLowerCase()
           .includes(q),
     );
-  if (imgRecent) all = [...all].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))); // what you just uploaded is at the top
+  if (imgRecent) all = [...all].sort((a, b) => byOldest(b, a)); // what you just uploaded is at the top
   const pages = Math.max(1, Math.ceil(all.length / IMG_PER));
   if (imgPage >= pages) imgPage = pages - 1;
   const list = all.slice(imgPage * IMG_PER, (imgPage + 1) * IMG_PER);
@@ -1584,7 +1587,7 @@ export async function importTags(file, names = null) {
   const wlSet = m => (oldPack ? withModern(wl(m)) : wl(m));
   // newest first: of two pictures with one file name, the file means the one uploaded last
   const byKey = new Map();
-  for (const i of [...app.images].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))) {
+  for (const i of [...app.images].sort((a, b) => byOldest(b, a))) {
     for (const k of [i.file, i.name, 'bg_' + i.name, (i.file || '').replace(/\.[^.]+$/, '')])
       if (k && !byKey.has(k)) byKey.set(k, i);
   }
@@ -1600,11 +1603,12 @@ export async function importTags(file, names = null) {
           .map(t => t.trim())
           .filter(Boolean);
   // an image's "set" puts it in that set whatever its file name; read now, applied with its tags
-  const moveTo = new Map();
+  const moveTo = new Map(),
+    story = new Set(storyImages());
   for (const [fn, m] of Object.entries(j.images || {})) {
     const x = findImg(fn),
       to = m && typeof m.set === 'string' ? m.set.trim() : '';
-    if (x && !isOpening(x) && KEY_RE.test(to) && !to.includes('_')) moveTo.set(x.id, to);
+    if (x && story.has(x) && KEY_RE.test(to) && !to.includes('_')) moveTo.set(x.id, to);
   }
   const into = new Set(moveTo.values());
   // only sets that have pictures here are used; a set in the file with no pictures uploaded is ignored (it would only
@@ -1647,7 +1651,7 @@ export async function importTags(file, names = null) {
     for (const [raw, e] of Object.entries(j.situations && typeof j.situations === 'object' ? j.situations : {})) {
       const k = sitKey(raw);
       if (SIT_KEY_RE.test(k) && !next[k]) {
-        next[k] = cleanSit(e);
+        next[k] = e;
         nsit++;
       }
     }
@@ -1744,7 +1748,7 @@ export async function importTags(file, names = null) {
       if (x.kind === 'char') left.add(x.set || x.name);
       x.kind = 'char';
       x.set = to;
-      x.name = `${to}_${x.emotion || 'neutral'}${x.variant ? '_' + x.variant : ''}`;
+      x.name = baseName(x);
     }
     if (m && m.off === true) x.off = true;
     // a list here replaces the frame's (merge_tags: joins it); one naming a key no dictionary has keeps the old list
@@ -1771,6 +1775,7 @@ export async function importTags(file, names = null) {
   }
   // a set's own tags go on every frame of that set; in replace mode a frame the file does not list keeps only them
   let nst = 0;
+  imagesChanged(); // the moves above are in memory only so far
   const now = charSetsAll();
   for (const [k, st] of Object.entries(setTagsIn)) {
     for (const x of now[k] || []) {
@@ -1781,7 +1786,7 @@ export async function importTags(file, names = null) {
       nst++;
     }
   }
-  if (oldSits) for (const id of touched) tagsToSits(app.images.find(x => x.id === id));
+  if (oldSits) for (const id of touched) tagsToSits(imgById(id));
   let saved = true;
   try {
     await IMGX.flush([...touched], (n, t) => say(T('Saving the image list {i}/{n}', { i: n, n: t })));
@@ -1973,7 +1978,6 @@ async function recoverImages() {
   renderImages();
 }
 const imgLabel = x => (x.file && x.file !== x.name ? `${x.name} [${x.file}]` : x.name || x.file || x.id);
-const byOldest = (a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
 async function dedupeImages() {
   const say = t => {
     setStat(t);
@@ -2065,34 +2069,39 @@ async function dedupeImages() {
 // asks a quick model what each untagged picture is; effects (fx, e.g. the dice reveal) and opening frames keep their kind
 // With every picture sorted, it can sort the character pictures again: emotion, situations and looks are replaced.
 async function autoTagAll() {
-  let todo = app.images.filter(x => !x.autoTagged && x.kind !== 'fx' && !isOpening(x));
+  let todo = storyImages().filter(x => !x.autoTagged && x.kind !== 'fx');
   const again = !todo.length;
   if (again) {
-    todo = app.images.filter(x => x.kind === 'char' && !isOpening(x));
-    if (
-      !todo.length ||
-      !(await askConfirm(
-        T(
-          'Every picture is sorted. Sort the {n} character {n|picture|pictures} again? Their emotion, situations and look tags are replaced.',
-          { n: todo.length },
-        ),
-      ))
-    ) {
-      if (!todo.length) toast(T('No images to auto-sort'));
-      return;
-    }
+    todo = storyImages().filter(x => x.kind === 'char');
+    if (!todo.length) return toast(T('No images to auto-sort'));
+    const ask = T(
+      'Every picture is sorted. Sort the {n} character {n|picture|pictures} again? Their emotion, situations and look tags are replaced.',
+      { n: todo.length },
+    );
+    if (!(await askConfirm(ask))) return;
   }
-  const sits = Object.entries(sitDict())
-    .map(([k, e]) => `${k}: ${e.hint || e.hint_en || k}`)
+  const sits = Object.keys(sitDict())
+    .map(k => `${k}: ${sitHint(k, 'ko') || k}`)
     .join('; ');
   const proposed = new Map(),
     excluded = [];
   let n = 0;
+  // the list is written every 15 pictures and at the end, not once a picture
+  const sorted = [];
+  const save = async () => {
+    const ids = sorted.splice(0);
+    if (ids.length) await IMGX.flush(ids).catch(e => logErr('autotag', e));
+  };
+  // what reads the list in the meantime sees the change before it is written
+  const changed = x => {
+    sorted.push(x.id);
+    imagesChanged();
+  };
   for (const x of todo) {
     setStat(T('Sorting {i}/{n}', { i: ++n, n: todo.length }));
     try {
       const blob = await (await fetch(imgUrl(x.id))).blob();
-      const r = await platform.sample.json(fillTemplate(pr('autotag'), { emos: EMOS.join('|'), sits }), {
+      const r = await sampleJson(fillTemplate(pr('autotag'), { emos: EMOS.join('|'), sits }), {
         images: blob,
         modelTier: 'quick',
         cache: false,
@@ -2105,10 +2114,8 @@ async function autoTagAll() {
         x.excluded = true;
         x.autoTagged = true;
         excluded.push(x.file || x.name || x.id);
-        await IMGDOC(x.id).set(x);
-        continue;
-      }
-      if (r) {
+        changed(x);
+      } else if (r) {
         x.kind = again || r.kind !== 'scene' ? 'char' : 'scene';
         const looks = Array.isArray(r.tags) ? r.tags.map(t => String(t).trim()).filter(Boolean) : [];
         if (again) x.tags = (x.tags || []).filter(t => isIdTag(t) || isSystemTag(t));
@@ -2131,8 +2138,9 @@ async function autoTagAll() {
         }
         if (looks.length) x.tags = capTags([...(x.tags || []), ...looks]);
         x.autoTagged = true;
-        await IMGDOC(x.id).set(x);
+        changed(x);
       }
+      if (sorted.length >= 15) await save();
     } catch (e) {
       if (e.code === 'rate_limited') {
         toast(T('Try again in a moment'));
@@ -2144,6 +2152,7 @@ async function autoTagAll() {
       }
     }
   }
+  await save();
   setStat('');
   if (excluded.length)
     openSheet(

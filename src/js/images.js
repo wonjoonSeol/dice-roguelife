@@ -2,7 +2,7 @@
 import { host } from './host.js';
 import { esc, pick } from './util.js';
 import { EMO_FB, WORLD_ALIAS, WORLDS } from './data.js';
-import { frameSits, isAdultSit, sitAncestors, sitKeyOf, sitVer } from './situations.js';
+import { frameSits, isAdultSit, sitAncestors, sitDict, sitKey, sitKeyOf, sitVer } from './situations.js';
 import { SCENARIO_WORLD } from './enums.js';
 import { app } from './app.js';
 import { canonName } from './people.js';
@@ -114,7 +114,7 @@ const OPENING_RE = /^opening(?:\s*[:：]\s*(.*))?$/i;
 const ORDER_RE = /^order\s*[:：]\s*(\d+)$/i;
 const tagList = x => (x && Array.isArray(x.tags) ? x.tags.map(t => String(t).trim()) : []);
 // the sequence a frame belongs to ('' for plain opening), or null for any other picture
-export function openingSeq(x) {
+function openingSeq(x) {
   for (const t of tagList(x)) {
     const m = OPENING_RE.exec(t);
     if (m) return (m[1] || '').trim();
@@ -122,7 +122,7 @@ export function openingSeq(x) {
   return null;
 }
 export const isOpening = x => openingSeq(x) !== null;
-export const isGameMaster = x => tagList(x).some(t => t.toLowerCase() === 'game-master');
+const isGameMaster = x => tagList(x).some(t => t.toLowerCase() === 'game-master');
 // the tags the game itself reads (opening, order, game-master), kept when look tags are redone
 export const isSystemTag = t => {
   const s = String(t).trim();
@@ -208,31 +208,44 @@ export function setCover(k, imgs, play = false) {
     (play ? null : imgs[0])
   );
 }
-export function charSetsAll() {
+// Built once per state of the list (its array, length and write count, imagesVer): what is read in play leaves the
+// opening frames out, and an edit in place is written, which counts, before anything reads it again.
+const memoOf = build => {
+  let key = [];
+  let val = null;
+  return (...extra) => {
+    const k = [app.images, app.images.length, ver, ...extra];
+    if (k.length !== key.length || k.some((v, i) => v !== key[i])) {
+      key = k;
+      val = build();
+    }
+    return val;
+  };
+};
+// the pictures a story uses: every row but the opening frames
+export const storyImages = memoOf(() => app.images.filter(x => !isOpening(x)));
+const bySet = list => {
   const m = {};
-  for (const x of app.images) {
-    if (x.kind !== 'char' || isOpening(x)) continue;
-    const k = x.set || x.name;
-    (m[k] = m[k] || []).push(x);
-  }
+  for (const x of list) (m[x.set || x.name] = m[x.set || x.name] || []).push(x);
   return m;
-}
-export function charSets() {
-  const m = {};
-  for (const x of app.images) {
-    if (
-      x.kind !== 'char' ||
-      x.off ||
-      (app.setMeta[x.set || x.name] || {}).off ||
-      (x.set || x.name) === 'admin' ||
-      isOpening(x)
-    )
-      continue;
-    const k = x.set || x.name;
-    (m[k] = m[k] || []).push(x);
-  }
-  return m;
-}
+};
+const allSets = memoOf(() => bySet(storyImages().filter(x => x.kind === 'char')));
+export const charSetsAll = () => allSets();
+// the sets casting may use; a set card's retire switch is not a list write, so the retired keys are part of the key
+const liveSets = memoOf(() =>
+  bySet(
+    storyImages().filter(
+      x => x.kind === 'char' && !x.off && !(app.setMeta[x.set || x.name] || {}).off && (x.set || x.name) !== 'admin',
+    ),
+  ),
+);
+export const charSets = () =>
+  liveSets(
+    app.setMeta,
+    Object.keys(app.setMeta)
+      .filter(k => app.setMeta[k] && app.setMeta[k].off)
+      .join(' '),
+  );
 export function genderOf(k) {
   const g = (app.setMeta[k] || {}).gender;
   if (g) return g;
@@ -283,7 +296,10 @@ const frameWords = x =>
     .toLowerCase()
     .split(/[\s,_]+/)
     .filter(Boolean);
-const adultFrame = x => frameSits(x).some(isAdultSit);
+// A frame is plain only with no situation at all; a key the dictionary no longer has counts as adult, so a picture
+// never shows in a scene its keys don't name.
+const rawSits = x => (Array.isArray(x.situations) ? x.situations : []);
+const adultFrame = x => rawSits(x).some(k => !sitDict()[sitKey(k)] || isAdultSit(sitKey(k)));
 // The situations a set has pictures for, an adult frame counting only for its adult ones. The narrator may name one
 // for the person (prompt.js situationBlock); computed once per set until the list or the dictionary changes.
 let sitMemo = { ver: '', bySet: {} };
@@ -323,7 +339,7 @@ export function pickEmotion(k, emo, look, situation) {
   const s = situationIn(k, situation);
   const ok = x => !adultFrame(x) || (s && isAdultSit(s));
   const named = s ? [s, ...sitAncestors(s)].map(c => imgs.filter(x => ok(x) && frameSits(x).includes(c))) : [];
-  const pool = [...named, imgs.filter(x => !frameSits(x).length), imgs.filter(x => !adultFrame(x))].find(l => l.length);
+  const pool = [...named, imgs.filter(x => !rawSits(x).length), imgs.filter(x => !adultFrame(x))].find(l => l.length);
   if (!pool) return null;
   let c = nearestEmotion(pool, emo);
   const want = (Array.isArray(look) ? look : []).map(x => String(x).toLowerCase()).filter(Boolean);

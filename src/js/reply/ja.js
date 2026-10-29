@@ -41,5 +41,6 @@ export default {
     signature: /^(?:武功|得意技|武器|能力|技|スキル)$/,
     ties: /^(?:関係|人間関係)$/,
     secret: /^秘密$/,
+    profile: /^(?:キャラクター設定|プロフィール)$/, // a persona note's (new-life.js); a character list keeps it as a detail
   },
 };

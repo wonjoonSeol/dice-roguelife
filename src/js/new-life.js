@@ -10,6 +10,7 @@ import {
   currencyOf,
   inPool,
   moneyFor,
+  normGender,
   ORIGINS,
   RACES,
   rollEntry,
@@ -57,20 +58,18 @@ import { introPrompt, runTurn } from './turn.js';
 import { fillTemplate, normalize, pr, talentVars } from './prompt.js';
 import { chooseUiLang } from './settings-sheet.js';
 import { extStart, WORLD_EXT } from './world-ext.js';
-import { parseRoster, rosterTextOf, setRoster, snapOf } from './roster.js';
+import { lineFields, parseRoster, rosterTextOf, setRoster, snapOf } from './roster.js';
 import { bindRosterEditor, joinRoster, openImport, rosterEditorHtml } from './roster-view.js';
 import { noteById } from './notes.js';
 import {
   bindNotePicker,
   bindOnePicker,
-  bindScenarioPicker,
   notePickerHtml,
   oneInForm,
   onePickerHtml,
   pickedInForm,
+  pickedStyle,
   saveBoxAsNote,
-  scenarioInForm,
-  scenarioPickerHtml,
 } from './notes-view.js';
 
 const TALENT_MAX = 5;
@@ -111,20 +110,13 @@ export const styleChips = (cur, off) =>
       `<button type="button" data-sty="${s}" aria-pressed="${s === cur}"${off ? ' disabled' : ''}>${T(STYLE_LABEL[s])}</button>`,
   ).join('');
 const formStyle = () => ($('#styseg button[aria-pressed="true"]') || { dataset: {} }).dataset.sty;
-// a style note, like the style: the save's, else the last save's
+// a style note, like the style: the save's on a regression, else none
 const startStyleNote = inherit => (inherit && app.state.styleNoteId) || null;
 // the note picker under the style chips (#styNote, or #mstyNote in the Memory tab), shown while From a note is picked
 export const styleNoteHtml = (key, style, id) =>
   `<div id="${key}Wrap" class="style-note${style === STYLE.NOTE ? '' : ' hidden'}">${onePickerHtml(key, id)}</div>`;
 // the form's prose style, with its note when it is one; null (and a toast) when From a note has none picked
-function styleFromForm(inherit) {
-  const style = formStyle() || startStyle(inherit);
-  if (style !== STYLE.NOTE) return { style };
-  const id = oneInForm('sty');
-  if (noteById(id)) return { style, styleNoteId: id };
-  toast(T('Pick a note for the prose style'));
-  return null;
-}
+const styleFromForm = inherit => pickedStyle('sty', formStyle() || startStyle(inherit));
 let tierLocked = false;
 // free setup for players without owner rights stops at C; Random stays open, its odds are the fair ones
 function lockTierSel(sel) {
@@ -150,6 +142,13 @@ const talentRow = first =>
 let formInherit; // for redrawNewLifeForm
 // characters imported from the setting box before the world is known: the fate screen's list takes them
 let castDraft = '';
+// how many people a draft holds, read again only when the draft or the player's name changed
+let castMemo = { text: '', me: '', n: 0 };
+function castCount(text, me) {
+  if (!text) return 0;
+  if (castMemo.text !== text || castMemo.me !== me) castMemo = { text, me, n: parseRoster(text, me).people.length };
+  return castMemo.n;
+}
 export function startNewLifeForm(inherit) {
   app.pendingRoll = null; // a fate left on an earlier screen (a redraw puts its own back)
   formInherit = inherit;
@@ -206,7 +205,7 @@ function showMode(to) {
 function bindScenarioForm() {
   const root = $('#scRoster');
   if (!root) return;
-  bindScenarioPicker();
+  bindOnePicker('sc');
   bindRosterEditor(root, null, $('#nm').value.trim(), v => (castDraft = v), { lang: storyLang() });
 }
 function syncScenarioCast() {
@@ -261,8 +260,6 @@ export function redrawNewLifeForm() {
   }
   $('#prof').dispatchEvent(new Event('input'));
   bindNotePicker();
-  bindScenarioPicker();
-  bindOnePicker('sty');
   bindWorldNoteSave();
   if (pending) {
     app.pendingRoll = pending;
@@ -354,7 +351,7 @@ function newLifeHtml(inherit, play) {
 // a scenario game's own fields: its note (required), an optional first scene, the world its pictures come from and
 // its characters
 function scenarioHtml() {
-  return `<div class="field sc-only"><label>${T('Scenario: a note from your library')}</label>${scenarioPickerHtml(null)}</div>
+  return `<div class="field sc-only"><label>${T('Scenario: a note from your library')}</label>${onePickerHtml('sc', null)}</div>
     <div class="field sc-only"><label for="scFirst">${T('First scene (optional)')}</label><textarea id="scFirst" rows="4" maxlength="${LIMITS.userNotes}" placeholder="${esc(T('e.g. The rain has not stopped for three days. You push open the door of the bookshop at the end of the alley.'))}"></textarea><label class="row opt"><input type="checkbox" id="scVerbatim"> ${T('Show this text as the first message, as it is')}</label><p class="muted field-note">${T('Unticked, the narrator writes the opening from the scenario, starting from this situation when there is one.')}</p></div>
     <div class="field sc-only"><label>${T('World of the pictures (optional)')}</label><div class="seg" id="scwseg"><button type="button" data-scw="none" aria-pressed="true">${T('None')}</button>${WORLDS.map(w => `<button type="button" data-scw="${w.id}" aria-pressed="false">${T(w.name)}</button>`).join('')}</div><p class="muted field-note">${T('It only decides which pictures fit. None means any picture.')}</p></div>
     <div class="field sc-only"><label>${T('Extras')}</label><div id="scAddons" class="addons"></div><p class="muted field-note">${T('Each extra brings in only its own part of the game. You can change them later in the Memory tab.')}</p></div>
@@ -417,7 +414,7 @@ function bindWorldNoteSave() {
   const sync = () => {
     save.disabled = !box.value.trim() || !!app.pendingRoll; // a rolled fate already took the text
     cast.disabled = !!app.pendingRoll; // the fate screen's list imports from then on
-    const n = castDraft ? parseRoster(castDraft, me()).people.length : 0;
+    const n = castCount(castDraft, me());
     $('#worldNoteCastNote').textContent = n
       ? T("{n} {n|person|people} imported. They join this world's character list once your fate is rolled.", { n })
       : '';
@@ -468,36 +465,32 @@ function untickInForm(id) {
   box.checked = false;
   box.dispatchEvent(new Event('change'));
 }
-// the profile box shows how much of its 600 characters is used
-// A persona note fills the name, gender and profile: a labelled line (or a part of one split by " / ") sets its field,
-// everything else is the profile
-// i18n-ignore-start: the labels and gender words a persona note may be written with
-const PERSONA_FIELD = [
-  ['name', /^(?:이름|name|名前)\s*[:：]\s*/i],
-  ['gender', /^(?:성별|gender|性別)\s*[:：]\s*/i],
-  ['profile', /^(?:캐릭터 설정|프로필|설정|profile|キャラクター設定|プロフィール)\s*[:：]\s*/i],
-];
-const PERSONA_GENDER = [
-  [GENDER.MALE, /^(?:남|남자|남성|male|man|m|男|男性)$/i],
-  [GENDER.FEMALE, /^(?:여|여자|여성|female|woman|f|女|女性)$/i],
-];
-// i18n-ignore-end
+// A persona note fills the name, gender and profile. A line that starts with one of their keys (any language, as a
+// character list reads them: roster.js lineFields) is read part by part; every other line or part is the profile.
+const PERSONA_KEYS = ['name', 'gender', 'profile'];
 function fillPersona(note) {
   if (!note) return;
   const got = { profile: [] };
   for (const line of String(note.text || '').split(/\r?\n/)) {
-    const parts = PERSONA_FIELD.some(([, re]) => re.test(line.trim())) ? line.split(/\s+\/\s+/) : [line];
-    for (const part of parts) {
-      const hit = PERSONA_FIELD.find(([, re]) => re.test(part.trim()));
-      const value = hit ? part.trim().replace(hit[1], '').trim() : part;
-      if (hit && hit[0] !== 'profile') got[hit[0]] = value;
-      else got.profile.push(value);
+    const ps = lineFields(line.trim());
+    if (!ps.length || !PERSONA_KEYS.includes(ps[0].field)) {
+      got.profile.push(line);
+      continue;
+    }
+    for (const p of ps) {
+      if (p.field === 'name') {
+        // what follows a slash in a name is no part of it ("Name: Baek / swordsman")
+        const cut = p.value.search(/[/／|]/);
+        got.name = cut < 0 ? p.value : p.value.slice(0, cut).trim();
+        if (cut >= 0 && p.value.slice(cut + 1).trim()) got.profile.push(p.value.slice(cut + 1).trim());
+      } else if (p.field === 'gender') got.gender = p.value;
+      else got.profile.push(p.field === 'profile' ? p.value : p.text);
     }
   }
   const nm = $('#nm');
   if (nm) nm.value = String(got.name || note.name).slice(0, 20);
-  const g = got.gender && PERSONA_GENDER.find(([, re]) => re.test(got.gender.trim()));
-  const gb = g && $(`#gseg button[data-g="${g[0]}"]`);
+  const g = normGender(got.gender);
+  const gb = (g === GENDER.MALE || g === GENDER.FEMALE) && $(`#gseg button[data-g="${g}"]`);
   if (gb) gb.click();
   const prof = $('#prof'),
     text = got.profile.join('\n').trim();
@@ -506,6 +499,7 @@ function fillPersona(note) {
   prof.dispatchEvent(new Event('input'));
   if (text.length > prof.maxLength) toast(T('The profile was cut to {n} characters', { n: prof.maxLength }));
 }
+// the profile box shows how much of its 600 characters is used
 function bindProfileCount() {
   const ta = $('#prof'),
     pc = $('#profCount');
@@ -867,8 +861,33 @@ function revealFate(life, inherit, again) {
     if (style) beginLife(style);
   };
 }
+// A new state: what every life starts with, then what this one brings
+const freshState = (life, overrides) => ({
+  v: 1,
+  goldV: 2,
+  life,
+  lifeNo: 1,
+  title: '',
+  skills: [],
+  lifeStart: 0,
+  turnNo: 0,
+  quests: [],
+  lore: {},
+  relations: {},
+  cast: {},
+  clock: { day: 0, date: '', time: '', weather: '', place: '' },
+  summaries: [],
+  summarizedUpto: -1,
+  stateNote: '',
+  pastLives: [],
+  userNotes: '',
+  roster: {},
+  dead: false,
+  next: 0,
+  ...overrides,
+});
 // style: the form's prose style (styleFromForm)
-async function beginLife({ style, styleNoteId }) {
+async function beginLife(style) {
   const { life, inherit, lang, roster } = app.pendingRoll;
   app.pendingRoll = null;
   castDraft = ''; // the list it went into is the one kept
@@ -898,40 +917,28 @@ async function beginLife({ style, styleNoteId }) {
       if (!skills.find(x => x.name === s.name)) skills.push(s);
   }
   life.money = moneyFor(lang);
-  app.state = {
-    v: 1,
-    goldV: 2,
+  app.state = freshState(life, {
     rules: inherit ? app.state.rules : snapshotRules(),
     lang,
     mode: MODE.ROGUELIKE,
-    life,
     lifeNo,
     stats: Object.assign(
       { hp: b.hp, maxHp: b.hp, power: b.power, gold: b.gold * currencyOf(life)[1], fame: 0, age: life.age },
       rollSubStats(life.originTier),
     ),
-    title: '',
     skills,
     lifeStart: inherit ? app.state.next : 0,
-    turnNo: 0,
-    quests: [],
     lore,
-    relations: {},
-    cast: {},
-    clock: { day: 0, date: '', time: '', weather: '', place: '' },
     ...extStart(life.world.id, life.originTier),
     summaries: inherit ? app.state.summaries : [],
     summarizedUpto: inherit ? app.state.summarizedUpto : -1,
-    stateNote: '',
     pastLives: past,
     userNotes,
     roster: (inherit && app.state.roster) || {}, // every world's list goes on; this life uses its own world's
     noteIds, // the library notes ticked on this screen (notes.js)
-    style,
-    ...(styleNoteId ? { styleNoteId } : {}),
-    dead: false,
+    ...style,
     next: inherit ? app.state.next : 0,
-  };
+  });
   if (roster != null) setRoster(app.state, life.world.id, roster);
   if (!inherit) openNewSave(T("{name}'s Fate", { name: life.name }));
   else app.currentSave.lifeNo = lifeNo;
@@ -984,7 +991,7 @@ async function startScenario(sel) {
     $('#nm').focus();
     return;
   }
-  const note = noteById(scenarioInForm());
+  const note = noteById(oneInForm('sc'));
   if (!note) {
     toast(T('Pick a scenario note'));
     return;
@@ -1018,14 +1025,12 @@ async function startScenario(sel) {
   const first = ($('#scFirst').value || '').trim();
   const verbatim = !!first && $('#scVerbatim').checked;
   const X = table && WORLD_EXT[table.id];
-  const addons = { ...Object.fromEntries(ADDONS.map(k => [k, false])), ...formAddons() };
+  const addons = formAddons(); // an extra it leaves out is off (rules.js addonOn)
   addons.ext = !!X && addons.ext;
   const pickStep = $('#scExtStart') ? $('#scExtStart').value : '';
   const step = addons.ext && X.ladder && pickStep !== '' ? Number(pickStep) : null;
   const b = BASE.C;
-  app.state = {
-    v: 1,
-    goldV: 2,
+  app.state = freshState(life, {
     rules: snapshotRules(), // dice and the gambler's fate come from the extras (rules.js rule)
     lang,
     mode: MODE.SCENARIO,
@@ -1035,29 +1040,10 @@ async function startScenario(sel) {
     scenarioId: note.id,
     scenarioName: note.name,
     firstScene: first,
-    life,
-    lifeNo: 1,
     stats: Object.assign({ hp: b.hp, maxHp: b.hp, power: b.power, gold: 0, fame: 0, age: 0 }, rollSubStats('C')), // kept, never shown or sent
-    title: '',
-    skills: [],
-    lifeStart: 0,
-    turnNo: 0,
-    quests: [],
-    lore: {},
-    relations: {},
-    cast: {},
-    clock: { day: 0, date: '', time: '', weather: '', place: '' },
-    summaries: [],
-    summarizedUpto: -1,
-    stateNote: '',
-    pastLives: [],
-    userNotes: '',
-    roster: {},
     noteIds: (pickedInForm() ?? startNotes(false)).filter(id => id !== note.id), // the scenario goes once
     ...style,
-    dead: false,
-    next: 0,
-  };
+  });
   if (castDraft.trim()) setRoster(app.state, life.world.id, castDraft);
   castDraft = '';
   openNewSave(T('{scenario} ({name})', { scenario: note.name, name }));

@@ -6,7 +6,7 @@ import { app } from './app.js';
 import { answerDialog, askConfirm, askPrompt, closeSheet, openDialog, openSheet } from './sheet.js';
 import { persist } from './persistence.js';
 import { notesShare } from './prompt.js';
-import { NOTE_TYPE, NOTE_TYPE_LABEL, NOTE_TYPES } from './enums.js';
+import { NOTE_TYPE, NOTE_TYPE_LABEL, NOTE_TYPES, STYLE } from './enums.js';
 import {
   cleanNoteName,
   deleteNote,
@@ -46,7 +46,7 @@ const typeLabel = t => T(NOTE_TYPE_LABEL[t]);
 const typeTag = n => `<span class="note-type">${esc(typeLabel(n.type))}</span>`;
 // A picker's notes: its own type first, the rest behind a toggle that starts open when one of them is picked
 // (shown). row(note, other) draws one; the others carry their type
-export function typedRows(notes, type, row, shown = () => false) {
+function typedRows(notes, type, row, shown = () => false) {
   const own = notes.filter(n => n.type === type),
     rest = notes.filter(n => n.type !== type);
   return (
@@ -132,11 +132,15 @@ export function renderNoteLibrary() {
     .forEach(b => (b.onclick = () => openNoteEditor(noteById(b.dataset.libEdit || b.dataset.libOpen))));
   root.querySelectorAll('[data-lib-del]').forEach(b => (b.onclick = () => removeNote(b.dataset.libDel)));
   root.querySelector('[data-lib-new]').onclick = () => openNoteEditor(null, null, preset);
-  root.querySelector('[data-lib-upload]').onchange = async e => {
+  bindUpload(root.querySelector('[data-lib-upload]'), libFilter === 'all' ? '' : libFilter);
+}
+// an upload button: the files picked go into the library as this type (uploadNotes)
+function bindUpload(input, preset) {
+  input.onchange = async e => {
     const files = [...(e.target.files || [])];
     e.target.value = ''; // the same files can be picked again
     try {
-      if (files.length) await uploadNotes(files, libFilter === 'all' ? '' : libFilter);
+      if (files.length) await uploadNotes(files, preset);
     } catch (err) {
       toast(T('Save failed: {err}', { err: err.code || err.message }));
     }
@@ -361,9 +365,14 @@ function refreshNotePicker() {
 
 /* ---- one-note pickers: a scenario game's scenario (sc), a persona on the new game screen (per), and a prose style
    from a note on the new game screen (sty) and in the Memory tab (msty) ---- */
-const STYLE_HINT = N_(
-  'The note says how the narrator writes: voice, tone, sentence length, words to use or avoid. It goes to Claude whole every turn.',
-);
+// the prose style's picker, the same on the new game screen (sty) and in the Memory tab (msty)
+const STY = {
+  label: N_('Write in the style of {name}'),
+  hint: N_(
+    'The note says how the narrator writes: voice, tone, sentence length, words to use or avoid. It goes to Claude whole every turn.',
+  ),
+  type: NOTE_TYPE.STYLE,
+};
 const ONE = {
   sc: {
     label: N_('Play {name}'),
@@ -380,11 +389,12 @@ const ONE = {
     ),
     type: NOTE_TYPE.PERSONA,
   },
-  sty: { label: N_('Write in the style of {name}'), hint: STYLE_HINT, type: NOTE_TYPE.STYLE },
-  msty: { label: N_('Write in the style of {name}'), hint: STYLE_HINT, type: NOTE_TYPE.STYLE },
+  sty: STY,
+  msty: STY,
 };
 const oneStart = {}; // the note each picker opened with
-const oneChange = {}; // what a pick does at once (the Memory tab saves it)
+// what a pick does at once: the scenario's size, a persona's fields, the Memory tab saving the style
+const oneChange = { sc: () => scenarioSize() };
 export function onePickerHtml(key, id) {
   oneStart[key] = id;
   return `<div id="${key}NoteBox">${oneInner(key, id)}</div>`;
@@ -404,16 +414,21 @@ export const oneInForm = key => {
   const r = $(`#${key}NoteBox [data-one-note]:checked`);
   return r ? r.dataset.oneNote : null;
 };
-export const scenarioPickerHtml = id => onePickerHtml('sc', id);
-export const scenarioInForm = () => oneInForm('sc');
+// a prose style as a save keeps it: From a note needs a note picked in that picker; null, and a toast, without one
+export function pickedStyle(key, style) {
+  if (style !== STYLE.NOTE) return { style };
+  const id = oneInForm(key);
+  if (noteById(id)) return { style, styleNoteId: id };
+  toast(T('Pick a note for the prose style'));
+  return null;
+}
 function onePicked(key) {
-  if (key === 'sc') scenarioSize();
   if (oneChange[key]) oneChange[key](oneInForm(key));
 }
 // the scenario counts with the ticked notes: both go to the narrator whole
 const scenarioSize = () => {
   const box = $('#scNoteBox'),
-    id = scenarioInForm();
+    id = oneInForm('sc');
   if (box) showSize(box, id ? [id, ...(pickedInForm() || []).filter(x => x !== id)] : [], true);
 };
 // onChange(id): what a pick does at once
@@ -439,18 +454,9 @@ export function bindOnePicker(key, onChange) {
       },
       ONE[key].type,
     );
-  box.querySelector('[data-one-upload]').onchange = async e => {
-    const files = [...(e.target.files || [])];
-    e.target.value = ''; // the same files can be picked again
-    try {
-      if (files.length) await uploadNotes(files, ONE[key].type);
-    } catch (err) {
-      toast(T('Save failed: {err}', { err: err.code || err.message }));
-    }
-  };
-  if (key === 'sc') scenarioSize();
+  bindUpload(box.querySelector('[data-one-upload]'), ONE[key].type);
+  if (ONE[key].size) scenarioSize(); // a redrawn picker shows its size again
 }
-export const bindScenarioPicker = () => bindOnePicker('sc');
 function refreshOnePickers() {
   for (const key of Object.keys(ONE)) {
     const box = $(`#${key}NoteBox`);

@@ -2,17 +2,17 @@
 import { clone, noteIgnored, pick, rnd, shortWhat, toast, uid } from './util.js';
 import { isPivotal, matchOdds, mentionsStars, stripOdds } from './reply-words.js';
 import { askOf, cmdIs, normEmo } from './data.js';
-import { ADDON, ENTRY_LABEL, STANCE_LABEL } from './enums.js';
+import { ENTRY_LABEL, STANCE_LABEL } from './enums.js';
 import { T } from './i18n.js';
 import { platform } from './db.js';
 import { NEW_SAVES, turnStore } from './turn-store.js';
 import { app, currentRun, exclusive } from './app.js';
-import { adminOn, addonOn, critOf, isScenario, rollGrade, rule } from './rules.js';
+import { adminOn, critOf, isScenario, luckOn, rollGrade, rule } from './rules.js';
 import { aliasOut, lastStoryReply } from './people.js';
 import { snapOf } from './roster.js';
 import { cueDeath, cueDoom, cueFanfare, cueItem, cueQuest, cueRealm, cueReveal, cueSkill } from './sound.js';
 import { ensureSample } from './boot.js';
-import { imgUrl, isOpening, openingFor, pickEmotion } from './images.js';
+import { imgUrl, openingFor, pickEmotion, storyImages } from './images.js';
 import { resolveScene } from './places.js';
 import { aiWillPick, castFor, earlyCast, presentOf, resolveAiPicks, startAiPick, takePromoted } from './casting.js';
 import { closeGone, openSave, persist, pushTurn, staleSave, storeError } from './persistence.js';
@@ -61,7 +61,7 @@ export let showDice = function showDice(r) {
       return;
     }
     const key = x => [x.name, ...(x.tags || [])].join(' ').toLowerCase();
-    const fx = app.images.filter(x => x.kind === 'fx' && !x.off && !isOpening(x) && /dice/.test(key(x)));
+    const fx = storyImages().filter(x => x.kind === 'fx' && !x.off && /dice/.test(key(x)));
     const okRe = /succ|crit|win|high|(^|[^0-9])20($|[^0-9])/,
       badRe = /fail|lose|low|(^|[^0-9])1($|[^0-9])/;
     const good = fx.filter(x => (r.ok ? okRe : badRe).test(key(x)));
@@ -150,9 +150,7 @@ async function sendInner(text) {
     fate = null;
   if (!cmd) {
     const keep = app.state.rollMemo && app.state.rollMemo.at === app.state.next && 'luck' in app.state.rollMemo;
-    // a scenario's luck comes with its luck extra, dice or not
-    const noLuck = isScenario() ? !addonOn(ADDON.LUCK) : rule('dice') === false;
-    luck = noLuck ? null : keep ? app.state.rollMemo.luck : rollLuck();
+    luck = !luckOn() ? null : keep ? app.state.rollMemo.luck : rollLuck();
     fate = keep && 'fate' in app.state.rollMemo ? app.state.rollMemo.fate : rollFate(null, false);
     const mr = makeRoll(text);
     text = mr.text;
@@ -485,13 +483,12 @@ function maskReply(out, cmd, turn) {
   }
 }
 // what a scenario reply may not do: the roguelike's own events (a windfall, a constellation channel, an awakening,
-// a new race) and death, which would offer a regression
+// a new race); death, which would offer a regression, is never applied to one (apply.js applyDeath)
 const SCENARIO_OFF = {
   windfall: false,
   channel_open: false,
   status_unlock: false,
   race: null,
-  dead: false,
 };
 const scenarioMask = out => Object.assign(out, SCENARIO_OFF);
 // A free roll gets its chance from the narrator's check and is written onto the player's line; a critical result

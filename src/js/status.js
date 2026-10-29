@@ -74,6 +74,18 @@ const STATUS_ORNAMENT =
   '<svg class="orn" viewBox="0 0 56 22" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M1 21 C1 8 8 1 21 1 M1 21 C1 14 4 9 9 6 M1 21 C6 21 10 18 12 14 M14 3 c3 -1 6 1 6 4 M4 17 c1 -3 4 -5 7 -5"/><circle cx="22" cy="6" r="1.2" fill="currentColor"/><circle cx="8" cy="20" r="1.2" fill="currentColor"/></svg>';
 const corners = () =>
   ['tl', 'tr', 'bl', 'br'].map(c => STATUS_ORNAMENT.replace('class="orn"', `class="orn ${c}"`)).join('');
+// a titled part of the window, only with something in it
+const sec = (title, body) =>
+  body ? `<div class="sw-line"></div><div class="sw-sec"><h4>${T(title)}</h4>${body}</div>` : '';
+// the six sub-stats, and the ledger's entries ('' with none): both windows show them the same way
+const subStatsHtml = s =>
+  `<div class="sw-subs">${SUB_STATS.map(([k, label]) => `<span><span class="sw-label">${T(label)}</span><b>${s[k] || 0}</b></span>`).join('')}</div>`;
+const ledgerHtml = st => {
+  const rows = Object.entries(st.ledger || {})
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
+    .join('');
+  return rows && `<dl class="sw-kv sw-kv-loose">${rows}</dl>`;
+};
 // A scenario save's window: where the story stands, and each list its story keeps once it has something (no grades,
 // race, standing or past lives)
 function scenarioStatus() {
@@ -82,13 +94,11 @@ function scenarioStatus() {
     s = st.stats,
     E = st.energy,
     place = st.clock.place;
-  const sec = (title, body) =>
-    body ? `<div class="sw-line"></div><div class="sw-sec"><h4>${T(title)}</h4>${body}</div>` : '';
   const card = (name, sub, note) =>
     `<div class="sk"><div><b>${esc(name)}</b>${sub ? `<span class="src">${esc(sub)}</span>` : ''}${note ? `<p>${esc(note)}</p>` : ''}</div></div>`;
   const stats =
     st.statsUsed || E
-      ? `<div class="sw-grid sw-grid-main"><div><small>HP</small><b>${fmt(s.hp)} / ${fmt(s.maxHp)}</b></div>${E ? `<div><small>${esc(E.name)}</small><b>${fmt(E.cur)} / ${fmt(E.max)}</b></div>` : ''}<div><small>${T(STAT_LABEL.gold)}</small><b>${esc(moneyText(s.gold, l))}</b></div><div><small>${T(STAT_LABEL.fame)}</small><b>${fmt(s.fame)}</b></div></div><div class="sw-subs">${SUB_STATS.map(([k, label]) => `<span><span class="sw-label">${T(label)}</span><b>${s[k] || 0}</b></span>`).join('')}</div>`
+      ? `<div class="sw-grid sw-grid-main"><div><small>HP</small><b>${fmt(s.hp)} / ${fmt(s.maxHp)}</b></div>${E ? `<div><small>${esc(E.name)}</small><b>${fmt(E.cur)} / ${fmt(E.max)}</b></div>` : ''}<div><small>${T(STAT_LABEL.gold)}</small><b>${esc(moneyText(s.gold, l))}</b></div><div><small>${T(STAT_LABEL.fame)}</small><b>${fmt(s.fame)}</b></div></div>${subStatsHtml(s)}`
       : '';
   const skills = st.skills
     .map(k => card(k.name, `Lv.${k.lv || 1}${k.cost ? ', ' + T('Cost {n}%', { n: k.cost }) : ''}`, k.desc))
@@ -108,9 +118,6 @@ function scenarioStatus() {
     .filter(q => q.status === 'active')
     .map(q => card(q.title, '', q.note))
     .join('');
-  const ledger = Object.entries(st.ledger || {})
-    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
-    .join('');
   const titles = (st.titles || []).map(t => `<span class="sw-chip">${esc(t)}</span>`).join('');
   openSheet(
     `<div class="sw">${corners()}<span class="xx" role="button" tabindex="0" aria-label="${T('Close')}" data-close>✕</span>
@@ -118,7 +125,7 @@ function scenarioStatus() {
     <div class="sw-head"><div><div class="kv"><span>${T('Name')}</span><span>${esc(l.name)}</span></div>
       <div class="kv"><span>${T('Scenario')}</span><span>${esc(scenarioName())}</span></div>
       ${place ? `<div class="kv"><span>${T('Place')}</span><span>${esc(place)}</span></div>` : ''}</div></div>
-    ${extSection(worldExt())}${sec('STATS', stats)}${sec('SKILLS', skills && `<div class="sw-scroll">${skills}</div>`)}${sec('Inventory', items && `<div class="sw-scroll">${items}</div>`)}${sec('QUESTS', quests && `<div class="sw-scroll">${quests}</div>`)}${sec('LEDGER', ledger && `<dl class="sw-kv sw-kv-loose">${ledger}</dl>`)}${sec('TITLES', titles && `<div class="sw-chips">${titles}</div>`)}${sec('NOW', st.stateNote && `<p class="sw-state">${esc(st.stateNote)}</p>`)}
+    ${extSection(worldExt())}${sec('STATS', stats)}${sec('SKILLS', skills && `<div class="sw-scroll">${skills}</div>`)}${sec('Inventory', items && `<div class="sw-scroll">${items}</div>`)}${sec('QUESTS', quests && `<div class="sw-scroll">${quests}</div>`)}${sec('LEDGER', ledgerHtml(st))}${sec('TITLES', titles && `<div class="sw-chips">${titles}</div>`)}${sec('NOW', st.stateNote && `<p class="sw-state">${esc(st.stateNote)}</p>`)}
   </div><div class="row sw-actions"><button class="btn" data-close>${T('Close')}</button></div>`,
     { center: true, wide: true },
   );
@@ -172,7 +179,7 @@ export function openStatus() {
         ${X.ladder ? '' : `<div><small>${T(STAT_LABEL.power)}</small><b>${fmt(s.power)}${itemBonus() ? `<span class="sw-sub"> +${fmt(itemBonus())}</span>` : ''}${SV ? ` <span class="sw-sub">(${powerGrade(app.state.stats.power + itemBonus())})</span>` : ''}</b></div>`}${[...(X.ladder ? [[T(X.ladder.label), T(X.ladder.steps[app.state.ladder])]] : []), ...(X.cells ? X.cells() : [])].map(([k, v]) => `<div><small>${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}
         <div><small>${T(STAT_LABEL.gold)}</small><b>${esc(moneyText(s.gold, app.state.life))}</b></div><div><small>${T(STAT_LABEL.fame)}</small><b>${fmt(s.fame)}</b></div>
       </div>
-      <div class="sw-subs">${SUB_STATS.map(([k, label]) => `<span><span class="sw-label">${T(label)}</span><b>${s[k] || 0}</b></span>`).join('')}</div>
+      ${subStatsHtml(s)}
     </div>
 
     ${extSection(X)}
@@ -195,15 +202,7 @@ export function openStatus() {
         : ''
     }
     <div class="sw-sec"><h4>${T('QUESTS')}</h4><div class="sw-scroll">${quests}</div></div>
-    ${
-      Object.keys(app.state.ledger || {}).length
-        ? `<div class="sw-line"></div><div class="sw-sec"><h4>${T('LEDGER')}</h4><dl class="sw-kv sw-kv-loose">${Object.entries(
-            app.state.ledger,
-          )
-            .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
-            .join('')}</dl></div>`
-        : ''
-    }
+    ${sec(N_('LEDGER'), ledgerHtml(app.state))}
     ${
       (app.state.titles || []).length
         ? (() => {

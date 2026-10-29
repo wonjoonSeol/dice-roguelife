@@ -18,7 +18,7 @@ const EXT = Object.fromEntries(
 const TIMES = ['day', 'sunset', 'night', 'indoor'];
 
 // one canonical file name per image (no extension): the same names the upload rules read back
-function baseName(x) {
+export function baseName(x) {
   if (x.kind === 'char') {
     const set = x.set || x.name || 'unnamed';
     return `${set}_${x.emotion || 'neutral'}${x.variant ? '_' + x.variant : ''}`;
@@ -40,19 +40,10 @@ function nameAll(imgs, extOf) {
   });
 }
 
-// the situation dictionary as tags.json writes it: label, hint and adult first
+// the situation dictionary as tags.json writes it: label and hint always, first
 const dictJson = () =>
   Object.fromEntries(
-    Object.entries(sitDict()).map(([k, e]) => [
-      k,
-      Object.assign(
-        { label: e.label || '', hint: e.hint || '' },
-        e.adult ? { adult: true } : {},
-        e.parent ? { parent: e.parent } : {},
-        e.label_ja ? { label_ja: e.label_ja } : {},
-        e.hint_en ? { hint_en: e.hint_en } : {},
-      ),
-    ]),
+    Object.entries(sitDict()).map(([k, e]) => [k, { label: e.label || '', hint: e.hint || '', ...e }]),
   );
 // the tags.json the import button reads, keyed by the pack's file names
 export function buildTagsJson(imgs, names) {

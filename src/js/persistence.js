@@ -88,17 +88,15 @@ export function closeGone(id, msg) {
   renderSaves();
   if (msg) toast(msg, 4500);
 }
-// what a save's card repeats from its state, read without opening the save (the saves tab, a new game's notes)
+// what a save's card repeats from its state, read without opening the save (the saves tab, how many saves use a note)
 export const cardFields = st => ({
   turns: st.next,
   lifeNo: st.lifeNo,
   noteIds: st.noteIds,
-  style: st.style, // a new game starts with the last save's (new-life.js)
+  style: st.style,
   ...(st.styleNoteId ? { styleNoteId: st.styleNoteId } : {}),
   ...(st.turnNo != null ? { lifeTurns: st.turnNo } : {}),
-  ...(isScenario(st)
-    ? { mode: st.mode, scenarioId: st.scenarioId, scenarioName: scenarioName(st), addons: st.addons }
-    : {}),
+  ...(isScenario(st) ? { mode: st.mode, scenarioId: st.scenarioId, scenarioName: scenarioName(st) } : {}),
 });
 let persistQueue = Promise.resolve();
 // one state write at a time, so they never trip each other's check
