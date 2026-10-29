@@ -13,9 +13,10 @@ import { logErr } from './diag.js';
 import { growthLevel, itemBonus, lifeDiff, rollGrade, rule, statusVisible, titlesOn } from './rules.js';
 import { stripOdds } from './reply-words.js';
 import { activeRel, bondOf, BONDS, canonName, lastStoryReply } from './people.js';
-import { charSets, fitsWorld, frameTags } from './images.js';
+import { charSets, fitsWorld, frameTags, genderOf } from './images.js';
 import { placeVocab } from './places.js';
-import { isOpenRole, namedSetFor, setIds } from './casting.js';
+import { cardIndex, cardProfile, isOpenRole, namedSetFor, namedSetOf, setIds } from './casting.js';
+import { mentioned, namesOf, rosterFor, rosterNow } from './roster.js';
 import { widgetOf } from './widgets.js';
 import { nextStep, standingRows, worldExt } from './world-ext.js';
 
@@ -278,62 +279,93 @@ function relationsBlock() {
       })()
     : '';
 }
-// named characters with portraits, grouped by the set's first identity tag so one line holds a whole sect; groups
-// the story mentions come first and the rest rotate over turns, within about 500 bytes
-function namedBlock(hay, turn) {
-  const l = app.state.life;
-  const used = new Set(Object.values(app.state.cast));
-  const w = l.world.id;
-  const ctx = hay + ' ' + (app.state.stateNote || '') + ' ' + ((app.state.standing || {}).faction || '');
-  // an open role (#key) is a set the narrator may name (casting.js isOpenRole)
-  const list = Object.keys(charSets())
-    .map(k => [k, app.setMeta[k] || {}])
-    .filter(([k, m]) => (m.charName || isOpenRole(k)) && !used.has(k) && fitsWorld(m, w));
-  if (!list.length) return '';
-  // grouped by the set's first identity tag, so one line holds a whole sect; groups the story mentions come first, the rest rotate over turns
+// the short text after a name in the named block
+const shortOf = p => [p.position, p.power].filter(Boolean).join(' ').slice(0, 16).trim();
+// the roster's people, each with the set card their names point to, and each card's person (the first to claim it),
+// once per prompt, for the named block and the profiles
+function rosterCards(ix) {
+  const of = rosterNow().map(e => [e, namedSetOf(namesOf(e), { ix, exact: true })]);
+  const bySet = new Map();
+  for (const [e, k] of of) if (k && !bySet.has(k)) bySet.set(k, e);
+  return { of, bySet };
+}
+// named characters, grouped by affiliation (a roster heading or faction key, a set's first identity tag) so one line
+// holds a whole sect: what the story mentions first, then the player's roster, then named sets and open roles, the
+// rest rotating over turns, within about 500 bytes
+function namedBlock(hay, turn, sets, own) {
+  const st = app.state;
+  const used = new Set(Object.values(st.cast));
+  const w = st.life.world.id;
+  const ctx = hay + ' ' + (st.stateNote || '') + ' ' + ((st.standing || {}).faction || '');
   const groups = new Map();
+  const groupOf = (name, vals) => {
+    if (!groups.has(name)) groups.set(name, { name, vals: [], members: [], roster: 0 });
+    const g = groups.get(name);
+    for (const v of vals) if (v && !g.vals.includes(v)) g.vals.push(v);
+    return g;
+  };
+  const sex = g => (g === 'female' ? pl('F') : g === 'male' ? pl('M') : '?');
+  // met, under any of their names or wearing their set: [Relations] and the faces have them
+  const known = n => st.cast[n] || (st.relations || {})[n] != null;
+  for (const [e, k] of own.of) {
+    if ([canonName(e.name), ...namesOf(e)].some(known) || (k && used.has(k))) continue;
+    const ids = k ? setIds(k).map(i => i.val) : [];
+    const g = groupOf(e.faction || ids[0] || pl('Other'), [e.faction, ...ids]);
+    g.roster = 1;
+    g.members.push({
+      name: e.name,
+      roster: 1,
+      g: sex(e.gender || (k && genderOf(k))),
+      short: shortOf(e.profile),
+      hit: mentioned(e, ctx) ? 1 : 0,
+    });
+  }
+  // an open role (#key) is a set the narrator may name (casting.js isOpenRole)
+  const list = Object.keys(sets)
+    .map(k => [k, app.setMeta[k] || {}])
+    .filter(([k, m]) => (m.charName || isOpenRole(k)) && !used.has(k) && !own.bySet.has(k) && fitsWorld(m, w));
   for (const [k, m] of list) {
     const ids = setIds(k);
-    const gname = ids.length ? ids[0].val : pl('Other');
-    if (!groups.has(gname)) groups.set(gname, { name: gname, vals: [], members: [] });
-    const g = groups.get(gname);
-    for (const i of ids) if (!g.vals.includes(i.val)) g.vals.push(i.val);
+    const g = groupOf(
+      ids.length ? ids[0].val : pl('Other'),
+      ids.map(i => i.val),
+    );
     const segs = String(m.role || '')
       .split(/[,，]/)
       .map(t => {
         for (const i of ids) t = t.split(i.val).join('');
         return t.replace(/\(.*?\)|（.*?）/g, '').trim();
       });
-    const p = m.profile || {};
-    const short = (
-      [p.position, p.power].filter(Boolean).join(' ').slice(0, 16) ||
-      (segs.find(t => t.length >= 3) || segs[0] || '').slice(0, 12)
-    ) // the first phrase that still says something once the identity is removed
-      .trim();
+    // the card's position and power, else the first phrase of its role that still says something once the identity
+    // is removed
+    const short = shortOf(cardProfile(k) || {}) || (segs.find(t => t.length >= 3) || segs[0] || '').slice(0, 12).trim();
     g.members.push({
       name: m.charName || '#' + k,
       open: !m.charName,
-      g: m.gender === 'female' ? pl('F') : m.gender === 'male' ? pl('M') : '?',
+      roster: 0,
+      g: sex(m.gender),
       short,
       hit: m.charName && ctx.includes(m.charName) ? 1 : 0,
     });
   }
+  if (!groups.size) return '';
   const N = groups.size,
     r = app.state.next % N;
   const gs = [...groups.values()]
     .map((g, i) => [g, g.vals.some(v => v && ctx.includes(v)) ? 1 : 0, (i - r + N) % N])
-    .sort((a, b) => b[1] - a[1] || a[2] - b[2])
+    .sort((a, b) => b[1] - a[1] || b[0].roster - a[0].roster || a[2] - b[2]) // mentioned, then the roster's, then rotation
     .map(([g]) => g);
   const bytes = x => new TextEncoder().encode(x).length;
   const parts = [];
   let size = 0,
-    open = false;
+    open = false,
+    anyOwn = false;
   for (const g of gs) {
     const n = g.members.length,
       r2 = app.state.next % n;
     const ms = g.members
       .map((x, i) => [x, (i - r2 + n) % n])
-      .sort((a, b) => b[0].hit - a[0].hit || a[1] - b[1])
+      .sort((a, b) => b[0].hit - a[0].hit || b[0].roster - a[0].roster || a[1] - b[1])
       .map(([x]) => x);
     const names = [];
     for (const x of ms.slice(0, 6)) {
@@ -342,6 +374,7 @@ function namedBlock(hay, turn) {
       names.push(t);
       size += bytes(t) + 2;
       open = open || x.open;
+      anyOwn = anyOwn || !!x.roster;
     } // at most six per group, so several groups fit; the rest rotate in
     if (names.length) {
       parts.push(`${g.name}: ${names.join(', ')}`);
@@ -352,18 +385,19 @@ function namedBlock(hay, turn) {
   turn.openRoles = open; // the streamed preview leaves newcomers' faces to the whole reply (turn.js pickPreview)
   if (!parts.length) return '';
   const named = fillTemplate(pr('named'), { list: parts.join(' | ') });
-  return open ? named + '\n' + pr('namedOpen') : named;
+  return [named, open && pr('namedOpen'), anyOwn && pr('namedRoster')].filter(Boolean).join('\n');
 }
 // who matters this turn, most first: on stage in the last story reply, named in the recent text or this input (also by
-// a named set's other names), then the latest relations. Each with the set they wear or would wear.
-function peopleInPlay(hay) {
+// a roster person's or a named set's other names), then the latest relations. Each with the set they wear or would wear.
+function peopleInPlay(hay, sets, ix) {
   const o = (lastStoryReply() || {}).out || {};
   const cast = app.state.cast;
   const named = [];
-  for (const k of Object.keys(charSets())) {
+  for (const k of Object.keys(sets)) {
     const m = app.setMeta[k] || {};
     if (m.charName && [m.charName, ...(m.aliases || [])].some(n => hay.includes(n))) named.push(m.charName);
   }
+  for (const e of rosterNow()) if (mentioned(e, hay)) named.unshift(e.name);
   const names = [
     o.speaker,
     ...(o.also_present || []).map(p => p && p.name),
@@ -373,18 +407,22 @@ function peopleInPlay(hay) {
       .map(([n]) => n)
       .reverse(),
   ];
-  return [...new Set(names.filter(Boolean).map(canonName))].map(n => [n, cast[n] || namedSetFor(n)]);
+  return [...new Set(names.filter(Boolean).map(canonName))].map(n => [n, cast[n] || namedSetFor(n, ix)]);
 }
 // at most this many people's profiles or picture tags per prompt, so a library of any size costs the same
 const PEOPLE_MAX = 3;
-// the set-card profiles of the people who matter this turn
-function profilesBlock(people) {
-  if (!worldExt().profiles) return '';
+// the profiles of the people who matter this turn: their roster entry (any world), else their set card's
+function profilesBlock(people, own) {
+  if (!worldExt().profiles && !own.of.length) return '';
   const lines = [];
   for (const [n, k] of people) {
-    const p = k && (app.setMeta[k] || {}).profile;
-    if (!p) continue;
-    const head = [p.position, p.power].filter(Boolean).join(', ');
+    const r = rosterFor(n) || (k && own.bySet.get(k)); // also someone wearing the person's set under another name
+    const card = k && cardProfile(k);
+    // an entry with any field replaces the card whole; one with none (a name, a faction) keeps the card's
+    const p = r && Object.keys(r.profile).length ? r.profile : card;
+    if (!p || !Object.keys(p).length) continue; // a name and a faction alone are no profile
+    const faction = r && r.faction && !String(p.position || '').includes(r.faction) ? r.faction : '';
+    const head = [[faction, p.position].filter(Boolean).join(' '), p.power].filter(Boolean).join(', ');
     const body = [p.looks, p.traits, p.speech && pl('speech: {s}', { s: p.speech }), p.signature, p.ties];
     if (p.secret) body.push(pl('secret: {s}', { s: p.secret }));
     lines.push(`${n}${head ? `(${head})` : ''}: ${body.filter(Boolean).join('; ')}`);
@@ -443,7 +481,10 @@ export function buildPrompt(text, cmd, turn = {}) {
     ck = app.state.clock;
   const recentStr = recentForPrompt();
   const hay = recentStr.slice(-3000) + ' ' + text;
-  const people = peopleInPlay(hay);
+  const sets = charSets(),
+    ix = cardIndex(sets),
+    own = rosterCards(ix);
+  const people = peopleInPlay(hay, sets, ix);
   const loreHay = hay + ' ' + ((app.state.standing || {}).faction || ''); // the player's own sect stays in view
   const lore = Object.entries(app.state.lore)
     .filter(([k]) => loreHay.includes(k))
@@ -535,8 +576,8 @@ export function buildPrompt(text, cmd, turn = {}) {
       ? `${pl('[Story so far]')}\n${app.state.summaries.map(x => '- ' + x.text).join('\n')}`
       : '',
     user: app.state.userNotes ? `${pl('[Player notes: always follow]')}\n${app.state.userNotes}` : '',
-    named: namedBlock(hay, turn),
-    profiles: profilesBlock(people),
+    named: namedBlock(hay, turn, sets, own),
+    profiles: profilesBlock(people, own),
     situation: situationBlock(people),
     bg: pl('[Place words] {list}', { list: vocab.length ? vocab.join(', ') : pl('none. scene is null') }),
     recent: recentStr ? `${pl('[Recent]')}\n${recentStr}` : '',

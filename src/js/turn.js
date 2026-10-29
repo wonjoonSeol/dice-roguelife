@@ -9,6 +9,7 @@ import { NEW_SAVES, turnStore } from './turn-store.js';
 import { app, currentRun, exclusive } from './app.js';
 import { critOf, rollGrade, rule } from './rules.js';
 import { aliasOut, lastStoryReply } from './people.js';
+import { snapOf } from './roster.js';
 import { cueDeath, cueDoom, cueFanfare, cueItem, cueQuest, cueRealm, cueReveal, cueSkill } from './sound.js';
 import { ensureSample } from './boot.js';
 import { imgUrl, pickEmotion } from './images.js';
@@ -353,7 +354,7 @@ async function narrate(text, cmd, intro, turn) {
         img: res.img,
         fate: turn.fate,
         clock: clone(app.state.clock),
-        snap: clone(app.state),
+        snap: snapOf(app.state),
       },
       turn.objection ? { objection: turn.objection } : {},
     ),

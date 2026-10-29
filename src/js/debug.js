@@ -15,6 +15,7 @@ import * as settings from './settings.js';
 import * as diag from './diag.js';
 import * as rules from './rules.js';
 import * as people from './people.js';
+import * as roster from './roster.js';
 import * as compat from './compat.js';
 import * as sheet from './sheet.js';
 import * as shell from './shell.js';
@@ -44,6 +45,7 @@ import * as death from './death.js';
 import * as hall from './hall.js';
 import * as savesView from './saves-view.js';
 import * as memoryView from './memory-view.js';
+import * as rosterView from './roster-view.js';
 import * as imagesView from './images-view.js';
 
 // window.DR: the modules of this page, for the tests and for looking into a live game from the browser console.
@@ -67,6 +69,7 @@ const MODULES = [
   diag,
   rules,
   people,
+  roster,
   murim,
   worldExt,
   compat,
@@ -96,6 +99,7 @@ const MODULES = [
   hall,
   savesView,
   memoryView,
+  rosterView,
   imagesView,
 ];
 const originals = new Map();

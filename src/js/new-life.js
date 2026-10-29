@@ -1,5 +1,5 @@
 /* ============ new life ============ */
-import { $, clone, esc, noteIgnored, nowIso, pick, rnd, toast, uid } from './util.js';
+import { $, esc, noteIgnored, nowIso, pick, rnd, toast, uid } from './util.js';
 import {
   BASE,
   cmdName,
@@ -36,6 +36,8 @@ import { lifeExtra, runTurn } from './turn.js';
 import { fillTemplate, pr } from './prompt.js';
 import { chooseUiLang } from './settings-sheet.js';
 import { extStart } from './world-ext.js';
+import { rosterTextOf, setRoster, snapOf } from './roster.js';
+import { bindRosterEditor, rosterEditorHtml } from './roster-view.js';
 
 const TALENT_MAX = 5;
 let tierLocked = false;
@@ -511,9 +513,15 @@ function revealFate(life, inherit, again) {
       null,
     ]);
   const f = $('#fate');
+  // this world's character list: the draft, else what a regression's save already keeps for it
+  const draft = (app.pendingRoll && app.pendingRoll.roster) ?? rosterTextOf(inherit && app.state, life.world.id);
   f.innerHTML = `<div class="fate">${cards.map((c, i) => `<div class="card${again ? '' : ' flip'} ${c[3] ? 'glow-' + c[3] : ''}" style="animation-delay:${again ? 0 : i * 0.35}s"><small>${c[0]}</small>${c[3] ? `<span class="g ${c[3]}">${c[3]}</span>` : ''}<div class="v">${esc(c[1])}</div>${c[2] ? `<div class="d">${esc(c[2])}</div>` : ''}</div>`).join('')}</div>
    ${inherit && inherit.name ? `<div class="item fate-note"><div class="m">${T('Inherited')}</div><div class="t"><span class="tier ${inherit.grade}">${inherit.grade}</span> ${esc(inherit.name)}</div><div class="m">${esc(inherit.desc)}</div></div>` : ''}
+   <details class="roster-box"${draft ? ' open' : ''}><summary>${T('Characters for this story (optional)')}</summary>${rosterEditorHtml(draft)}<p class="muted field-note">${T('Kept in this save for lives in this world. Each turn the narrator gets the names of a few people not met yet, and the full details only of the few the story is on right now, so a long list costs no more.')}</p></details>
    <div class="row fate-actions"><button class="btn primary" id="acceptBtn">${T('Begin with this fate')}</button></div>`;
+  bindRosterEditor(f, life.world.id, life.name, v => {
+    if (app.pendingRoll) app.pendingRoll.roster = v; // a redrawn screen (another language) keeps the draft
+  });
   if (!again)
     cards.forEach((c, i) =>
       setTimeout(
@@ -538,7 +546,7 @@ function revealFate(life, inherit, again) {
   };
 }
 async function beginLife() {
-  const { life, inherit, lang } = app.pendingRoll;
+  const { life, inherit, lang, roster } = app.pendingRoll;
   app.pendingRoll = null;
   const b = BASE[life.originTier];
   const skills = [
@@ -589,9 +597,11 @@ async function beginLife() {
     stateNote: '',
     pastLives: past,
     userNotes,
+    roster: (inherit && app.state.roster) || {}, // every world's list goes on; this life uses its own world's
     dead: false,
     next: inherit ? app.state.next : 0,
   };
+  if (roster != null) setRoster(app.state, life.world.id, roster);
   if (!inherit) {
     app.currentSave = {
       id: uid(),
@@ -623,7 +633,7 @@ async function beginLife() {
       talent: life.talent.name,
       talentTier: life.talentTier,
     }),
-    snap: clone(app.state),
+    snap: snapOf(app.state),
   });
   app.state.introText = fillTemplate(pr('intro'), {
     opening: inherit ? pr('introOpeningRegress') : pr('introOpeningFirst'),

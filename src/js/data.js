@@ -467,8 +467,8 @@ export function normGender(g) {
   g = String(g || '')
     .trim()
     .toLowerCase();
-  if (/^(female|여|여성|여자|f)$/.test(g)) return 'female';
-  if (/^(male|남|남성|남자|m)$/.test(g)) return 'male';
+  if (/^(female|여|여성|여자|f|女|女性)$/.test(g)) return 'female';
+  if (/^(male|남|남성|남자|m|男|男性)$/.test(g)) return 'male';
   return g ? 'other' : null;
 }
 export const STAT_LABEL = {

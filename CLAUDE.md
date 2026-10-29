@@ -42,6 +42,10 @@ English is the source language. Each other language is a JSON map keyed by the E
   (classified by `pm`, `day`, `night`); date `y`, `m` or `mon` (with `months`), `d`. All profiles are tried, since
   a save can mix languages. A new story language needs a profile and its money in `LOCAL_MONEY` (`data.js`), and its
   prompt should ask for what it reads (`tests/i18n-parse.spec.js` checks the odds tag).
+- The keys of a pasted character list (`roster.js`: `이름:`, `Speech:`, `口調:`) live in the same profiles under `roster`
+  (field -> regex of the whole key, spaces removed), read through `rosterField`; every language's keys work in any save.
+  A new screen language's example list (`ROSTER_EXAMPLE` in `roster-view.js`) must read without skipped lines
+  (`tests/roster.spec.js` checks each one).
 - `node tools/i18n-check.js --list` (also run by `npm run lint`) fails on a key without Korean, a screen key
   without Japanese (prompt-only `pl()` keys are exempt), differing placeholders, a `${}` inside `T()`, or Korean
   left in a code string. Mark deliberate Korean data with `// i18n-ignore` (or an
