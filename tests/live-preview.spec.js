@@ -49,6 +49,11 @@ test('live preview', async ({ game }) => {
   console.log('hunter opening:', JSON.stringify(op));
   if (!same(op, [['o3', 'o1', 'o2'], null, ['/_blob/o3', '/_blob/o1', '/_blob/o2']]))
     errs.push("a hunter life's first reply did not show the hunter sequence in frame order");
+  // a tap on a story picture opens it full size
+  await pg.evaluate("document.querySelector('.turn .opening .op-frame').click()");
+  const big = await pg.evaluate("document.querySelector('#sheet:not(.hidden) .big-image-pic')?.getAttribute('src')");
+  if (big !== '/_blob/o3') errs.push('a tap on an opening frame did not open it full size (' + big + ')');
+  await pg.evaluate("DR.closeSheet ? DR.closeSheet() : document.querySelector('#sheet [data-close]').click()");
   const other = await game(claudeMock(J, { before: STORED }), { size: [420, 900] });
   await withLibrary(other.pg, 'modern');
   const fb = await openingOf(other.pg);

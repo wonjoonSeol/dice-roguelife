@@ -5,8 +5,18 @@ import { EMO_FB, EMOS, WORLD_ALIAS, WORLDS } from './data.js';
 import { app } from './app.js';
 import { canonName } from './people.js';
 import { T } from './i18n.js';
+import { openSheet } from './sheet.js';
 
 export const imgUrl = id => host().assetUrl(id);
+// A picture in the sheet, from a tap in the image tab or in the story, where it opens at twice its shown width.
+// A tap anywhere on it closes it.
+export function showBigImage(id, caption, shown = 0) {
+  const w = Math.round(shown * 2);
+  openSheet(
+    `<div class="big-image" data-close><img src="${imgUrl(id)}" alt="" class="big-image-pic"${w ? ` style="width:${w}px"` : ''}>${caption ? `<p class="muted big-image-cap">${esc(caption)}</p>` : ''}<div class="row actions centered"><button class="btn" data-close>${T('Close')}</button></div></div>`,
+    { center: true, zoom: !!w },
+  );
+}
 // picture file extensions and their types: what a zip upload takes, and the extension an exported pack gives each type
 export const IMAGE_TYPES = {
   png: 'image/png',
@@ -19,9 +29,11 @@ export const IMAGE_TYPES = {
 export function sceneHtml(sc, people) {
   // background banner on top, the people present in a row underneath (never layered)
   const ppl = (people || []).filter(p => p && p.x).slice(0, 3);
-  const bg = sc ? `<div class="scene" style="background-image:url('${imgUrl(sc.id)}')"></div>` : '';
+  const bg = sc
+    ? `<div class="scene" data-big="${esc(sc.id)}" style="background-image:url('${imgUrl(sc.id)}')"></div>`
+    : '';
   const row = ppl.length
-    ? `<div class="castrow n${ppl.length}">${ppl.map(p => `<figure><img class="char" alt="" src="${imgUrl(p.x.id)}">${p.npc ? `<figcaption>${esc(p.npc)}</figcaption>` : ''}</figure>`).join('')}</div>`
+    ? `<div class="castrow n${ppl.length}">${ppl.map(p => `<figure><img class="char" alt="" data-big="${esc(p.x.id)}" data-cap="${esc(p.npc || '')}" src="${imgUrl(p.x.id)}">${p.npc ? `<figcaption>${esc(p.npc)}</figcaption>` : ''}</figure>`).join('')}</div>`
     : '';
   return bg + row;
 }
@@ -171,7 +183,7 @@ export function openingHtml(ti) {
   const one = !frames.length && ti && ti.banner && turnImg(ti, ti.banner);
   const list = frames.length ? frames : one ? [one] : [];
   if (!list.length) return '';
-  return `<div class="opening${one ? ' banner' : ''}">${list.map(x => `<img class="op-frame" alt="" loading="lazy" decoding="async" src="${imgUrl(x.id)}">`).join('')}</div>`;
+  return `<div class="opening${one ? ' banner' : ''}">${list.map(x => `<img class="op-frame" alt="" data-big="${esc(x.id)}" loading="lazy" decoding="async" src="${imgUrl(x.id)}">`).join('')}</div>`;
 }
 export function setCover(k, imgs) {
   imgs = imgs || charSetsAll()[k] || [];

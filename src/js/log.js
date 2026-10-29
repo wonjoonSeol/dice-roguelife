@@ -19,7 +19,7 @@ import {
   sysTag,
   titleGained,
 } from './reply-words.js';
-import { charSetsAll, imgById, imgUrl, openingHtml, sceneHtml, turnImg, turnPeople } from './images.js';
+import { charSetsAll, imgById, imgUrl, openingHtml, sceneHtml, showBigImage, turnImg, turnPeople } from './images.js';
 import { startNewLifeForm } from './new-life.js';
 import { loadEarlier, pushTurn } from './persistence.js';
 import { changeFaceIn } from './face-picker.js';
@@ -157,16 +157,16 @@ function narrWithImages(o, ti, people, sc) {
       const x = pl && turnImg(ti, pl.id);
       if (!x || used.has('@' + name) || x === sc) return '';
       used.add('@' + name);
-      return `\u0000<div class="scene inl" style="background-image:url('${imgUrl(x.id)}')"></div>\u0000`;
+      return `\u0000<div class="scene inl" data-big="${esc(x.id)}" style="background-image:url('${imgUrl(x.id)}')"></div>\u0000`;
     }
     const p = P[name];
     if (!p || used.has(name)) return '';
     used.add(name);
-    return `\u0000<div class="castrow n1 inl"><figure><img class="char" alt="" src="${imgUrl(p.x.id)}"><figcaption>${esc(name)}</figcaption></figure></div>\u0000`;
+    return `\u0000<div class="castrow n1 inl"><figure><img class="char" alt="" data-big="${esc(p.x.id)}" data-cap="${esc(name)}" src="${imgUrl(p.x.id)}"><figcaption>${esc(name)}</figcaption></figure></div>\u0000`;
   });
   // people the narrator didn't mark: after the first paragraph that names them, else after the first line of dialogue
   const figOf = p =>
-    `\u0000<div class="castrow n1 inl"><figure><img class="char" alt="" src="${imgUrl(p.x.id)}"><figcaption>${esc(p.npc)}</figcaption></figure></div>\u0000`;
+    `\u0000<div class="castrow n1 inl"><figure><img class="char" alt="" data-big="${esc(p.x.id)}" data-cap="${esc(p.npc)}" src="${imgUrl(p.x.id)}"><figcaption>${esc(p.npc)}</figcaption></figure></div>\u0000`;
   for (const p of people) {
     if (used.has(p.npc) || !p.npc) continue;
     const paras = h.split('\n');
@@ -310,7 +310,7 @@ export function adminFace(emo) {
 }
 function adminLine(o) {
   const f = adminFace(normEmo(o.admin_emotion || 'smirk'));
-  return `<p class="admin">${f ? `<img class="adm" alt="" src="${imgUrl(f.id)}">` : ''}<b>ADMIN</b>${esc(o.admin)}</p>`;
+  return `<p class="admin">${f ? `<img class="adm" alt="" data-big="${esc(f.id)}" src="${imgUrl(f.id)}">` : ''}<b>ADMIN</b>${esc(o.admin)}</p>`;
 }
 const choiceRow = c =>
   `<div class="crow"><button class="cedit" data-cedit="${esc(c)}" title="${T('Put it in the input box to edit (long-press or right-click works too)')}" aria-label="${T('Put this choice in the input box to edit')}">✎</button><button data-choice="${esc(c)}">${choiceHtml(c)}</button></div>`;
@@ -522,6 +522,7 @@ const LOG_ACTIONS = {
   cedit: b => choiceToInput(b.dataset.cedit),
   face: b => changeFaceIn(+b.dataset.face),
   why: b => toast(b.textContent.trim() + ': ' + b.dataset.why, 5000),
+  big: b => showBigImage(b.dataset.big, b.dataset.cap, b.getBoundingClientRect().width),
   act: b => followUp(b.dataset.act),
   reroll: () => rerollWithReason(),
   fork: b => fork(+b.dataset.fork),

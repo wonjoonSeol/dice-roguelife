@@ -23,6 +23,7 @@ import {
   openingWorlds,
   setCover,
   setWorlds,
+  showBigImage,
   withModern,
   withOpeningTags,
   worldChips,
@@ -493,12 +494,6 @@ let setQuery = '',
   setPage = 0,
   setRecent = false;
 const SET_PER = 10;
-function showBigImage(id, caption) {
-  openSheet(
-    `<div class="big-image"><img src="${imgUrl(id)}" alt="" class="big-image-pic">${caption ? `<p class="muted big-image-cap">${esc(caption)}</p>` : ''}<div class="row actions centered"><button class="btn" data-close>${T('Close')}</button></div></div>`,
-    { center: true },
-  );
-}
 function imgGrid() {
   const q = imgQuery.trim().toLowerCase();
   let all = app.images
