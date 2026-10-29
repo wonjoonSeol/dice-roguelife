@@ -215,5 +215,15 @@ test('cast', async ({ game }) => {
   );
   console.log('translation skips ids:', tr);
   check(errs, '5) identity tags are never sent for translation', same(tr, ['faction:사천당가']));
+  // 6) a frame the file lists with no tags of its own loses its old tags (file-name tokens, an old identity) in replace mode
+  const first = await pg.evaluate(
+    "(()=>{const x=DR.charSetsAll().female3[0];x.tags=['neutral113','faction:옛 학교'];return x.name})()",
+  );
+  const tj2 = { sets: { female3: { tags: ['silver hair'] } }, images: { [first + '.png']: { tags: [] } } };
+  await pg.evaluate(j => DR.importTags({ text: async () => JSON.stringify(j) }), tj2);
+  await pg.waitForTimeout(800);
+  const after = await pg.evaluate("DR.charSetsAll().female3.find(x=>x.name==='" + first + "').tags");
+  console.log('frame with no own tags after replace import:', JSON.stringify(after));
+  check(errs, '6) a listed frame with empty tags keeps only the set tags', same(after, ['silver hair']));
   expect(errs).toEqual([]);
 });

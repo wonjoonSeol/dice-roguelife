@@ -1566,7 +1566,7 @@ export async function importTags(file) {
     const x = findImg(fn);
     if (!x) continue;
     const t = toTags(m.tags || m);
-    if (t.length) x.tags = capTags(replaceTags ? t : [...(x.tags || []), ...t]);
+    if (t.length || replaceTags) x.tags = capTags(replaceTags ? t : [...(x.tags || []), ...t]);
     {
       const ws = wl(m);
       if (ws.length) setWorlds(x, ws);
