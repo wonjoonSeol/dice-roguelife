@@ -1214,9 +1214,13 @@
   "That doesn't fit: the list keeps up to {max} people, and with these there would be more.": "リストに収まりません。リストは{max}人までですが、これを足すとそれより多くなります。",
   "Shorten it above, then add.": "上で減らしてから追加してください。",
   "Already in your list: {names}. Where a name comes twice, the later entry is kept.": "すでにリストにいます：{names}。同じ名前が二度出てくると、後のものが残ります。",
-  "The source wasn't changed: {err}": "元の文章は変わっていません：{err}",
   "{n} {n|person|people} added to the list.": "リストに{n}人を追加しました。",
   "Your notes for this save": "このセーブのメモ",
   "Setting and characters box": "世界観・登場人物の欄",
-  "Use {name} in this game": "このゲームで{name}を使う"
+  "Use {name} in this game": "このゲームで{name}を使う",
+  "Import as characters": "人物として取り込む",
+  "{n} {n|person|people} imported. They join this world's character list once your fate is rolled.": "{n}人を取り込みました。運命を決めると、その世界の人物リストに入ります。",
+  "Use the character list and the rest in this game instead of the note (the note stays as it is)": "このゲームではノートの代わりに人物リストと残りの文章を使う（ノートはそのまま）",
+  "The note is unticked for this game, and the rest above is added to {box}.": "このゲームではノートのチェックが外れ、上の残りの文章は{box}に追加されます。",
+  "The rest doesn't fit in {box}: it holds up to {max} characters, and with it there would be {n}. Untick the box to keep using the note.": "残りの文章が{box}に収まりません。{max}字までですが、足すと{n}字になります。ノートをそのまま使うにはチェックを外してください。"
 }

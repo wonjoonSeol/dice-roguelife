@@ -110,6 +110,7 @@ export function renderMemory() {
         app.state.userNotes = $('#notes').value.trim(); // kept with the list (saveCharacters)
       },
     },
+    untick: id => (app.state.noteIds = app.state.noteIds.filter(x => x !== id)), // kept with the list too
     busy,
     commit: saveCharacters,
   });

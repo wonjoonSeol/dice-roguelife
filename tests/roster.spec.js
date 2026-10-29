@@ -711,5 +711,52 @@ test('roster', async ({ game }) => {
     imp.list.startsWith(listBefore) && imp.alias === '황보엽' && !imp.names.includes('{user}') && imp.names.length > 1,
   );
   check(errs, 'the notes keep only the rest', imp.notes === '세계: 마교가 강하다.');
+
+  // 5) imported on the next life's form, from a ticked library note, before a world is picked: the note stays as it
+  // was and is unticked for this game, its rest goes into the setting box, and the people wait for the fate screen,
+  // where they follow that world's list in an open box
+  const NOTE = '세계: 마교가 강하다.\n-백무명: 떠돌이';
+  const noteId = await pg.evaluate(async text => {
+    window.__next = { roster: '# 낭인\n이름: 백무명 / 직책: 떠돌이', rest: '세계: 마교가 강하다.' };
+    const note = await DR.saveNote({ name: '설정집', text });
+    DR.showTab('play');
+    DR.startNewLifeForm({});
+    return note.id;
+  }, NOTE);
+  await pg.check(`#nlNote-${noteId}`);
+  await pg.click('#mseg [data-m="free"]');
+  await pg.fill('#worldNote', '마법은 없다.');
+  await pg.click('#worldNoteCast');
+  await pg.click(`[name="impSrc"][value="note:${noteId}"]`);
+  await pg.click('#impRead');
+  await pg.click('#impAdd');
+  await pg.waitForFunction(() => document.querySelector('#worldNote').value.includes('마교'));
+  const form = await pg.evaluate(
+    id => ({
+      box: document.querySelector('#worldNote').value,
+      ticked: document.querySelector(`#nlNote-${id}`).checked,
+      note: DR.noteById(id).text,
+    }),
+    noteId,
+  );
+  await pg.click('[data-w="murim"]');
+  await pg.click('#rollBtn');
+  await pg.waitForSelector('#acceptBtn');
+  const fate = await pg.evaluate(() => ({
+    open: document.querySelector('#fate .roster-box').open,
+    text: document.querySelector('#fate [data-roster]').value,
+    kept: DR.app.state.roster.murim,
+  }));
+  await pg.evaluate('window.__next = null');
+  check(
+    errs,
+    'a note read on the form stays as it was, is unticked for this game, and its rest joins the setting box',
+    form.note === NOTE && !form.ticked && form.box === '마법은 없다.\n\n세계: 마교가 강하다.',
+  );
+  check(
+    errs,
+    "the form's import joins the rolled world's list after its own, in an open box",
+    fate.open && fate.text.startsWith(fate.kept) && fate.text.endsWith('이름: 백무명 / 직책: 떠돌이'),
+  );
   expect(errs).toEqual([]);
 });

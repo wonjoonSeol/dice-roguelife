@@ -39,8 +39,8 @@ import { lifeExtra, runTurn } from './turn.js';
 import { fillTemplate, pr, talentVars } from './prompt.js';
 import { chooseUiLang } from './settings-sheet.js';
 import { extStart } from './world-ext.js';
-import { rosterTextOf, setRoster, snapOf } from './roster.js';
-import { bindRosterEditor, rosterEditorHtml } from './roster-view.js';
+import { parseRoster, rosterTextOf, setRoster, snapOf } from './roster.js';
+import { bindRosterEditor, joinRoster, openImport, rosterEditorHtml } from './roster-view.js';
 import { lastNoteIds } from './notes.js';
 import { bindNotePicker, notePickerHtml, pickedInForm, saveBoxAsNote } from './notes-view.js';
 
@@ -70,8 +70,11 @@ const tierOptions = () =>
 const talentRow = first =>
   `<div class="trow"><div class="row talent-row"><select class="tt" aria-label="${T('Talent grade')}">${first ? `<option value="${NO_TALENT}">${T('No talent')}</option>` : ''}${tierOptions()}</select><input class="tn grow" maxlength="30" placeholder="${first ? T('e.g. Obsessed with the sword (blank for random)') : T('Talent name')}">${first ? '' : `<button type="button" class="tx" aria-label="${T('Remove this talent')}">×</button>`}</div><input class="td talent-desc" maxlength="80" placeholder="${T('Effect in one line')}"></div>`;
 let formInherit; // for redrawNewLifeForm
+// characters imported from the setting box before the world is known: the fate screen's list takes them
+let castDraft = '';
 export function startNewLifeForm(inherit) {
   formInherit = inherit;
+  castDraft = '';
   tierLocked = false;
   if (!inherit) {
     leaveOpenSave(); // a new game leaves the open save; a regression continues it
@@ -118,8 +121,10 @@ export function redrawNewLifeForm() {
   const talents = [...form.querySelectorAll('#talents .trow')].map(r =>
     [...r.querySelectorAll('select,input')].map(x => x.value),
   );
-  const pending = app.pendingRoll;
+  const pending = app.pendingRoll,
+    cast = castDraft;
   startNewLifeForm(formInherit);
+  castDraft = cast;
   for (const [id, data] of pressed) {
     const [k, v] = Object.entries(data)[0] || [];
     const b = k && $(`#${id} button[data-${k}="${v}"]`);
@@ -199,7 +204,7 @@ function newLifeHtml(inherit) {
       <div class="row"><div class="field talent-grade-field"><label for="fOT">${T('Standing grade')}</label><select id="fOT">${tierOptions()}</select></div><div class="field grow"><label for="fOrigin">${T('Standing')}</label><input id="fOrigin" maxlength="30" placeholder="${T('e.g. Lowest disciple of the Mount Hua Sect (blank for random)')}"></div></div>
       <div class="field"><label>${T('Talents (grade, name, effect in one line)')}</label><div id="talents">${talentRow(true)}</div><button type="button" class="btn ghost add-talent" id="addTalent">${T('+ Add a talent')}</button></div>
       <div class="field"><label for="fAge">${T('Starting age')}</label><input id="fAge" type="number" min="0" max="90" placeholder="${T('Leave blank for random')}"></div>
-      <div class="field"><label for="worldNote">${T('Setting and characters (optional)')}</label><textarea id="worldNote" rows="3" maxlength="${LIMITS.userNotes}" placeholder="${T('e.g. There is no magic in this world and the guilds rule the cities. My childhood friend Seoyun lives next door. Blunt on the outside, but always looking out for me.')}">${esc(app.settings.worldNote || '')}</textarea><div class="row note-tools"><button type="button" class="btn ghost" id="worldNoteSave" disabled>${T('Save as note')}</button></div><p class="muted field-note">${T('This goes into your notes, so it shapes the story from the first scene. You can edit it later in the Memory tab.')}</p></div>
+      <div class="field"><label for="worldNote">${T('Setting and characters (optional)')}</label><textarea id="worldNote" rows="3" maxlength="${LIMITS.userNotes}" placeholder="${T('e.g. There is no magic in this world and the guilds rule the cities. My childhood friend Seoyun lives next door. Blunt on the outside, but always looking out for me.')}">${esc(app.settings.worldNote || '')}</textarea><div class="row note-tools"><button type="button" class="btn ghost" id="worldNoteSave" disabled>${T('Save as note')}</button><button type="button" class="btn ghost" id="worldNoteCast" disabled>${T('Import as characters')}</button></div><p class="muted field-note" id="worldNoteCastNote"></p><p class="muted field-note">${T('This goes into your notes, so it shapes the story from the first scene. You can edit it later in the Memory tab.')}</p></div>
       <div class="field"><label>${T('Constellations')}</label><div class="seg" id="spseg"><button type="button" data-sp="random" aria-pressed="true">${T('Random')}</button><button type="button" data-sp="on" aria-pressed="false">${T('Yes')}</button><button type="button" data-sp="off" aria-pressed="false">${T('None')}</button></div></div>
     </div>
     <details class="odds guide"><summary>${T('How to play')}</summary>
@@ -264,13 +269,37 @@ async function lockFreeSetup(inherit) {
     document.querySelectorAll('#talents .tt').forEach(lockTierSel);
   }
 }
-// the setting box kept as a library note instead: ticked for this game, and the box emptied so it isn't sent twice
+// the setting box kept as a library note instead: ticked for this game, and the box emptied so it isn't sent twice.
+// Or its characters imported: held until the fate is rolled, as the world may still be random
 function bindWorldNoteSave() {
   const box = $('#worldNote'),
-    save = $('#worldNoteSave');
+    save = $('#worldNoteSave'),
+    cast = $('#worldNoteCast');
   if (!box || !save) return;
-  const sync = () => (save.disabled = !box.value.trim() || !!app.pendingRoll); // a rolled fate already took the text
+  const me = () => (formInherit ? app.state.life.name : $('#nm').value.trim());
+  const sync = () => {
+    save.disabled = !box.value.trim() || !!app.pendingRoll; // a rolled fate already took the text
+    cast.disabled = !!app.pendingRoll; // the fate screen's list imports from then on
+    const n = castDraft ? parseRoster(castDraft, me()).people.length : 0;
+    $('#worldNoteCastNote').textContent = n
+      ? T("{n} {n|person|people} imported. They join this world's character list once your fate is rolled.", { n })
+      : '';
+  };
   box.oninput = sync;
+  cast.onclick = () => {
+    const w = ($('#wseg button[aria-pressed="true"]') || { dataset: {} }).dataset.w;
+    openImport({
+      own: worldNoteSource(),
+      untick: untickInForm,
+      worldId: w && w !== 'random' ? w : null, // the faces in the preview: any world's while it is random
+      me: me(),
+      list: () => castDraft,
+      add: text => {
+        castDraft = text;
+        sync();
+      },
+    });
+  };
   save.onclick = async () => {
     if (await saveBoxAsNote(box.value.trim())) {
       box.value = '';
@@ -286,12 +315,22 @@ const worldNoteSource = () => ({
   put: rest => {
     const box = $('#worldNote'),
       life = app.pendingRoll && app.pendingRoll.life;
-    if (box) box.value = rest.slice(0, LIMITS.userNotes);
+    if (box) {
+      box.value = rest.slice(0, LIMITS.userNotes);
+      box.dispatchEvent(new Event('input'));
+    }
     if (!life || life.seedNotes === undefined) return;
     life.seedNotes = app.settings.worldNote = rest.slice(0, LIMITS.userNotes);
     saveSettings().catch(e => noteIgnored('new-life: dset settings', e));
   },
 });
+// a library note this game stops using: Import characters put its list and leftover in its place
+function untickInForm(id) {
+  const box = $('#nlNote-' + id);
+  if (!box || !box.checked) return;
+  box.checked = false;
+  box.dispatchEvent(new Event('change'));
+}
 // the profile box shows how much of its 600 characters is used
 function bindProfileCount() {
   const ta = $('#prof'),
@@ -594,8 +633,11 @@ function revealFate(life, inherit, again) {
       null,
     ]);
   const f = $('#fate');
-  // this world's character list: the draft, else what a regression's save already keeps for it
-  const draft = (app.pendingRoll && app.pendingRoll.roster) ?? rosterTextOf(inherit && app.state, life.world.id);
+  // this world's character list: the draft, else what a regression's save already keeps for it, with the characters
+  // imported on the form after it
+  const draft =
+    (app.pendingRoll && app.pendingRoll.roster) ??
+    joinRoster(rosterTextOf(inherit && app.state, life.world.id), castDraft);
   f.innerHTML = `<div class="fate">${cards.map((c, i) => `<div class="card${again ? '' : ' flip'} ${c[3] ? 'glow-' + c[3] : ''}" style="animation-delay:${again ? 0 : i * 0.35}s"><small>${c[0]}</small>${c[3] ? `<span class="g ${c[3]}">${c[3]}</span>` : ''}<div class="v">${esc(c[1])}</div>${c[2] ? `<div class="d">${esc(c[2])}</div>` : ''}</div>`).join('')}</div>
    ${inherit && inherit.name ? `<div class="item fate-note"><div class="m">${T('Inherited')}</div><div class="t"><span class="tier ${inherit.grade}">${inherit.grade}</span> ${esc(inherit.name)}</div><div class="m">${esc(inherit.desc)}</div></div>` : ''}
    <details class="roster-box"${draft ? ' open' : ''}><summary>${T('Characters for this story (optional)')}</summary>${rosterEditorHtml(draft)}<p class="muted field-note">${T('Kept in this save for lives in this world. Each turn the narrator gets the names of a few people not met yet, and the full details only of the few the story is on right now, so a long list costs no more.')}</p></details>
@@ -607,7 +649,12 @@ function revealFate(life, inherit, again) {
     v => {
       if (app.pendingRoll) app.pendingRoll.roster = v; // a redrawn screen (another language) keeps the draft
     },
-    { own: worldNoteSource(), lang: app.pendingRoll && app.pendingRoll.lang },
+    // the setting box is this game's only while its text seeds the notes (the custom setup)
+    {
+      own: life.seedNotes !== undefined ? worldNoteSource() : null,
+      untick: untickInForm,
+      lang: app.pendingRoll && app.pendingRoll.lang,
+    },
   );
   if (!again)
     cards.forEach((c, i) =>
@@ -635,6 +682,7 @@ function revealFate(life, inherit, again) {
 async function beginLife() {
   const { life, inherit, lang, roster } = app.pendingRoll;
   app.pendingRoll = null;
+  castDraft = ''; // the list it went into is the one kept
   const noteIds = pickedInForm() ?? startNotes(inherit); // no picker: the library is empty or unread
   const b = BASE[life.originTier];
   const skills = [

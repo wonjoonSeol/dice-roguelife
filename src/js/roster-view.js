@@ -11,8 +11,7 @@ import { storyLang } from './settings.js';
 import { logErr } from './diag.js';
 import { extractJson, fillTemplate, prIn } from './prompt.js';
 import { closeSheet, openSheet } from './sheet.js';
-import { noteById, saveNote } from './notes.js';
-import { libraryChanged } from './notes-view.js';
+import { noteById } from './notes.js';
 import { ensureSample } from './boot.js';
 import { sampleError } from './turn.js';
 
@@ -102,14 +101,16 @@ function rosterPreviewHtml(text, worldId, me) {
 const IMPORT_HELP = N_(
   'Claude reads character sheets in any format and writes everyone in them as this list. Nothing is sent until you press Read characters.',
 );
-function openImport(ctx) {
+// ctx: what bindRosterEditor describes as imp, plus worldId and me, list() (the list now) and add(text) (the list after)
+export function openImport(ctx) {
   const own = ctx.own && ctx.own.text().trim() ? ctx.own : null;
   const notes = (app.notes || []).filter(n => n.text.trim());
+  const first = own ? 'own' : notes.length ? 'note:' + notes[0].id : 'paste';
   const opt = (value, label, on) =>
     `<label class="row opt"><input type="radio" name="impSrc" value="${esc(value)}"${on ? ' checked' : ''}> <span>${label}</span></label>`;
   openSheet(
     `<h3 class="sheet-title">${T('Import characters')}</h3><p class="muted sheet-lead">${T(IMPORT_HELP)}</p>
-   <div class="field"><label>${T('Read from')}</label><div class="imp-src">${own ? opt('own', esc(own.label), true) : ''}${notes.map(n => opt('note:' + n.id, `${esc(T('Note: {name}', { name: n.name }))} <span class="muted">${kb(n.bytes)}</span>`)).join('')}${opt('paste', T('Text pasted here'), !own)}</div>
+   <div class="field"><label>${T('Read from')}</label><div class="imp-src">${own ? opt('own', esc(own.label), true) : ''}${notes.map(n => opt('note:' + n.id, `${esc(T('Note: {name}', { name: n.name }))} <span class="muted">${kb(n.bytes)}</span>`, first === 'note:' + n.id)).join('')}${opt('paste', T('Text pasted here'), first === 'paste')}</div>
    <textarea id="impPaste" rows="6" class="roster-text" aria-label="${T('Text pasted here')}" placeholder="${esc(T('Paste character sheets in any format'))}"></textarea></div>
    <div class="row actions"><button class="btn primary" id="impRead">${T('Read characters')}</button><button class="btn ghost" id="impCancel">${T('Cancel')}</button></div>`,
     { wide: true, modal: true },
@@ -122,7 +123,7 @@ function openImport(ctx) {
   };
   const btn = $('#impRead');
   btn.onclick = async () => {
-    const src = sourceOf(($('[name="impSrc"]:checked') || {}).value, own);
+    const src = sourceOf(($('[name="impSrc"]:checked') || {}).value, own, ctx);
     if (!src || !src.text.trim()) return toast(T('Nothing to read'));
     if (!platform.sample && !(await ensureSample())) return toast(T('Claude needs to be connected'));
     btn.disabled = true;
@@ -141,17 +142,23 @@ function openImport(ctx) {
     reviewImport(ctx, src, got);
   };
 }
-// the text to read and, when it can take the leftover back, how
-function sourceOf(pick, own) {
+// the text to read and, when the leftover can go back, where. A library note is never changed, as other games use it:
+// this game stops using it and keeps its leftover in this screen's own box
+function sourceOf(pick, own, ctx) {
   if (pick === 'own' && own) return { text: own.text(), put: own.put };
   if (pick === 'paste') return { text: $('#impPaste').value };
   const note = pick && pick.startsWith('note:') && noteById(pick.slice(5));
   if (!note) return null;
+  const into = ctx.own;
+  if (!into) return { text: note.text };
+  const after = rest => [into.text().trim(), rest].filter(Boolean).join('\n\n');
   return {
     text: note.text,
-    put: async rest => {
-      await saveNote({ id: note.id, name: note.name, text: rest });
-      libraryChanged();
+    into,
+    after,
+    put: rest => {
+      if (ctx.untick) ctx.untick(note.id);
+      into.put(after(rest));
     },
   };
 }
@@ -184,7 +191,7 @@ async function readCharacters(text, { lang = storyLang(), me }, signal) {
 }
 // the list with the imported people after its own. People of no group go before the list's first heading, or they
 // would be taken for the last group's
-function joinRoster(cur, add) {
+export function joinRoster(cur, add) {
   cur = cur.trim();
   add = add.trim();
   if (!cur || !add) return cur || add;
@@ -200,7 +207,13 @@ function reviewImport(ctx, src, got) {
     `<h3 class="sheet-title">${T('Characters found')}</h3>
    <div class="field"><label for="impRoster">${T('Character list')}</label><textarea id="impRoster" rows="8" class="roster-text">${esc(got.roster)}</textarea><div class="roster-preview" id="impPreview"></div><div class="imp-fit" id="impFit"></div></div>
    <div class="field"><label for="impRest">${T('The rest, not about characters')}</label><textarea id="impRest" rows="5" class="roster-text" placeholder="${esc(T('Nothing else'))}">${esc(got.rest)}</textarea></div>
-   ${cut ? `<label class="row opt"><input type="checkbox" id="impCut" checked> ${T('Take the character parts out of the source')}</label><p class="muted field-note">${T('The source keeps only the rest above, so the characters are not sent twice.')}</p>` : ''}
+   ${
+     !cut
+       ? ''
+       : src.into
+         ? `<label class="row opt"><input type="checkbox" id="impCut" checked> ${T('Use the character list and the rest in this game instead of the note (the note stays as it is)')}</label><p class="muted field-note">${esc(T('The note is unticked for this game, and the rest above is added to {box}.', { box: src.into.label }))}</p>`
+         : `<label class="row opt"><input type="checkbox" id="impCut" checked> ${T('Take the character parts out of the source')}</label><p class="muted field-note">${T('The source keeps only the rest above, so the characters are not sent twice.')}</p>`
+   }
    <div class="row actions"><button class="btn primary" id="impAdd">${T('Add to the list')}</button><button class="btn ghost" id="impCancel">${T('Cancel')}</button></div>`,
     { wide: true, modal: true },
   );
@@ -216,17 +229,27 @@ function reviewImport(ctx, src, got) {
     const people = parseRoster(text, ctx.me).people;
     n = people.length;
     const again = people.filter(e => mine.has(normName(e.name))).map(e => e.name);
+    const long = src.into && $('#impCut').checked && src.after($('#impRest').value.trim()).length;
     const why =
-      joined.length > LIMITS.roster.text
-        ? T("That doesn't fit: the list holds up to {max} characters, and with these it would be {n}.", {
-            max: LIMITS.roster.text,
-            n: joined.length,
-          })
-        : parseRoster(joined, ctx.me).notes.some(x => x.why === 'over')
-          ? T("That doesn't fit: the list keeps up to {max} people, and with these there would be more.", {
-              max: LIMITS.roster.people,
+      long > LIMITS.userNotes
+        ? T(
+            "The rest doesn't fit in {box}: it holds up to {max} characters, and with it there would be {n}. Untick the box to keep using the note.",
+            {
+              box: src.into.label,
+              max: LIMITS.userNotes,
+              n: long,
+            },
+          )
+        : joined.length > LIMITS.roster.text
+          ? T("That doesn't fit: the list holds up to {max} characters, and with these it would be {n}.", {
+              max: LIMITS.roster.text,
+              n: joined.length,
             })
-          : '';
+          : parseRoster(joined, ctx.me).notes.some(x => x.why === 'over')
+            ? T("That doesn't fit: the list keeps up to {max} people, and with these there would be more.", {
+                max: LIMITS.roster.people,
+              })
+            : '';
     $('#impFit').innerHTML =
       (again.length
         ? `<p class="muted field-note">${esc(T('Already in your list: {names}. Where a name comes twice, the later entry is kept.', { names: again.join(', ') }))}</p>`
@@ -234,6 +257,7 @@ function reviewImport(ctx, src, got) {
     add.disabled = !!why || !n;
   };
   ta.oninput = check;
+  if (src.into) $('#impRest').oninput = $('#impCut').onchange = check;
   check();
   $('#impCancel').onclick = closeSheet;
   add.onclick = async () => {
@@ -243,17 +267,8 @@ function reviewImport(ctx, src, got) {
     const rest = cut && $('#impCut').checked ? $('#impRest').value.trim() : null;
     closeSheet();
     ctx.add(joined);
-    let failed = '';
-    if (rest != null)
-      try {
-        await src.put(rest);
-      } catch (e) {
-        failed = T("The source wasn't changed: {err}", { err: e.code || e.message });
-      }
+    if (rest != null) src.put(rest);
     if (ctx.commit) await ctx.commit();
-    toast(
-      [T('{n} {n|person|people} added to the list.', { n }), failed].filter(Boolean).join(' '),
-      failed ? 6000 : 3000,
-    );
+    toast(T('{n} {n|person|people} added to the list.', { n }));
   };
 }

@@ -1271,9 +1271,13 @@
   "That doesn't fit: the list keeps up to {max} people, and with these there would be more.": "목록에 다 들어가지 않아요. 목록은 {max}명까지인데, 이것까지 더하면 그보다 많아요.",
   "Shorten it above, then add.": "위에서 줄인 뒤 추가하세요.",
   "Already in your list: {names}. Where a name comes twice, the later entry is kept.": "이미 목록에 있어요: {names}. 같은 이름이 두 번 나오면 뒤의 것이 남아요.",
-  "The source wasn't changed: {err}": "원문은 바뀌지 않았어요: {err}",
   "{n} {n|person|people} added to the list.": "목록에 {n}명을 더했어요.",
   "Your notes for this save": "이 저장의 유저 노트",
   "Setting and characters box": "세계관, 등장인물 칸",
-  "Use {name} in this game": "이 게임에서 {name} 쓰기"
+  "Use {name} in this game": "이 게임에서 {name} 쓰기",
+  "Import as characters": "인물로 가져오기",
+  "{n} {n|person|people} imported. They join this world's character list once your fate is rolled.": "{n}명을 가져왔어요. 운명을 굴리면 그 세계의 인물 목록에 들어가요.",
+  "Use the character list and the rest in this game instead of the note (the note stays as it is)": "이 게임에서는 노트 대신 인물 목록과 나머지 글을 쓰기 (노트는 그대로)",
+  "The note is unticked for this game, and the rest above is added to {box}.": "이 게임에서 노트 체크가 꺼지고, 위의 나머지 글은 {box}에 더해져요.",
+  "The rest doesn't fit in {box}: it holds up to {max} characters, and with it there would be {n}. Untick the box to keep using the note.": "나머지 글이 {box}에 다 들어가지 않아요. {max}자까지인데, 더하면 {n}자예요. 노트를 그대로 쓰려면 체크를 끄세요."
 }
