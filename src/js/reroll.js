@@ -10,7 +10,7 @@ import { renderStrip } from './status.js';
 import { renderLog } from './log.js';
 import { parseCmd } from './composer.js';
 import { lifeExtra, runTurn } from './turn.js';
-import { fillTemplate, pl, pr } from './prompt.js';
+import { fillTemplate, pl, pr, talentVars } from './prompt.js';
 import { N_, T, tIn } from './i18n.js';
 import { storyLang } from './settings.js';
 
@@ -267,8 +267,7 @@ async function rerollIntro(last, sys, fix) {
       race: app.state.life.race,
       origin: app.state.life.origin,
       originTier: app.state.life.originTier,
-      talent: app.state.life.talent.name,
-      talentTier: app.state.life.talentTier,
+      ...talentVars(app.state.life),
     });
   await persist();
   if (run.abandoned) return;

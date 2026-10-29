@@ -30,6 +30,11 @@ export const pr = k => {
   return en && en[k] !== undefined ? en[k] : prompts[k];
 };
 export const pl = (en, vars) => tIn(promptLang(), en, vars);
+// the talent fields of a life's opening prompt and first row; a life started with no talent says so
+export const talentVars = life =>
+  life.talent
+    ? { talent: life.talent.name, talentTier: life.talentTier }
+    : { talent: pl('None'), talentTier: pl('this life has no talent') };
 // an enum's label in the prompt's language (an unknown value as it is)
 export const plLabel = (labels, v) => (labels[v] ? pl(labels[v]).toLowerCase() : v);
 export const fillTemplate = (str, v) =>
@@ -567,7 +572,7 @@ export function buildPrompt(text, cmd, turn = {}) {
     stat: statBlock(),
     ext: extBlock(),
     clock: `${pl('[Time]')} D+${ck.day}${ck.date ? ', ' + withWeekday(ck.date) : ''}${ck.time ? ', ' + ck.time : ''}${ck.weather ? ', ' + ck.weather : ''}${ck.place ? ', ' + ck.place : ''}`,
-    skill: `${pl('[Skills]')} ${app.state.skills.map(k => `${k.name}(${k.grade}, Lv.${k.lv || 1}${k.cost ? pl(', cost {n}%', { n: k.cost }) : ''}${k.src === SKILL_SRC.INHERITED ? pl(', inherited from a past life') : ''}): ${k.desc}`).join(' | ')}`,
+    skill: `${pl('[Skills]')} ${app.state.skills.map(k => `${k.name}(${k.grade}, Lv.${k.lv || 1}${k.cost ? pl(', cost {n}%', { n: k.cost }) : ''}${k.src === SKILL_SRC.INHERITED ? pl(', inherited from a past life') : ''}): ${k.desc}`).join(' | ') || pl('None')}`,
     note: app.state.stateNote ? pl('[Current situation] {note}', { note: app.state.stateNote }) : '',
     quest: ifAny(
       app.state.quests.filter(q => q.status === 'active').map(q => q.title + (q.note ? ` (${q.note})` : '')),

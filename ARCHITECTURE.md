@@ -186,7 +186,7 @@
 ### 노트 보관함 (모든 세계)
 
 플레이어가 미리 써 둔 노트(시나리오, 문체 지침 같은 .md, .txt 파일)를 한 번 올려 두고, 저장마다 쓸 것만 체크합니다.
-기억 탭의 유저 노트 칸(`userNotes`, 1200자)은 그대로이고, 보관함은 그 옆에 따로 있습니다(`notes-view.js`).
+기억 탭의 유저 노트 칸(`userNotes`, `LIMITS.userNotes` 4000자)은 그대로이고, 보관함은 그 옆에 따로 있습니다(`notes-view.js`).
 
 - **저장**: 저장과 상관없는 계정 전체의 보관함입니다. 노트 하나가 문서 하나(`P/notes/items/<id>` = `{ name, text, updatedAt }`,
   id는 `uid()`)이고, 부팅 때 `loadNotes`가 저장 목록과 함께 `app.notes`로 읽습니다. 메모리의 노트는 본문 바이트(`bytes`)를
@@ -196,7 +196,8 @@
   있으면 그 묶음에 한 번만 바꿀지, 건너뛸지 묻습니다. 파일은 나란히 읽고(`Promise.allSettled`, 읽지 못한 파일은 이름을 알림)
   나란히 씁니다(`saveNotes`). 본문은 UTF-8로 읽히면 UTF-8(BOM 제외), 아니면 화면 언어 순서의 옛 인코딩(일본어 화면은
   shift_jis 먼저, 그 밖은 euc-kr 먼저, `zip.js` `decodeText`, `legacyEncodings`: 압축 파일 이름과 같은 규칙)으로 읽습니다.
-  메모장의 ANSI(CP949) 파일이 깨지지 않게 하려는 것입니다.
+  메모장의 ANSI(CP949) 파일이 깨지지 않게 하려는 것입니다. 자유 설정의 세계관 칸(`LIMITS.userNotes` 4000자)은 "노트로
+  저장"으로 보관함 노트가 될 수 있고, 그러면 그 게임에 체크되고 칸은 비워져 유저 노트로 두 번 가지 않습니다(`saveBoxAsNote`).
 - **저장마다**: 체크한 노트의 id 목록이 `state.noteIds`입니다(옛 저장은 `compat`이 빈 목록으로). `PLAYER_KEYS`에 있어서
   다시 쓰기, 분기, 뒤처진 상태 복구가 지금 체크를 둡니다(`fromSnap`). 다음 삶과 새 게임은 새 삶 화면의 고르기에서 정하는데,
   다음 삶은 그 저장의 체크, 새 게임은 마지막으로 한 저장의 체크로 시작합니다(`lastNoteIds`, `lastSaveCard`). 보관함을 읽지
@@ -399,7 +400,9 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
   구조, `parent`는 분기 원본입니다.
 - **상태**(`state`)의 주요 키: `life, lifeNo, stats, rules, titles, skills, items, equipped, energy, ledger, quests, lore,
   relations, cast, clock, summaries, summarizedUpto, corrections, userNotes, roster, noteIds, next, turnNo, dead` 등. 세계 애드온이 있는 세계는
-  `ladder, standing, bonds`와 애드온의 상태(`murim`)도 가집니다.
+  `ladder, standing, bonds`와 애드온의 상태(`murim`)도 가집니다. 자유 설정에서 첫 재능의 등급을 "재능 없음"으로 고른 삶은
+  `life.talent`와 `life.talentTier`가 `null`이고 재능 스킬도 덤 재능도 없습니다. 읽는 곳(운명 카드, 첫 줄, 시작 프롬프트의
+  `talentVars`, 전당, 스킬 상한)이 이를 다룹니다.
 - **턴 줄**: `i, at, kind(user | ai | system | ledger), text, req, roll, luck, fate, out, deltas, notes, img, clock, snap`.
   `out`과 `snap`은 저장할 때 gzip + base64로 줄여 `z` 필드 하나에 넣고(`packTurn`), 읽을 때 되돌립니다(`inflate`).
 

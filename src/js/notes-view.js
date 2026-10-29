@@ -3,7 +3,7 @@ import { $, esc, fmt, kb, toast, uid, utf8Bytes } from './util.js';
 import { N_, T, uiLang } from './i18n.js';
 import { decodeText, legacyEncodings } from './zip.js';
 import { app } from './app.js';
-import { answerDialog, askConfirm, closeSheet, openDialog, openSheet } from './sheet.js';
+import { answerDialog, askConfirm, askPrompt, closeSheet, openDialog, openSheet } from './sheet.js';
 import { persist } from './persistence.js';
 import { notesShare } from './prompt.js';
 import {
@@ -189,6 +189,34 @@ export async function uploadNotes(files) {
     unreadable.length && T("Couldn't read: {names}.", { names: unreadable.join(', ') }),
   ].filter(Boolean);
   if (said.length) toast(said.join(' '), big.length || error || unreadable.length ? 6000 : 3000);
+}
+// The new game's setting box kept as a library note and ticked in the picker. True when it was, so the box can be
+// emptied and the text isn't sent twice (as the save's notes too)
+export async function saveBoxAsNote(text) {
+  const bytes = utf8Bytes(text);
+  if (bytes > NOTE_MAX) {
+    toast(T('A note can be up to 32 KB. This one is {kb}', { kb: kb(bytes) }));
+    return false;
+  }
+  const name = cleanNoteName(await askPrompt(T('Name of the note'), T('World setting')));
+  if (!name) return false;
+  const old = noteByName(name);
+  if (old && (await askSameName([name])) !== 'replace') return false;
+  let note;
+  try {
+    note = await saveNote({ id: old ? old.id : undefined, name, text });
+  } catch (e) {
+    toast(T('Save failed: {err}', { err: e.code || e.message }));
+    return false;
+  }
+  libraryChanged();
+  const box = $(`#nlNote-${note.id}`);
+  if (box && !box.checked) {
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+  }
+  toast(T('Saved as a note, ticked for this game'));
+  return true;
 }
 // 'replace', 'skip', or null for neither (nothing of the batch is added)
 function askSameName(names) {

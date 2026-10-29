@@ -47,6 +47,7 @@ export const LIMITS = {
     people: 40,
     aliases: 4, // other names per person
   },
+  userNotes: 4000, // characters of a save's notes (the Memory tab's box) and the new game's setting box that seeds them
   statMax: 9999, // a main stat (hp, power, gold, fame) never goes above this
   skillLevelMax: 10,
   // how far one reply may move the story

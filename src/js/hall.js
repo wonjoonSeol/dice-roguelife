@@ -18,7 +18,7 @@ export function entryFrom(o, t) {
     world: life.world.name,
     origin: life.origin,
     tier: life.originTier,
-    talent: life.talent.name,
+    talent: life.talent ? life.talent.name : '',
     lifeNo: st.lifeNo,
     age: st.stats.age,
     score: Math.max(0, Math.min(100, Math.round(Number(o.score) || 0))),

@@ -1,5 +1,6 @@
 /* ============ new life ============ */
 import { $, esc, noteIgnored, nowIso, pick, rnd, toast, uid } from './util.js';
+import { LIMITS } from './limits.js';
 import {
   BASE,
   cmdName,
@@ -34,13 +35,13 @@ import { ensureSample } from './boot.js';
 import { liveWorldIds } from './images.js';
 import { leaveOpenSave, pushTurn, showPlay } from './persistence.js';
 import { lifeExtra, runTurn } from './turn.js';
-import { fillTemplate, pr } from './prompt.js';
+import { fillTemplate, pr, talentVars } from './prompt.js';
 import { chooseUiLang } from './settings-sheet.js';
 import { extStart } from './world-ext.js';
 import { rosterTextOf, setRoster, snapOf } from './roster.js';
 import { bindRosterEditor, rosterEditorHtml } from './roster-view.js';
 import { lastNoteIds } from './notes.js';
-import { bindNotePicker, notePickerHtml, pickedInForm } from './notes-view.js';
+import { bindNotePicker, notePickerHtml, pickedInForm, saveBoxAsNote } from './notes-view.js';
 
 const TALENT_MAX = 5;
 // a regression keeps its save's notes; a new game starts with the last save's
@@ -51,15 +52,17 @@ function lockTierSel(sel) {
   if (!sel) return;
   [...sel.options].forEach(o => {
     o.setAttribute('value', o.value);
-    if (tierRank(o.value) < tierRank('C')) {
+    if (o.value !== NO_TALENT && tierRank(o.value) < tierRank('C')) {
       o.disabled = true;
       o.textContent = o.value + T(' (locked)');
     }
   });
   sel.value = 'C';
 }
+// the first row's grade may be "no talent": the life starts with none at all (life.talent null)
+const NO_TALENT = 'none';
 const talentRow = first =>
-  `<div class="trow"><div class="row talent-row"><select class="tt" aria-label="${T('Talent grade')}">${TIERS.map(t => `<option ${t === 'C' ? 'selected' : ''}>${t}</option>`).join('')}</select><input class="tn grow" maxlength="30" placeholder="${first ? T('e.g. Obsessed with the sword') : T('Talent name')}">${first ? '' : `<button type="button" class="tx" aria-label="${T('Remove this talent')}">×</button>`}</div><input class="td talent-desc" maxlength="80" placeholder="${T('Effect in one line')}"></div>`;
+  `<div class="trow"><div class="row talent-row"><select class="tt" aria-label="${T('Talent grade')}">${first ? `<option value="${NO_TALENT}">${T('No talent')}</option>` : ''}${TIERS.map(t => `<option ${t === 'C' ? 'selected' : ''}>${t}</option>`).join('')}</select><input class="tn grow" maxlength="30" placeholder="${first ? T('e.g. Obsessed with the sword') : T('Talent name')}">${first ? '' : `<button type="button" class="tx" aria-label="${T('Remove this talent')}">×</button>`}</div><input class="td talent-desc" maxlength="80" placeholder="${T('Effect in one line')}"></div>`;
 let formInherit; // for redrawNewLifeForm
 export function startNewLifeForm(inherit) {
   formInherit = inherit;
@@ -86,6 +89,7 @@ export function startNewLifeForm(inherit) {
   lockFreeSetup(inherit);
   bindProfileCount();
   bindNotePicker();
+  bindWorldNoteSave();
   bindFormLang();
   $('#rollBtn').onclick = () => rollFromForm(inherit, sel);
 }
@@ -121,6 +125,8 @@ export function redrawNewLifeForm() {
       if (talents[i] && talents[i][j] !== undefined && !x.disabled) x.value = talents[i][j];
     }),
   );
+  const firstGrade = $('#talents .tt');
+  if (firstGrade) firstGrade.dispatchEvent(new Event('change')); // a restored "no talent" locks its rows again
   for (const [id, v] of kept) {
     const el = $('#' + id);
     if (!el || el.closest('.trow')) continue;
@@ -129,6 +135,7 @@ export function redrawNewLifeForm() {
   }
   $('#prof').dispatchEvent(new Event('input'));
   bindNotePicker();
+  bindWorldNoteSave();
   if (pending) {
     app.pendingRoll = pending;
     revealFate(pending.life, pending.inherit, true);
@@ -186,7 +193,7 @@ function newLifeHtml(inherit) {
       <div class="row"><div class="field talent-grade-field"><label for="fOT">${T('Standing grade')}</label><select id="fOT">${TIERS.map(t => `<option ${t === 'C' ? 'selected' : ''}>${t}</option>`).join('')}</select></div><div class="field grow"><label for="fOrigin">${T('Standing')}</label><input id="fOrigin" maxlength="30" placeholder="${T('e.g. Lowest disciple of the Mount Hua Sect')}"></div></div>
       <div class="field"><label>${T('Talents (grade, name, effect in one line)')}</label><div id="talents">${talentRow(true)}</div><button type="button" class="btn ghost add-talent" id="addTalent">${T('+ Add a talent')}</button></div>
       <div class="field"><label for="fAge">${T('Starting age')}</label><input id="fAge" type="number" min="0" max="90" placeholder="${T('Leave blank for random')}"></div>
-      <div class="field"><label for="worldNote">${T('Setting and characters (optional)')}</label><textarea id="worldNote" rows="3" maxlength="1200" placeholder="${T('e.g. There is no magic in this world and the guilds rule the cities. My childhood friend Seoyun lives next door. Blunt on the outside, but always looking out for me.')}">${esc(app.settings.worldNote || '')}</textarea><p class="muted field-note">${T('This goes into your notes, so it shapes the story from the first scene. You can edit it later in the Memory tab.')}</p></div>
+      <div class="field"><label for="worldNote">${T('Setting and characters (optional)')}</label><textarea id="worldNote" rows="3" maxlength="${LIMITS.userNotes}" placeholder="${T('e.g. There is no magic in this world and the guilds rule the cities. My childhood friend Seoyun lives next door. Blunt on the outside, but always looking out for me.')}">${esc(app.settings.worldNote || '')}</textarea><div class="row note-tools"><button type="button" class="btn ghost" id="worldNoteSave" disabled>${T('Save as note')}</button></div><p class="muted field-note">${T('This goes into your notes, so it shapes the story from the first scene. You can edit it later in the Memory tab.')}</p></div>
       <div class="field"><label>${T('Constellations')}</label><div class="seg" id="spseg"><button type="button" data-sp="random" aria-pressed="true">${T('Random')}</button><button type="button" data-sp="on" aria-pressed="false">${T('Yes')}</button><button type="button" data-sp="off" aria-pressed="false">${T('None')}</button></div></div>
     </div>
     <details class="odds guide"><summary>${T('How to play')}</summary>
@@ -211,7 +218,10 @@ function bindTalentRows() {
     add = $('#addTalent');
   if (!box || !add) return;
   const sync = () => {
-    add.disabled = box.querySelectorAll('.trow').length >= TALENT_MAX;
+    const rows = [...box.querySelectorAll('.trow')];
+    const none = rows[0].querySelector('.tt').value === NO_TALENT; // no talent means no extra ones either
+    rows.forEach((r, i) => r.querySelectorAll(i ? 'select,input,button' : 'input').forEach(x => (x.disabled = none)));
+    add.disabled = none || rows.length >= TALENT_MAX;
     box.querySelectorAll('.tx').forEach(
       x =>
         (x.onclick = () => {
@@ -229,6 +239,7 @@ function bindTalentRows() {
     if (tierLocked) lockTierSel(last.querySelector('.tt'));
     last.querySelector('.tn').focus();
   };
+  box.querySelector('.tt').onchange = sync;
   sync();
 }
 // before the second life (and for anyone but the owner) free setup is closed and tiers are rolled, not chosen
@@ -246,6 +257,21 @@ async function lockFreeSetup(inherit) {
     lockTierSel($('#fOT'));
     document.querySelectorAll('#talents .tt').forEach(lockTierSel);
   }
+}
+// the setting box kept as a library note instead: ticked for this game, and the box emptied so it isn't sent twice
+function bindWorldNoteSave() {
+  const box = $('#worldNote'),
+    save = $('#worldNoteSave');
+  if (!box || !save) return;
+  const sync = () => (save.disabled = !box.value.trim() || !!app.pendingRoll); // a rolled fate already took the text
+  box.oninput = sync;
+  save.onclick = async () => {
+    if (await saveBoxAsNote(box.value.trim())) {
+      box.value = '';
+      sync();
+    }
+  };
+  sync();
 }
 // the profile box shows how much of its 600 characters is used
 function bindProfileCount() {
@@ -272,10 +298,13 @@ function readFreeSetup(sel) {
     talentTier: first.tier,
     talent: first.name,
     talentDesc: first.desc,
-    extraTalents: talents
-      .slice(1)
-      .filter(t => t.name)
-      .slice(0, TALENT_MAX - 1),
+    extraTalents:
+      first.tier === NO_TALENT
+        ? []
+        : talents
+            .slice(1)
+            .filter(t => t.name)
+            .slice(0, TALENT_MAX - 1),
     age: $('#fAge').value,
     sponsor: sel.sponsor || 'random',
   };
@@ -308,7 +337,7 @@ async function rollFromForm(inherit, sel) {
   const life = rollLife(name, gender, sel.world, free, aff);
   life.profile = profTxt;
   const wn = $('#worldNote');
-  if (wn && sel.mode === 'free') life.seedNotes = wn.value.trim().slice(0, 1200); // the save's first user notes, so the opening scene knows them
+  if (wn && sel.mode === 'free') life.seedNotes = wn.value.trim().slice(0, LIMITS.userNotes); // the save's first user notes, so the opening scene knows them
   rememberFormDefaults(life);
   app.pendingRoll = { life, inherit, lang: storyLang() }; // the language the fate was rolled in, even if the screen changes before starting
   revealFate(life, inherit);
@@ -465,8 +494,9 @@ export let rollLife = function rollLife(name, gender, worldChoice, free, aff) {
     if (free.race) race = free.race.slice(0, 20);
     ot = TIERS.includes(free.originTier) ? free.originTier : ot;
     origin = free.origin || tr(pick(origins(ot)));
-    tt = TIERS.includes(free.talentTier) ? free.talentTier : tt;
-    if (free.talent) {
+    tt = free.talentTier === NO_TALENT ? null : TIERS.includes(free.talentTier) ? free.talentTier : tt;
+    if (!tt) [tn, td] = ['', ''];
+    else if (free.talent) {
       tn = free.talent;
       td = free.talentDesc || '';
     } else {
@@ -493,7 +523,7 @@ export let rollLife = function rollLife(name, gender, worldChoice, free, aff) {
     originTier: ot,
     origin,
     talentTier: tt,
-    talent: { name: tn, grade: tt, desc: td },
+    talent: tt ? { name: tn, grade: tt, desc: td } : null,
     age,
     free: !!free,
     entry,
@@ -512,7 +542,9 @@ function revealFate(life, inherit, again) {
     ],
     [T('Race'), life.race, '', null],
     [T('Standing'), life.origin, '', life.originTier],
-    [T('Talent'), life.talent.name, life.talent.desc, life.talentTier],
+    life.talent
+      ? [T('Talent'), life.talent.name, life.talent.desc, life.talentTier]
+      : [T('Talent'), T('No talent'), '', null],
   ];
   if (life.entry && life.entry !== 'native')
     cards.push([
@@ -573,8 +605,10 @@ async function beginLife() {
   const noteIds = pickedInForm() ?? startNotes(inherit); // no picker: the library is empty or unread
   const b = BASE[life.originTier];
   const skills = [
-    { ...life.talent, src: SKILL_SRC.TALENT },
-    ...(life.extraTalents || []).filter(t => t.name !== life.talent.name).map(t => ({ ...t, src: SKILL_SRC.TALENT })),
+    ...(life.talent ? [{ ...life.talent, src: SKILL_SRC.TALENT }] : []),
+    ...(life.extraTalents || [])
+      .filter(t => !life.talent || t.name !== life.talent.name)
+      .map(t => ({ ...t, src: SKILL_SRC.TALENT })),
   ];
   const seed = (life && life.seedNotes) || '';
   let past = [],
@@ -587,7 +621,7 @@ async function beginLife() {
     lifeNo = app.state.lifeNo + 1;
     userNotes = app.state.userNotes || '';
     if (seed && !userNotes.includes(seed)) userNotes = (userNotes ? userNotes + '\n' : '') + seed;
-    userNotes = userNotes.slice(0, 1200);
+    userNotes = userNotes.slice(0, LIMITS.userNotes);
     if (inherit.name)
       skills.push({ name: inherit.name, grade: inherit.grade, desc: inherit.desc, src: SKILL_SRC.INHERITED });
     for (const s of app.state.skills.filter(s => s.src === SKILL_SRC.INHERITED))
@@ -646,17 +680,19 @@ async function beginLife() {
   } else {
     app.currentSave.lifeNo = lifeNo;
   }
+  const lifeRow = {
+    n: lifeNo,
+    world: life.world.name,
+    race: life.race,
+    origin: life.origin,
+    tier: life.originTier,
+    ...talentVars(life),
+  };
   await pushTurn({
     kind: 'system',
-    text: tIn(storyLang(), 'Life {n}: {world}, {race}, {origin} ({tier}), talent {talent} ({talentTier})', {
-      n: lifeNo,
-      world: life.world.name,
-      race: life.race,
-      origin: life.origin,
-      tier: life.originTier,
-      talent: life.talent.name,
-      talentTier: life.talentTier,
-    }),
+    text: life.talent
+      ? tIn(storyLang(), 'Life {n}: {world}, {race}, {origin} ({tier}), talent {talent} ({talentTier})', lifeRow)
+      : tIn(storyLang(), 'Life {n}: {world}, {race}, {origin} ({tier}), no talent', lifeRow),
     snap: snapOf(app.state),
   });
   app.state.introText = fillTemplate(pr('intro'), {
@@ -665,8 +701,7 @@ async function beginLife() {
     race: life.race,
     origin: life.origin,
     originTier: life.originTier,
-    talent: life.talent.name,
-    talentTier: life.talentTier,
+    ...talentVars(life),
     extra: lifeExtra(life),
   });
 
