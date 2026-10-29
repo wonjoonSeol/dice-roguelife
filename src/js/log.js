@@ -19,7 +19,7 @@ import {
   sysTag,
   titleGained,
 } from './reply-words.js';
-import { charSetsAll, imgById, imgUrl, sceneHtml, turnImg, turnPeople } from './images.js';
+import { charSetsAll, imgById, imgUrl, openingHtml, sceneHtml, turnImg, turnPeople } from './images.js';
 import { startNewLifeForm } from './new-life.js';
 import { loadEarlier, pushTurn } from './persistence.js';
 import { changeFaceIn } from './face-picker.js';
@@ -30,11 +30,12 @@ import { fork, rerollWithReason } from './reroll.js';
 import { deathPanel, ledgerCard, runLedger } from './death.js';
 import { entryFrom, openShareCard, shareToHall } from './hall.js';
 
-// the live box's banner and face: the preview once the streaming reply has named them, an empty slot before
+// the live box's banner and face: the preview once the streaming reply has named them, an empty slot before. A
+// life's first reply shows its opening in place of the banner.
 function liveSceneHtml(turn) {
   const p = turn && turn.preview;
   if (!p) return '<div id="liveScene"></div>';
-  const sc = imgById(p.scene),
+  const sc = !turn.opening && imgById(p.scene),
     ch = imgById(p.char);
   return sc || ch ? sceneHtml(sc, ch ? [{ x: ch, npc: turn.previewNpc }] : []) : '';
 }
@@ -74,6 +75,7 @@ export function renderLog(scroll = 'bottom') {
     retry +
     (waitingForReply()
       ? '<div class="turn"><div class="ai" id="liveBox">' +
+        openingHtml(app.turn && app.turn.opening) +
         liveSceneHtml(app.turn) +
         '<div class="body">' +
         (app.turn && app.turn.head ? `<div class="sysmsg turn-head"><span>[ ${T(app.turn.head)} ]</span></div>` : '') +
@@ -425,11 +427,12 @@ function renderTurnInner(t, isLast) {
   const o = t.out || {};
   const ti = t.img || {};
   let img = '';
-  const sc = turnImg(ti, ti.scene);
+  const op = openingHtml(ti); // a life's first reply: its opening takes the banner's place
+  const sc = op ? null : turnImg(ti, ti.scene);
   const ppl = turnPeople(ti, o);
   const NW = narrWithImages(o, ti, ppl, sc);
   const rest = ppl.filter(p => !NW.used.has(p.npc));
-  if (sc || rest.length) img = sceneHtml(sc, rest);
+  if (op || sc || rest.length) img = op + sceneHtml(sc, rest);
   const RS = o.reasons || {};
   const SV = statusVisible();
   const deltas =

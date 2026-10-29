@@ -12,7 +12,7 @@ import { aliasOut, lastStoryReply } from './people.js';
 import { snapOf } from './roster.js';
 import { cueDeath, cueDoom, cueFanfare, cueItem, cueQuest, cueRealm, cueReveal, cueSkill } from './sound.js';
 import { ensureSample } from './boot.js';
-import { imgUrl, pickEmotion } from './images.js';
+import { imgUrl, openingFor, pickEmotion } from './images.js';
 import { resolveScene } from './places.js';
 import { aiWillPick, castFor, earlyCast, presentOf, resolveAiPicks, startAiPick, takePromoted } from './casting.js';
 import { closeGone, openSave, persist, pushTurn, staleSave, storeError } from './persistence.js';
@@ -257,6 +257,7 @@ export async function runTurn(text, cmd, opts = {}) {
     head: askOf(cmd) ? askOf(cmd).head : null, // the live box heading (English; log.js shows it with T)
     preview: null, // the banner and face picked while the reply streamed (once per reply)
     previewNpc: '', // whose face that is
+    opening: intro ? openingFor(app.state.life.world.id) : null, // the frames or banner above a life's first reply
     abort: new AbortController(), // the stop button
   };
   turn.onText = streamedReply(turn, cmd);
@@ -337,6 +338,7 @@ async function narrate(text, cmd, intro, turn) {
   if (turn.run.abandoned) return;
   const before = clone(app.state); // the state before this reply, in case the reply cannot be saved
   const res = applyOut(out, turn);
+  if (turn.opening) Object.assign(res.img, turn.opening);
   const browsing = cmdIs(cmd, 'browse');
   delete app.state.introText;
   if (app.state.turnNo != null && !browsing) app.state.turnNo++;

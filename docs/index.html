@@ -863,6 +863,7 @@ db、sample、user、assets、downloads、artifact の機能をオンにして�
       <tr><td>배경</td><td><code>bg_{장소}_{시간}.png</code></td><td><code>bg_tavern_night.png</code>, <code>bg_castle-gate_day.png</code></td></tr>
       <tr><td>그림자</td><td><code>shadow_{male|female}_{표정}.png</code></td><td><code>shadow_male_neutral.png</code></td></tr>
       <tr><td>게임 마스터</td><td><code>admin_{표정}.png</code></td><td><code>admin_smirk.png</code></td></tr>
+      <tr><td>오프닝</td><td><code>opening_{번호}.png</code> <code>opening_{묶음}_{번호}.png</code></td><td><code>opening_1.png</code>, <code>opening_무협_1.png</code>. 삶의 첫 답 위에 번호 순서대로 나와요. 세계에 맞는 묶음 하나를 무작위로 골라요</td></tr>
       <tr><td>연출 (주사위)</td><td><code>dice.png</code> <code>dice_success.png</code> <code>dice_fail.png</code> <code>fx_*.png</code></td><td>대성공이나 대실패일 때만 나와요</td></tr>
     </tbody>
   </table><table lang="en">
@@ -874,6 +875,7 @@ db、sample、user、assets、downloads、artifact の機能をオンにして�
       <tr><td>Background</td><td><code>bg_{place}_{time}.png</code></td><td><code>bg_tavern_night.png</code>, <code>bg_castle-gate_day.png</code></td></tr>
       <tr><td>Shadow</td><td><code>shadow_{male|female}_{emotion}.png</code></td><td><code>shadow_male_neutral.png</code></td></tr>
       <tr><td>Game master</td><td><code>admin_{emotion}.png</code></td><td><code>admin_smirk.png</code></td></tr>
+      <tr><td>Opening</td><td><code>opening_{n}.png</code> <code>opening_{set}_{n}.png</code></td><td><code>opening_1.png</code>, <code>opening_murim_1.png</code>. Shown in number order above the first reply of a life; one sequence that fits the world is picked at random</td></tr>
       <tr><td>Effects (dice)</td><td><code>dice.png</code> <code>dice_success.png</code> <code>dice_fail.png</code> <code>fx_*.png</code></td><td>Shown only on a critical success or failure</td></tr>
     </tbody>
   </table><table lang="ja">
@@ -885,6 +887,7 @@ db、sample、user、assets、downloads、artifact の機能をオンにして�
       <tr><td>背景</td><td><code>bg_{place}_{time}.png</code></td><td><code>bg_tavern_night.png</code>、<code>bg_castle-gate_day.png</code></td></tr>
       <tr><td>シルエット</td><td><code>shadow_{male|female}_{emotion}.png</code></td><td><code>shadow_male_neutral.png</code></td></tr>
       <tr><td>ゲームマスター</td><td><code>admin_{emotion}.png</code></td><td><code>admin_smirk.png</code></td></tr>
+      <tr><td>オープニング</td><td><code>opening_{n}.png</code> <code>opening_{set}_{n}.png</code></td><td><code>opening_1.png</code>、<code>opening_murim_1.png</code>。人生の最初の返答の上に番号順に表示され、世界に合う組をひとつランダムに選びます</td></tr>
       <tr><td>演出（ダイス）</td><td><code>dice.png</code> <code>dice_success.png</code> <code>dice_fail.png</code> <code>fx_*.png</code></td><td>大成功・大失敗のときだけ表示されます</td></tr>
     </tbody>
   </table></div>
@@ -897,6 +900,7 @@ db、sample、user、assets、downloads、artifact の機能をオンにして�
     <li><b>sets</b>: gender(male/female/other), worlds, role, vibe, look, tier(extra/minor/major), tags, name, aliases, cover(표지 그림의 파일 이름)</li>
     <li><b>images</b>: 파일 이름별 emotion, tags, worlds</li>
     <li><b>backgrounds</b>: 파일 이름별 place, time, mood, tags, worlds</li>
+    <li><b>openings</b>: 파일 이름별 sequence(묶음 이름, 비우면 <code>opening_{번호}</code> 묶음), order(번호), worlds</li>
     <li>태그는 이렇게 써요. 묘사는 영어 소문자로 3~6개 적고, 고유명사만 원래 언어로 적어요. 정체 태그는 <code>key:value</code> 형태예요 (예: <code>faction:사천당가</code>).</li>
   </ul><ul lang="en">
     <li>Images tab → <b>Import tags.json</b> adds set details and tags in one go.</li>
@@ -904,6 +908,7 @@ db、sample、user、assets、downloads、artifact の機能をオンにして�
     <li><b>sets</b>: gender (male/female/other), worlds, role, vibe, look, tier (extra/minor/major), tags, name, aliases, cover (file name of the cover picture)</li>
     <li><b>images</b>: emotion, tags and worlds per file name</li>
     <li><b>backgrounds</b>: place, time, mood, tags and worlds per file name</li>
+    <li><b>openings</b>: sequence (its name, empty for the <code>opening_{n}</code> one), order (frame number) and worlds per file name</li>
     <li>Tags: 3 to 6 descriptive tags in lowercase English; only proper nouns stay in their own language. Identity tags look like <code>key:value</code> (e.g. <code>faction:Tang Clan</code>).</li>
   </ul><ul lang="ja">
     <li>画像タブ → <b>tags.jsonを読み込む</b>で、セットの情報とタグを一度に追加できます。</li>
@@ -911,6 +916,7 @@ db、sample、user、assets、downloads、artifact の機能をオンにして�
     <li><b>sets</b>：gender（male/female/other）、worlds、role、vibe、look、tier（extra/minor/major）、tags、name、aliases、cover（表紙にする画像のファイル名）</li>
     <li><b>images</b>：ファイル名ごとの emotion、tags、worlds</li>
     <li><b>backgrounds</b>：ファイル名ごとの place、time、mood、tags、worlds</li>
+    <li><b>openings</b>：ファイル名ごとの sequence（組の名前、空なら <code>opening_{n}</code> の組）、order（コマ番号）、worlds</li>
     <li>タグ：小文字の英語で説明タグを3〜6個。固有名詞は英語以外（日本語など）でもかまいません。所属タグは <code>key:value</code> の形です（例：<code>faction:新選組</code>）。</li>
   </ul>
 
@@ -971,7 +977,7 @@ Backgrounds (scenes without a main character)
 Effects (dice or effect art that is neither a character nor a scene)
 - Name them dice.png, dice_success.png, dice_fail.png, or fx_{what}.png. No tags needed.
 
-Skip files that are already named as system assets: shadow_*, admin_*, dice*, fx*.
+Skip files that are already named as system assets: shadow_*, admin_*, opening_*, dice*, fx*.
 
 Worlds (for "worlds", 0 to 3 that clearly fit; empty array if it fits anywhere):
 hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster, modern
@@ -1045,7 +1051,7 @@ Backgrounds (scenes without a main character)
 Effects (dice or effect art that is neither a character nor a scene)
 - Name them dice.png, dice_success.png, dice_fail.png, or fx_{what}.png. No tags needed.
 
-Skip files that are already named as system assets: shadow_*, admin_*, dice*, fx*.
+Skip files that are already named as system assets: shadow_*, admin_*, opening_*, dice*, fx*.
 
 Worlds (for "worlds", 0 to 3 that clearly fit; empty array if it fits anywhere):
 hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster, modern
@@ -1118,7 +1124,7 @@ Also
 演出（キャラクターでも場面でもないダイスや演出の画像）
 - dice.png、dice_success.png、dice_fail.png、または fx_{what}.png と名付けます。タグは不要です。
 
-すでにシステム素材の名前になっているファイルはスキップ：shadow_*、admin_*、dice*、fx*。
+すでにシステム素材の名前になっているファイルはスキップ：shadow_*、admin_*、opening_*、dice*、fx*。
 
 世界（"worlds" 用、明らかに合うものを0〜3個。どこにでも合うなら空の配列）：
 hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster, modern

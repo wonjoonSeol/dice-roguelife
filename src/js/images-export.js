@@ -3,7 +3,7 @@ import { noteIgnored, toast } from './util.js';
 import { setStat } from './stat.js';
 import { app } from './app.js';
 import { useCapability } from './boot.js';
-import { IMAGE_TYPES, imgUrl, worldsOf } from './images.js';
+import { IMAGE_TYPES, imgUrl, openingName, worldsOf } from './images.js';
 import { logErr } from './diag.js';
 import { T } from './i18n.js';
 import { makeZip } from './zip.js';
@@ -23,6 +23,7 @@ function baseName(x) {
     return `${set}_${x.emotion || 'neutral'}${x.variant ? '_' + x.variant : ''}`;
   }
   if (x.kind === 'scene') return 'bg_' + String(x.name || x.file || x.id).replace(/^bg_/i, '');
+  if (x.kind === 'opening') return openingName(x);
   return String(x.name || (x.file || x.id).replace(/\.[^.]+$/, ''));
 }
 // names are unique inside the pack: a second "female1_smile" becomes "female1_smile_2"
@@ -73,6 +74,10 @@ export function buildTagsJson(imgs, names) {
       if (time) e.time = time;
       if (ws.length) e.worlds = ws;
       out.backgrounds[fn] = e;
+    } else if (x.kind === 'opening') {
+      const e = { sequence: x.set || '', order: x.order || 1 };
+      if (ws.length) e.worlds = ws;
+      (out.openings = out.openings || {})[fn] = e;
     }
   });
   return out;
@@ -93,7 +98,7 @@ export async function exportPack(withImages) {
   const say = t => {
     setStat(t);
   };
-  const imgs = app.images.filter(x => x.kind === 'char' || x.kind === 'scene' || x.kind === 'fx');
+  const imgs = app.images.filter(x => ['char', 'scene', 'fx', 'opening'].includes(x.kind));
   if (!imgs.length) {
     toast(T('No images to export'));
     return;
