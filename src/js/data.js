@@ -360,6 +360,7 @@ const CURRENCY = {
   hunter: LOCAL,
   academy: LOCAL,
   modern: LOCAL,
+  scenario: LOCAL, // a scenario with no world (enums.js SCENARIO_WORLD) counts in the story language's money
   cyber: [N_('credits'), 10],
   apoc: [N_('ration tickets'), 1],
   murim: [N_('nyang'), 1],

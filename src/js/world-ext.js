@@ -1,6 +1,7 @@
 /* ============ world add-ons: systems only some worlds have ============ */
 import { MURIM } from './murim.js';
 import { app } from './app.js';
+import { isScenario } from './rules.js';
 
 // by world id; what an add-on may hold is in ARCHITECTURE.md, in the world add-on section
 export const WORLD_EXT = {
@@ -11,8 +12,9 @@ export const WORLD_EXT = {
 const NONE = Object.freeze({});
 export const STANDING_KEYS = ['faction', 'position', 'epithet', 'trait'];
 
-// a world without an add-on gets an empty one, so callers read its fields directly
-export const extOf = st => (st && st.life && st.life.world && WORLD_EXT[st.life.world.id]) || NONE;
+// a world without an add-on gets an empty one, so callers read its fields directly. A scenario save's world only
+// picks its pictures, so it has none
+export const extOf = st => (st && st.life && st.life.world && !isScenario(st) && WORLD_EXT[st.life.world.id]) || NONE;
 export const worldExt = () => extOf(app.state);
 
 // what a new life of this world starts with

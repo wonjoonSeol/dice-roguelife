@@ -27,6 +27,7 @@ import { cardFields, closeGone, openSave } from './persistence.js';
 import { renderTurn } from './log.js';
 import { widgetOf } from './widgets.js';
 import { locale, T, Tc, uiLang } from './i18n.js';
+import { MODE } from './enums.js';
 import { deleteNote, NOTES_UNREAD, notesForFile, notesReady, planNotes, saveNotes } from './notes.js';
 import { libraryChanged } from './notes-view.js';
 
@@ -225,10 +226,15 @@ export async function importSaveFile(f) {
   }
   // the notes go in first: one that can't be written leaves the save's ticks, and a save that can't be written takes
   // its notes back out
-  const plan = planNotes(j.notes, j.state.noteIds);
+  // a scenario note and a style note come with the ticked ones, and keep pointing at theirs under the ids they get here
+  const own = ['scenarioId', 'styleNoteId'].filter(k => j.state[k] != null);
+  const plan = planNotes(j.notes, [...(j.state.noteIds || []), ...own.map(k => String(j.state[k]))]);
   const { saved, error } = plan.add.length ? await saveNotes(plan.add) : { saved: [], error: null };
   const lost = plan.add.filter(n => !saved.some(s => s.id === n.id));
-  j.state.noteIds = plan.ids.filter(nid => !lost.some(n => n.id === nid));
+  const here = id => (plan.map[id] && !lost.some(n => n.id === plan.map[id]) ? plan.map[id] : null);
+  const ticked = new Set((j.state.noteIds || []).map(String).map(here));
+  j.state.noteIds = plan.ids.filter(nid => !lost.some(n => n.id === nid) && ticked.has(nid));
+  for (const k of own) j.state[k] = here(String(j.state[k]));
   const id = uid();
   const meta = Object.assign(
     {},
@@ -390,7 +396,7 @@ export function renderSaves() {
      app.saves
        .map(
          s => `<div class="item"><div class="t">${esc(s.name)}${app.currentSave && app.currentSave.id === s.id ? ` <span class="muted playing-tag">${T('(playing)')}</span>` : ''}</div>
-     <div class="m">${T('Life {n}', { n: s.lifeNo })}, ${T('{n} {n|turn|turns}', { n: s.lifeTurns != null ? s.lifeTurns : s.turns })}, ${T('about {n} {n|document|documents}', { n: docsOf(s) })}, ${new Date(s.updatedAt).toLocaleString(locale())}${s.parent ? `<br>${T('Branched from {name} at turn {n}', { name: esc(s.parent.name), n: s.parent.turnNo != null ? s.parent.turnNo : s.parent.turn })}` : ''}</div>
+     <div class="m">${s.mode === MODE.SCENARIO ? T('Scenario: {name}', { name: esc(s.scenarioName || T('Scenario')) }) : T('Life {n}', { n: s.lifeNo })}, ${T('{n} {n|turn|turns}', { n: s.lifeTurns != null ? s.lifeTurns : s.turns })}, ${T('about {n} {n|document|documents}', { n: docsOf(s) })}, ${new Date(s.updatedAt).toLocaleString(locale())}${s.parent ? `<br>${T('Branched from {name} at turn {n}', { name: esc(s.parent.name), n: s.parent.turnNo != null ? s.parent.turnNo : s.parent.turn })}` : ''}</div>
      <div class="row save-actions"><button class="btn" data-open="${s.id}">${T('Continue')}</button><button class="btn ghost" data-rename="${s.id}">${Tc('save', 'Rename')}</button><button class="btn ghost" data-export="${s.id}">${T('Export story')}</button><button class="btn ghost" data-savefile="${s.id}" title="${T('This save as a file. Another copy or a new version can import it')}">${T('Save file')}</button><button class="btn danger" data-del="${s.id}">${T('Delete')}</button></div></div>`,
        )
        .join('') || `<p class="muted">${T('No saved lives yet. Start a new game and roll your first fate.')}</p>`

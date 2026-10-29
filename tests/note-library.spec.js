@@ -32,7 +32,8 @@ async function turn(pg, text) {
   await idle(pg);
   return promptFor(pg, n, text);
 }
-// files picked in the Memory tab's library at once: [name, text]
+// files picked in the Memory tab's library at once: [name, text]. Several readable files ask once what they are for:
+// general notes here
 async function upload(pg, files) {
   await pg.click('[data-tab="memory"]');
   await pg.setInputFiles(
@@ -43,6 +44,11 @@ async function upload(pg, files) {
       buffer: Buffer.isBuffer(text) ? text : Buffer.from(text),
     })),
   );
+  if (files.length > 1)
+    await pg
+      .locator('[data-ask-type="general"]')
+      .click({ timeout: 1500 })
+      .catch(() => {}); // not asked when only one of them can be added
 }
 const noteIds = pg => pg.evaluate('DR.app.state.noteIds.join()');
 const ticked = (pg, id) => pg.evaluate(id => !!document.querySelector(`#nlNote-${id}`)?.checked, id);
@@ -225,7 +231,7 @@ test('ticked notes reach the narrator, and only narrator turns', async ({ game }
       const docs = [...window.__store.entries()].filter(([k]) => k.includes('/notes/items/'));
       return (
         docs.length === 1 &&
-        docs.every(([, d]) => Object.keys(d).sort().join() === 'name,text,updatedAt') &&
+        docs.every(([, d]) => Object.keys(d).sort().join() === 'name,text,type,updatedAt') &&
         docs[0][1].text === DR.noteByName('Alpha').text
       );
     }),

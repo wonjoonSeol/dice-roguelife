@@ -1,8 +1,12 @@
 /* ============ rules: what a save froze at its start, growth, checks, titles ============ */
 import { WORLDS } from './data.js';
+import { MODE } from './enums.js';
 import { app } from './app.js';
 import { setting } from './settings.js';
 import { N_ } from './i18n.js';
+
+// a scenario save: the player's scenario note sets the story, without the roguelike's framing
+export const isScenario = (st = app.state) => !!st && st.mode === MODE.SCENARIO;
 
 const RULE_KEYS = ['growth', 'knowledgeGuard', 'dice', 'gambler', 'gamblerP'];
 export function snapshotRules() {

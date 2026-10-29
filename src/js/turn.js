@@ -7,7 +7,7 @@ import { T } from './i18n.js';
 import { platform } from './db.js';
 import { NEW_SAVES, turnStore } from './turn-store.js';
 import { app, currentRun, exclusive } from './app.js';
-import { critOf, rollGrade, rule } from './rules.js';
+import { critOf, isScenario, rollGrade, rule } from './rules.js';
 import { aliasOut, lastStoryReply } from './people.js';
 import { snapOf } from './roster.js';
 import { cueDeath, cueDoom, cueFanfare, cueItem, cueQuest, cueRealm, cueReveal, cueSkill } from './sound.js';
@@ -20,7 +20,7 @@ import { openStatus, renderStrip } from './status.js';
 import { adminFace, countInputHint, renderLog, showLiveReply } from './log.js';
 import { fitInput, input, offerInput, parseCmd, saveDraft, setSendMode } from './composer.js';
 import { applyOut } from './apply.js';
-import { callNarrator, peekReply, pl, plLabel } from './prompt.js';
+import { callNarrator, fillTemplate, peekReply, pl, plLabel, pr, talentVars } from './prompt.js';
 import { applyErratum, upholdObjection } from './reroll.js';
 import { maybeSummarize } from './summaries.js';
 import { extMask } from './world-ext.js';
@@ -150,7 +150,7 @@ async function sendInner(text) {
     fate = null;
   if (!cmd) {
     const keep = app.state.rollMemo && app.state.rollMemo.at === app.state.next && 'luck' in app.state.rollMemo;
-    luck = rule('dice') === false ? null : keep ? app.state.rollMemo.luck : rollLuck();
+    luck = rule('dice') === false || isScenario() ? null : keep ? app.state.rollMemo.luck : rollLuck();
     fate = keep && 'fate' in app.state.rollMemo ? app.state.rollMemo.fate : rollFate(null, false);
     const mr = makeRoll(text);
     text = mr.text;
@@ -206,6 +206,24 @@ export function lifeExtra(l) {
     );
   return x.join('');
 }
+// what the opening reply of a life answers: the roguelike's slot reels (opening: how this life begins), or a
+// scenario's first scene, from the player's starting situation when there is one
+export function introPrompt(st, opening = '') {
+  if (isScenario(st)) {
+    const first = st.firstScene ? '\n' + pl('[First scene] {text}', { text: st.firstScene }) : '';
+    return fillTemplate(pr('scenarioOpening'), { first });
+  }
+  const l = st.life;
+  return fillTemplate(pr('intro'), {
+    opening,
+    world: l.world.name,
+    race: l.race,
+    origin: l.origin,
+    originTier: l.originTier,
+    ...talentVars(l),
+    extra: lifeExtra(l),
+  });
+}
 const LUCK_P = { bad: 0.03, good: 0.03 };
 // everyday luck, apart from what the player does: rare bad and good turns the narrator does not have to invent
 export let rollLuck = function rollLuck() {
@@ -257,7 +275,7 @@ export async function runTurn(text, cmd, opts = {}) {
     head: askOf(cmd) ? askOf(cmd).head : null, // the live box heading (English; log.js shows it with T)
     preview: null, // the banner and face picked while the reply streamed (once per reply)
     previewNpc: '', // whose face that is
-    opening: intro ? openingFor(app.state.life.world.id) : null, // the frames or banner above a life's first reply
+    opening: intro ? openingFor(app.state.life.world.id, isScenario()) : null, // the frames or banner above a life's first reply
     abort: new AbortController(), // the stop button
   };
   turn.onText = streamedReply(turn, cmd);
@@ -424,6 +442,7 @@ async function objectionHandled(out, cmd, text) {
 // were. A screen you read (news, quests, the gallery, a messenger) is not a place: no banner, no portraits, and the
 // browsing ones change nothing in the story.
 function maskReply(out, cmd, turn) {
+  if (isScenario()) scenarioMask(out);
   if (!cmd) return;
   if (cmdIs(cmd, 'ask')) {
     out.widget = null;
@@ -457,6 +476,20 @@ function maskReply(out, cmd, turn) {
     if (out.clock) out.clock.days_passed = 0;
     if (out.memory) out.memory = { lore: out.memory.lore || [] };
   }
+}
+// what a scenario reply may not do: the roguelike's own events (a windfall, a constellation channel, an awakening,
+// a new race), ADMIN, and death, which would offer a regression
+const SCENARIO_OFF = {
+  windfall: false,
+  channel_open: false,
+  status_unlock: false,
+  race: null,
+  admin: '',
+  dead: false,
+};
+function scenarioMask(out) {
+  Object.assign(out, clone(SCENARIO_OFF));
+  extMask(out);
 }
 // A free roll gets its chance from the narrator's check and is written onto the player's line; a critical result
 // (either kind of roll) plays the dice reveal.

@@ -2,7 +2,7 @@
 import PR_DEFAULT from '../../prompts.json' with { type: 'json' };
 import { kb, stripMarks, utf8Bytes } from './util.js';
 import { askOf, cmdIs, moneyText, powerGrade } from './data.js';
-import { GENDER_LABEL, SKILL_SRC, STANCE_LABEL } from './enums.js';
+import { GENDER_LABEL, SCENARIO_WORLD, SKILL_SRC, STANCE_LABEL, STYLE } from './enums.js';
 import { LIMITS } from './limits.js';
 import { withWeekday } from './calendar.js';
 import { platform, sget } from './db.js';
@@ -10,7 +10,7 @@ import { app } from './app.js';
 import { promptLang, setting, storyLang } from './settings.js';
 import { N_, T, tIn } from './i18n.js';
 import { logErr } from './diag.js';
-import { growthLevel, itemBonus, lifeDiff, rollGrade, rule, statusVisible, titlesOn } from './rules.js';
+import { growthLevel, isScenario, itemBonus, lifeDiff, rollGrade, rule, statusVisible, titlesOn } from './rules.js';
 import { stripOdds } from './reply-words.js';
 import { activeRel, bondOf, BONDS, canonName, lastStoryReply } from './people.js';
 import { charSets, fitsWorld, frameTags, genderOf } from './images.js';
@@ -19,7 +19,7 @@ import { cardIndex, cardProfile, isOpenRole, namedSetFor, namedSetOf, setIds } f
 import { mentioned, namesOf, rosterFor, rosterNow } from './roster.js';
 import { widgetOf } from './widgets.js';
 import { nextStep, standingRows, worldExt } from './world-ext.js';
-import { NOTES_UNREAD, notesReady, pickedNotes } from './notes.js';
+import { NOTES_UNREAD, notesReady, pickedNotes, scenarioNote, STYLE_GONE, styleNote } from './notes.js';
 
 export let prompts = PR_DEFAULT; // narrator prompt text; config/prompt in the db overrides field by field
 // a prompts.json map keyed by story language ("lang", "tip", "ledgerLang", "summaryLang")
@@ -143,6 +143,7 @@ function withPlayerSettings(rules, extra) {
 }
 // The blocks after the rules, in the order the narrator reads them. Empty blocks are left out.
 const PROMPT_ORDER = [
+  'scenario',
   'adminp',
   'cheat',
   'growth',
@@ -183,6 +184,22 @@ const PROMPT_ORDER = [
   'roll',
   'input',
 ];
+// The Dice Roguelife framing: ADMIN, cheating, growth pace, outside knowledge from past lives, the world and its
+// difficulty, arrival, constellations, past lives, the gambler's fate and daily luck. A scenario save sends none of
+// it; its stats, gear, skills and titles go in neutral words (scenarioBlocks, personaBlock), and the world add-on is
+// empty there (world-ext.js extOf).
+const ROGUELIKE_ONLY = ['adminp', 'cheat', 'growth', 'know', 'world', 'entry', 'sponsor', 'past', 'fate', 'luck'];
+// the prompts.json entry a save reads: a scenario save's own version where it has one
+export const prFor = k => pr(isScenario() ? SCENARIO_KEYS[k] || k : k);
+const SCENARIO_KEYS = {
+  rules: 'scenarioRules',
+  styles: 'scenarioStyles',
+  summary: 'scenarioSummary',
+  widgets: 'scenarioWidgets',
+  widgetsIdle: 'scenarioWidgetsIdle',
+  cmdJudge: 'scenarioCmdJudge',
+  cmdSkills: 'scenarioCmdSkills',
+};
 // recent turns for the prompt: older player turns are trimmed (the action survives, the long deliberation does not),
 // and only the last three remarks ADMIN actually made are kept
 const recentBlock = str => (str ? `${pl('[Recent]')}\n${str}` : '');
@@ -335,8 +352,9 @@ function namedBlock(hay, turn, sets, own) {
       hit: mentioned(e, ctx) ? 1 : 0,
     });
   }
-  // an open role (#key) is a set the narrator may name (casting.js isOpenRole)
-  const list = Object.keys(sets)
+  // an open role (#key) is a set the narrator may name (casting.js isOpenRole). A scenario with no world offers only
+  // its own list: every world's cast would fit it
+  const list = (w === SCENARIO_WORLD ? [] : Object.keys(sets))
     .map(k => [k, app.setMeta[k] || {}])
     .filter(([k, m]) => (m.charName || isOpenRole(k)) && !used.has(k) && !own.bySet.has(k) && fitsWorld(m, w));
   for (const [k, m] of list) {
@@ -456,16 +474,17 @@ function situationBlock(people) {
   }
   return lines.length ? fillTemplate(pr('situation'), { list: lines.join(' | ') }) : '';
 }
+// a scenario's versions: no ranked quest boards, and a widget only when a command or the scenario asks
 function widgetsBlock(cmd) {
-  const W = pr('widgets') || {};
+  const W = prFor('widgets') || {};
   if (cmdIs(cmd, 'ask')) return '';
   if (cmd && W[cmd.type]) return fillTemplate(pr('widgetsCmd'), { schema: W[cmd.type] });
-  return pr('widgetsIdle');
+  return prFor('widgetsIdle');
 }
 function cmdBlock(cmd) {
   if (!cmd) return '';
   const ask = askOf(cmd);
-  if (ask) return fillTemplate(pr(ask.prompt), { q: cmd.arg || pl(ask.q) });
+  if (ask) return fillTemplate(prFor(ask.prompt), { q: cmd.arg || pl(ask.q) });
   const how = cmdIs(cmd, 'browse') ? pr('cmdBrowse') : pr('cmdAct');
   return `${pl('[Command] Always fill the {type} widget. {arg}', {
     type: cmd.type,
@@ -497,19 +516,86 @@ function userBlock(memo, notes) {
 }
 // the notes' part of that block in bytes: what the size error and the meter count
 export const notesBytes = notes => notes.reduce((a, n) => a + utf8Bytes(noteHead(n)) + n.bytes, 0);
+// a scenario save's note, whole, right after the base rules; like the ticked notes it is never cut
+const scenarioBlock = n => (n ? `${pl('[Scenario: {name}]', { name: n.name })}\n${n.text}` : '');
+// the prose style: a note's text under its name, else the chosen style's prompts.json text (none for the default)
+function styleBlock() {
+  if (app.state.style !== STYLE.NOTE) return (prFor('styles') || {})[app.state.style] || '';
+  const n = styleNote();
+  return n
+    ? `${pl('[Prose style: {name}] The prose style the player chose. Write the narration this way:', { name: n.name })}\n${n.text}`
+    : '';
+}
+// a scenario save's player character, in place of the roguelike's [Player] line, with any titles its story granted
+function personaBlock(l) {
+  const fx = app.state.titleFx || {};
+  const titles = (app.state.titles || []).map(t => `${t}${fx[t] ? `(${fx[t]})` : ''}`);
+  return (
+    pl('[Player character] {name}, {gender}', { name: l.name, gender: plLabel(GENDER_LABEL, l.gender) }) +
+    (titles.length ? pl(', titles {list}', { list: titles.join(', ') }) : '')
+  );
+}
+// a scenario summary's word on the lists its save keeps (the ledger, inventory, skills), only those it has
+export function trackedLine(st = app.state) {
+  const has = [
+    Object.keys(st.ledger || {}).length && pl('the ledger'),
+    (st.items || []).length && pl('the inventory'),
+    st.skills.length && pl('the skills'),
+  ].filter(Boolean);
+  return has.length
+    ? ' ' + pl('Do not repeat the numbers and lists tracked separately: {list}.', { list: has.join(', ') })
+    : '';
+}
+// A scenario save's numbers, gear and skills in plain words (no power grade, human range or skill grades), each only
+// once the story has some: the stats once a reply changed one (state.statsUsed, apply.js)
+function scenarioBlocks() {
+  const st = app.state,
+    s = st.stats,
+    E = st.energy;
+  const stat =
+    st.statsUsed || E
+      ? pl(
+          '[Stats] HP {hp}/{maxHp}, Constitution {con} Strength {str} Magic {mag} Agility {agi} Intelligence {int} Charm {cha}, money {money}, fame {fame}',
+          { ...s, money: moneyText(s.gold, st.life, promptLang()) },
+        ) + (E ? `, ${E.name} ${E.cur}/${E.max}` : '')
+      : '';
+  const skills = st.skills.map(
+    k => `${k.name}(Lv.${k.lv || 1}${k.cost ? pl(', cost {n}%', { n: k.cost }) : ''}): ${k.desc}`,
+  );
+  const gear = (st.equipped || []).map(n => {
+    const it = (st.items || []).find(x => x.name === n) || {};
+    return `${n}${it.note ? `(${it.note.slice(0, 40)})` : ''}`;
+  });
+  const inv = (st.items || []).map(
+    it =>
+      `${it.name}${it.qty > 1 ? ' x' + it.qty : ''}${it.note && !(st.equipped || []).includes(it.name) ? ': ' + it.note.slice(0, 30) : ''}`,
+  );
+  return {
+    stat,
+    skill: ifAny(skills, list => `${pl('[Skills]')} ${list}`),
+    gear: ifAny(gear, list => pl('[Gear] {list}', { list })),
+    inv: ifAny(inv, list => pl('[Inventory] {list}', { list })),
+  };
+}
 // what the ticked notes take of the prompt's limit (0 when not known yet)
 export function notesShare(ids) {
   const bytes = notesBytes(pickedNotes({ noteIds: ids }));
   const max = (platform.limits && platform.limits.maxPromptBytes) || 0;
   return { bytes, max, heavy: !!max && bytes > max / 3 };
 }
-const notesTooLarge = (notes, max) =>
+// fixed: the scenario and prose style note text that goes with the ticked notes
+const notesTooLarge = (notes, max, fixed = '') =>
   Object.assign(
     new Error(
-      T(
-        "The ticked notes ({kb}) don't fit in this model's prompt ({max}) with the story, so nothing was sent. Untick or shorten some in the Memory tab, then try again.",
-        { kb: kb(notesBytes(notes)), max: kb(max) },
-      ),
+      fixed
+        ? T(
+            "Your notes ({kb}: the scenario or prose style note and the ticked notes) don't fit in this model's prompt ({max}) with the story, so nothing was sent. Shorten them, or untick some notes in the Memory tab, then try again.",
+            { kb: kb(notesBytes(notes) + utf8Bytes(fixed)), max: kb(max) },
+          )
+        : T(
+            "The ticked notes ({kb}) don't fit in this model's prompt ({max}) with the story, so nothing was sent. Untick or shorten some in the Memory tab, then try again.",
+            { kb: kb(notesBytes(notes)), max: kb(max) },
+          ),
     ),
     { code: 'notes_too_large', shown: true },
   );
@@ -649,11 +735,21 @@ export function buildPrompt(text, cmd, turn = {}) {
     roll: rollBlock(roll),
     input: `${pl('[This input] {text}', { text })}\n\n${pr('jsonTail')}`,
   };
+  const scen = isScenario();
+  if (scen) {
+    for (const k of ROGUELIKE_ONLY) P[k] = '';
+    Object.assign(P, scenarioBlocks());
+    P.scenario = scenarioBlock(scenarioNote());
+    P.me = personaBlock(l);
+    P.nodice = rule('dice') === false ? '' : pr('scenarioDice'); // the odds on choices the roguelike's rules ask for
+  }
   const LEN = { short: pr('lenShort'), normal: '', long: pr('lenLong') }[setting('len')] || '';
   const tip = app.settings.langTip ? prLang('tip') : '';
-  const extra = prLang('lang') + (tip ? pl('\n[Extra output field] ') + tip : '');
-  const style = (pr('styles') || {})[app.state.style] || ''; // after the language block, whose plain prose it replaces
-  const rules = withPlayerSettings(pr('rules') || '', [LEN, extra, style].filter(Boolean).join('\n'));
+  const extra = prLang(scen ? 'scenarioLang' : 'lang') + (tip ? pl('\n[Extra output field] ') + tip : '');
+  const style = styleBlock(); // after the language block, whose plain prose it replaces
+  const base = prFor('rules') || '';
+  const rulesWith = st => withPlayerSettings(base, [LEN, extra, st].filter(Boolean).join('\n'));
+  let rules = rulesWith(style);
   const build = skip =>
     rules +
     '\n\n' +
@@ -678,10 +774,13 @@ export function buildPrompt(text, cmd, turn = {}) {
       p = build(skip);
       size = utf8Bytes(p);
     }
-    // when the notes alone take the prompt over, nothing is sent
-    if (notes.length && size > room) {
+    // when the notes (with a scenario and a prose style note) alone take the prompt over, nothing is sent
+    const fixed = (P.scenario || '') + (styleNote() ? style : '');
+    if ((notes.length || fixed) && size > room) {
       P.user = userBlock(app.state.userNotes, []);
-      if (utf8Bytes(build(skip)) <= room) throw notesTooLarge(notes, max);
+      P.scenario = '';
+      if (styleNote()) rules = rulesWith('');
+      if (utf8Bytes(build(skip)) <= room) throw notesTooLarge(notes, max, fixed);
     }
   }
   const rows = win.rows;
@@ -740,6 +839,8 @@ export function peekReply(text) {
 export async function callNarrator(text, cmd, turn) {
   const req = turn.req;
   if (!(await notesReady())) throw Object.assign(new Error(T(NOTES_UNREAD)), { code: 'notes_unread', shown: true });
+  if (app.state.style === STYLE.NOTE && !styleNote())
+    throw Object.assign(new Error(T(STYLE_GONE)), { code: 'style_note_gone', shown: true });
   const prompt = buildPrompt(text, cmd, turn) + (req ? `\n(req ${req})` : '');
   const cacheOpt = () => (!req ? false : STALE_REQ.has(req) ? Object.assign({ refresh: true }, REPLAY) : REPLAY);
   const stale = () => {

@@ -6,7 +6,7 @@ import { cmdName, EMO_FB, moneyText, normEmo, STAT_LABEL } from './data.js';
 import { withWeekday } from './calendar.js';
 import { platform } from './db.js';
 import { app, exclusive, waitingForReply } from './app.js';
-import { critOf, statusVisible, TITLES_MAX, titlesOn } from './rules.js';
+import { critOf, isScenario, statusVisible, TITLES_MAX, titlesOn } from './rules.js';
 import {
   isCheckLine,
   isPivotal,
@@ -44,7 +44,7 @@ export function showLiveReply(turn, f) {
   const slot = $('#liveScene');
   if (slot && turn.preview) slot.outerHTML = liveSceneHtml(turn);
   const ad = $('#liveAdmin');
-  if (ad && f.admin) {
+  if (ad && f.admin && !isScenario()) {
     ad.classList.remove('hidden');
     ad.lastChild.textContent = f.admin;
   }

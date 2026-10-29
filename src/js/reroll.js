@@ -9,8 +9,8 @@ import { cardFields, fromSnap, openSave, persist, storeError } from './persisten
 import { renderStrip } from './status.js';
 import { renderLog } from './log.js';
 import { parseCmd } from './composer.js';
-import { lifeExtra, runTurn } from './turn.js';
-import { fillTemplate, pl, pr, talentVars } from './prompt.js';
+import { introPrompt, runTurn } from './turn.js';
+import { pl } from './prompt.js';
 import { N_, T, tIn } from './i18n.js';
 import { storyLang } from './settings.js';
 
@@ -258,17 +258,7 @@ async function rerollIntro(last, sys, fix) {
   app.state = fromSnap(sys.snap);
   app.state.next = next;
   app.state.introReq = uid();
-  app.state.introText =
-    app.state.introText ||
-    fillTemplate(pr('intro'), {
-      extra: lifeExtra(app.state.life),
-      opening: '',
-      world: app.state.life.world.name,
-      race: app.state.life.race,
-      origin: app.state.life.origin,
-      originTier: app.state.life.originTier,
-      ...talentVars(app.state.life),
-    });
+  app.state.introText = app.state.introText || introPrompt(app.state);
   await persist();
   if (run.abandoned) return;
   renderStrip();

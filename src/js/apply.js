@@ -7,7 +7,7 @@ import { LIMITS } from './limits.js';
 import { addDaysISO, clockMin, fmtKDate, parseKDate } from './calendar.js';
 import { app } from './app.js';
 import { promptLang, storyLang } from './settings.js';
-import { costPct, growthLevel, sameQuest, TITLES_MAX, titlesOn } from './rules.js';
+import { costPct, growthLevel, isScenario, sameQuest, TITLES_MAX, titlesOn } from './rules.js';
 import { BONDS, bondStep, markSeen, moveBond, renamePerson } from './people.js';
 import { bgKey, hasSituation, imgById, pickEmotion } from './images.js';
 import { baseOfKey, findPlace } from './places.js';
@@ -74,6 +74,7 @@ export function applyOut(reply, turn = {}) {
     bannerBase: '', // the place the scene banner shows
   };
   for (const step of APPLY_STEPS) step(ctx);
+  if (isScenario() && Object.keys(ctx.deltas).length) app.state.statsUsed = true; // its stats are sent from then on
   return {
     deltas: ctx.deltas,
     newSkills: ctx.newSkills,
@@ -704,8 +705,10 @@ function applyPlaces(ctx) {
   if (places.length) img.places = places;
 }
 
+// a scenario save never dies here (death would offer a regression); its story says what happens at hp 0
 function applyDeath(ctx) {
   const { reply, stats, deltas, notes } = ctx;
+  if (isScenario()) return;
   if (stats.hp <= 0 || reply.dead === true) {
     app.state.dead = true;
     if (stats.hp < 0) {

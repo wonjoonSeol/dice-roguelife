@@ -4,7 +4,7 @@ import { platform } from './db.js';
 import { turnStore } from './turn-store.js';
 import { app } from './app.js';
 import { persist } from './persistence.js';
-import { fillTemplate, pr, prLang, sentWindow, turnText } from './prompt.js';
+import { fillTemplate, pr, prFor, prLang, sentWindow, trackedLine, turnText } from './prompt.js';
 
 export async function maybeSummarize() {
   const lastI = app.state.next - 1;
@@ -25,10 +25,11 @@ export async function maybeSummarize() {
     const ctext = chunk.map(turnText).join('\n\n').slice(0, 40000);
     const nsent = Math.max(4, Math.min(12, Math.round(utf8Bytes(ctext) / 4000)));
     const r = await platform.sample.json(
-      fillTemplate(pr('summary'), {
+      fillTemplate(prFor('summary'), {
         lang: prLang('summaryLang'),
         n: `${nsent}~${nsent + 2}`,
         chunk: ctext,
+        tracked: trackedLine(), // only the scenario summary has a place for it
       }),
       { modelTier: 'quick', cache: false },
     );

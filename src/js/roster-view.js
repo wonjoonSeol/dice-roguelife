@@ -12,6 +12,8 @@ import { logErr } from './diag.js';
 import { extractJson, fillTemplate, prIn } from './prompt.js';
 import { closeSheet, openSheet } from './sheet.js';
 import { noteById, saveNoteCast } from './notes.js';
+import { otherTag } from './notes-view.js';
+import { NOTE_TYPE } from './enums.js';
 import { ensureSample } from './boot.js';
 import { sampleError } from './turn.js';
 
@@ -105,12 +107,21 @@ const IMPORT_HELP = N_(
 export function openImport(ctx) {
   const own = ctx.own && ctx.own.text().trim() ? ctx.own : null;
   const notes = (app.notes || []).filter(n => n.text.trim());
-  const first = own ? 'own' : notes.length ? 'note:' + notes[0].id : 'paste';
+  // character sheet notes first, then the others with their type
+  const cast = n => n.type === NOTE_TYPE.CAST;
+  const pick = notes.find(cast) || notes[0];
+  const first = own ? 'own' : pick ? 'note:' + pick.id : 'paste';
   const opt = (value, label, on) =>
     `<label class="row opt"><input type="radio" name="impSrc" value="${esc(value)}"${on ? ' checked' : ''}> <span>${label}</span></label>`;
+  const noteOpt = (n, other) =>
+    opt(
+      'note:' + n.id,
+      `${esc(T('Note: {name}', { name: n.name }))} ${otherTag(n, other)} <span class="muted">${kb(n.bytes)}</span>`,
+      first === 'note:' + n.id,
+    );
   openSheet(
     `<h3 class="sheet-title">${T('Import characters')}</h3><p class="muted sheet-lead">${T(IMPORT_HELP)}</p>
-   <div class="field"><label>${T('Read from')}</label><div class="imp-src">${own ? opt('own', esc(own.label), true) : ''}${notes.map(n => opt('note:' + n.id, `${esc(T('Note: {name}', { name: n.name }))} <span class="muted">${kb(n.bytes)}</span>`, first === 'note:' + n.id)).join('')}${opt('paste', T('Text pasted here'), first === 'paste')}</div>
+   <div class="field"><label>${T('Read from')}</label><div class="imp-src">${own ? opt('own', esc(own.label), true) : ''}${[...notes.filter(cast), ...notes.filter(n => !cast(n))].map(n => noteOpt(n, !cast(n))).join('')}${opt('paste', T('Text pasted here'), first === 'paste')}</div>
    <textarea id="impPaste" rows="6" class="roster-text" aria-label="${T('Text pasted here')}" placeholder="${esc(T('Paste character sheets in any format'))}"></textarea></div>
    <div class="row actions"><button class="btn primary" id="impRead">${T('Read characters')}</button><button class="btn ghost" id="impCancel">${T('Cancel')}</button></div>`,
     { wide: true, modal: true },
