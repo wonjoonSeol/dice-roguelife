@@ -33,9 +33,13 @@ window.claude={use:async(n)=>{ if(n==='db')return window.__dbmock; if(n==='user'
   );
 }
 
-// fill the new-game form and start. dice: the per-save luck mode
-export async function startLife(pg, { world = 'hunter', dice = false, name = '진무', free = false, wait = 1500 } = {}) {
-  await pg.fill('#nm', name);
+// fill the new-game form and start. dice: the per-save luck mode; name: '' on a regression's form, which has none;
+// onFate: run on the fate screen, before accepting
+export async function startLife(
+  pg,
+  { world = 'hunter', dice = false, name = '진무', free = false, wait = 1500, onFate = null } = {},
+) {
+  if (name) await pg.fill('#nm', name);
   await pg.click(`[data-w="${world}"]`);
   if (free) await pg.click('#mseg [data-m="free"]');
   await pg.evaluate(d => {
@@ -44,6 +48,7 @@ export async function startLife(pg, { world = 'hunter', dice = false, name = '�
   }, dice);
   await pg.click('#rollBtn');
   await pg.waitForTimeout(wait);
+  if (onFate) await onFate();
   await pg.click('#acceptBtn');
   await pg.waitForTimeout(700);
 }

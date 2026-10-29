@@ -2,7 +2,9 @@
 import { $, esc, toast } from './util.js';
 import { T } from './i18n.js';
 import { app, isIdle } from './app.js';
-import { renamePerson } from './people.js';
+import { renamePerson, saveRoster } from './people.js';
+import { rosterNow, rosterTextOf } from './roster.js';
+import { bindRosterEditor, rosterEditorHtml } from './roster-view.js';
 import { askConfirm } from './sheet.js';
 import { charSets } from './images.js';
 import { persist } from './persistence.js';
@@ -19,6 +21,8 @@ export function renderMemory() {
    <div class="field"><label>${T('Character profile (fixed for this life; you can change it on the new game screen of your next life)')}</label><p class="lore mem-profile">${app.state.life.profile ? esc(app.state.life.profile) : none}</p></div>
    <div class="field"><label for="notes">${T('Notes: sent to Claude every turn')}</label><textarea id="notes" rows="5" maxlength="1200" placeholder="${T('e.g. Make ADMIN more cynical. Keep fight scenes short. There is no magic in this world. My childhood friend Seoyun lives next door.')}">${esc(app.state.userNotes)}</textarea>
     <div class="row"><button class="btn" id="saveNotes">${T('Save notes')}</button><span class="muted count-note" id="notesCount">${app.state.userNotes.length}/1200</span></div></div>
+   <div class="sec mem-roster"><h4>${T('Characters ({n})', { n: rosterNow().length })}</h4><p class="muted mem-hint">${T("For {world} lives in this save; a life in another world keeps its own list. A name that matches a set card's name or alias in the Images tab wears that face.", { world: esc(app.state.life.world.name) })}</p>${rosterEditorHtml(rosterTextOf(app.state, app.state.life.world.id))}
+    <div class="row"><button class="btn" data-roster-save>${T('Save characters')}</button></div></div>
    <div class="sec"><h4>${T('Current situation')}</h4><p class="lore mem-state">${app.state.stateNote ? esc(app.state.stateNote) : none}</p></div>
    <div class="sec"><h4>${T('Story so far ({n})', { n: app.state.summaries.length })}</h4><p class="muted mem-hint">${T('Long-term memory. If a wrong fact sticks, fix it here. Sent to Claude every turn.')}</p>${app.state.summaries.map((x, i) => `<div class="lore"><b>${x.era ? T('Era') : T('life {n}', { n: x.life })}</b><textarea data-esum="${i}" rows="3" maxlength="1600" class="mem-edit">${esc(x.text)}</textarea><button class="x" data-dsum="${i}" aria-label="${T('Delete')}">✕</button></div>`).join('') || `<p class="muted mem-note">${T('Once more than 22 turns have scrolled out of the window, they are summarized automatically.')}</p>`}</div>
    <div class="sec"><h4>${T('Lore ({n})', { n: Object.keys(app.state.lore).length })}</h4><p class="muted mem-hint">${T('Long-term memory. Sent to Claude only when a name comes up in recent turns. Fix or delete wrong lore here.')}</p>
@@ -77,6 +81,25 @@ export function renderMemory() {
     app.state.userNotes = $('#notes').value.trim();
     await persist();
     toast(T('Notes saved'));
+  };
+  const rs = box.querySelector('.mem-roster');
+  bindRosterEditor(rs, app.state.life.world.id, app.state.life.name);
+  rs.querySelector('[data-roster-save]').onclick = async () => {
+    if (!isIdle()) {
+      toast(T('A reply is being written. You can change it when it is done'));
+      return;
+    }
+    saveRoster(app.state.life.world.id, rs.querySelector('[data-roster]').value);
+    await persist();
+    toast(T('Characters saved'));
+    // moved notes and faces show in the tab again; what is typed in the other boxes and not saved stays
+    const drafts = ['notes', 'loreK', 'loreV'].map(id => [id, $('#' + id) && $('#' + id).value]);
+    renderMemory();
+    for (const [id, v] of drafts)
+      if (v != null && $('#' + id)) {
+        $('#' + id).value = v;
+        $('#' + id).dispatchEvent(new Event('input'));
+      }
   };
   box.querySelectorAll('[data-merge]').forEach(
     sel =>

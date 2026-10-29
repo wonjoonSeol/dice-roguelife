@@ -8,25 +8,39 @@ import { T } from './i18n.js';
 import { LIMITS } from './limits.js';
 import { charSets, charSetsAll, fitsWorld, genderOf, imagesVer, pickEmotion } from './images.js';
 import { worldExt } from './world-ext.js';
+import { namesOf, rosterFor } from './roster.js';
+import { canonName } from './people.js';
 
-export function namedSetFor(name) {
-  const n = normName(name);
-  if (!n) return null;
-  const sets = charSets();
+// the named set cards of these sets that fit the world (this life's by default): each name and alias (normalized) ->
+// the first card holding it, and every card's names for the look inside a longer name. Build it once to look up many
+// people (namedSetOf's ix)
+export function cardIndex(sets = charSets(), world = app.state && app.state.life && app.state.life.world.id) {
+  const ix = { exact: new Map(), cards: [] };
   for (const k of Object.keys(sets)) {
     const m = app.setMeta[k] || {};
-    if (!m.charName) continue;
+    if (!m.charName || (world && !fitsWorld(m, world))) continue;
     const all = [m.charName, ...(m.aliases || [])].map(normName);
-    if (all.includes(n)) return k;
+    ix.cards.push([k, all]);
+    for (const n of all) if (!ix.exact.has(n)) ix.exact.set(n, k);
   }
-  for (const k of Object.keys(sets)) {
-    const m = app.setMeta[k] || {};
-    if (!m.charName) continue;
-    const all = [m.charName, ...(m.aliases || [])].map(normName).filter(a => a.length >= 2);
-    if (all.some(a => n.includes(a))) return k;
-  }
+  return ix;
+}
+// the set card that holds one of these names: an exact fixed name or alias for any of them, in their order, first;
+// then, unless exact, a card name inside the first (the person's main name), as the label 남궁설화 holds 설화
+export function namedSetOf(names, { ix = cardIndex(), exact = false } = {}) {
+  const ns = names.map(normName).filter(Boolean);
+  if (!ns.length) return null;
+  for (const n of ns) if (ix.exact.has(n)) return ix.exact.get(n);
+  if (exact) return null;
+  for (const [k, all] of ix.cards) if (all.some(x => x.length >= 2 && ns[0].includes(x))) return k;
   return null;
 }
+// the set card that names this person: a roster person by an exact name or alias only (their list says who they are),
+// anyone else also by a card name inside theirs
+export const namedSetFor = (name, ix) => {
+  const r = rosterFor(name);
+  return r ? namedSetOf(namesOf(r), { ix, exact: true }) : namedSetOf([name], { ix });
+};
 export const TIERS_CAST = ['extra', 'minor', 'major'];
 // faceless figures any number of extras can share: marked on the set card (tier generic) or named shadow_ / generic_ / silhouette_. An explicit standing wins
 // a printed name is never a silhouette
@@ -260,9 +274,9 @@ export function takePromoted() {
 // (normGender); weight is extra, minor or major (anything else counts as minor); look is a list (or a comma string) of
 // look words and identity tags (faction:사천당가); cast is the key of an open role the reply gives them.
 
-// the people a reply names, in that shape
+// the people a reply names, in that shape, each under the label they are kept by (canonName)
 export const speakerOf = o => ({
-  name: String(o.speaker || '').slice(0, LIMITS.text.name),
+  name: canonName(String(o.speaker || '').slice(0, LIMITS.text.name)),
   gender: normGender(o.speaker_gender),
   role: o.speaker_role,
   weight: o.speaker_weight,
@@ -270,7 +284,7 @@ export const speakerOf = o => ({
   cast: o.speaker_cast,
 });
 export const presentOf = p => ({
-  name: String(p.name || '').slice(0, LIMITS.text.name),
+  name: canonName(String(p.name || '').slice(0, LIMITS.text.name)),
   gender: normGender(p.gender),
   role: p.role,
   weight: p.weight,
@@ -282,10 +296,12 @@ const metaOf = k => app.setMeta[k] || {};
 // a set nobody gets by chance: a named character's face, or in a world that offers them an open role (a profile without
 // a name), which only a reply's speaker_cast hands out
 const reserved = k => !!(metaOf(k).charName || isOpenRole(k));
+// a set card's profile, in a world whose add-on offers profiles (none elsewhere)
+export const cardProfile = k => (worldExt().profiles && metaOf(k).profile) || null;
 // an open role in this life's world: a set with a profile and no fixed name, still usable, where the world offers them
 export function isOpenRole(k) {
   const m = metaOf(k);
-  return !!(worldExt().profiles && m.profile && !m.charName && !retiredSets().has(k) && fitsWorld(m, worldId()));
+  return !!(cardProfile(k) && !m.charName && !retiredSets().has(k) && fitsWorld(m, worldId()));
 }
 const worldId = () => app.state.life.world.id;
 const genderKey = gender => (gender === 'female' || gender === 'male' ? gender : null);
@@ -434,10 +450,12 @@ export let startAiPick = function startAiPick(c) {
         return `- ${k} | ${isGeneric(k) ? 'silhouette' : setTier(k)} | ${ids || '-'} | ${m.role || ''} | ${tags}`;
       };
       const rel = (app.state.relations || {})[c.name];
+      const ro = rosterFor(c.name);
+      const listed = ro && [ro.faction, ro.profile.position, ro.profile.looks].filter(Boolean).join(', ');
       const lore = (app.state.lore || {})[c.name];
       const loreT = lore && (lore.text || lore);
       const r = await platform.sample.json(
-        `Pick the portrait that best fits this character. Judge by what they belong to first (a matching faction, house or company outranks looks), then appearance (clothing, era, genre), then role and how important they are. A silhouette is only right for a faceless passer-by. If no candidate plausibly fits (wrong era or genre), answer "none".\nWorld: ${app.state.life.world.name}\nCharacter: ${c.name} | gender ${c.gender || '?'} | belongs ${L.ids.map(i => i.key + ':' + i.val).join(', ') || '?'} | role ${c.role || '?'} | look ${L.desc.join(', ') || '?'} | importance ${normWeight(c.weight)}${rel ? `\nRelationship notes: ${String(rel.note || rel).slice(0, 200)}` : ''}${loreT ? `\nLore: ${String(loreT).slice(0, 200)}` : ''}\nCandidates (key | standing | belongs | role | tags):\n${cands.map(line).join('\n')}\nReply with only JSON {"pick":"<key or none>"}.`,
+        `Pick the portrait that best fits this character. Judge by what they belong to first (a matching faction, house or company outranks looks), then appearance (clothing, era, genre), then role and how important they are. A silhouette is only right for a faceless passer-by. If no candidate plausibly fits (wrong era or genre), answer "none".\nWorld: ${app.state.life.world.name}\nCharacter: ${c.name} | gender ${c.gender || '?'} | belongs ${L.ids.map(i => i.key + ':' + i.val).join(', ') || '?'} | role ${c.role || '?'} | look ${L.desc.join(', ') || '?'} | importance ${normWeight(c.weight)}${rel ? `\nRelationship notes: ${String(rel.note || rel).slice(0, 200)}` : ''}${loreT ? `\nLore: ${String(loreT).slice(0, 200)}` : ''}${listed ? `\nIn the player's cast list: ${listed}` : ''}\nCandidates (key | standing | belongs | role | tags):\n${cands.map(line).join('\n')}\nReply with only JSON {"pick":"<key or none>"}.`,
         { modelTier: 'quick' },
       );
       const k = r && String(r.pick || '').trim();
@@ -527,7 +545,7 @@ function castFor0(who) {
 const castKey = who =>
   String(who.cast || '')
     .trim()
-    .replace(/^#/, ''); // the roster shows it as #key
+    .replace(/^#/, ''); // the named block shows it as #key
 const openRole = who => {
   const k = castKey(who);
   return !!(

@@ -26,4 +26,19 @@ export default {
   ],
   date: [{ re: /(?:西暦\s*)?(?<y>\d{4})年\s*(?<m>\d{1,2})月\s*(?<d>\d{1,2})日/ }],
   weekday: /\s*[(（][日月火水木金土][)）]|\s*[日月火水木金土]曜日/,
+  // the keys of a pasted character list (roster.js), spaces removed
+  roster: {
+    name: /^(?:名前|氏名)$/,
+    aliases: /^(?:別名|二つ名|愛称|あだ名)$/,
+    faction: /^(?:所属|流派|門派|勢力|陣営|家門)$/,
+    gender: /^性別$/,
+    position: /^(?:役職|身分|地位|立場|役割)$/,
+    power: /^(?:実力|境地|強さ|ランク|等級|レベル)$/,
+    looks: /^(?:外見|容姿|見た目)$/,
+    traits: /^(?:性格|特徴)$/,
+    speech: /^(?:口調|話し方|口癖|台詞|セリフ)$/,
+    signature: /^(?:武功|得意技|武器|能力|技|スキル)$/,
+    ties: /^(?:関係|人間関係)$/,
+    secret: /^秘密$/,
+  },
 };

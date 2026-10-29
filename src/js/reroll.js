@@ -1,12 +1,11 @@
 /* ============ reroll & fork ============ */
-import { $, clone, cutLine, noteIgnored, nowIso, toast, uid } from './util.js';
+import { $, cutLine, noteIgnored, nowIso, toast, uid } from './util.js';
 import { cmdIs, currencyOf, moneyText } from './data.js';
 import { dset } from './db.js';
 import { turnStore } from './turn-store.js';
 import { app, currentRun, exclusive, isIdle } from './app.js';
-import { compat } from './compat.js';
 import { answerDialog, askConfirm, askPrompt, openDialog } from './sheet.js';
-import { openSave, persist, storeError } from './persistence.js';
+import { fromSnap, openSave, persist, storeError } from './persistence.js';
 import { renderStrip } from './status.js';
 import { renderLog } from './log.js';
 import { parseCmd } from './composer.js';
@@ -224,7 +223,7 @@ async function rewriteLast(fix = null, again = false) {
     pc = parseCmd(prevUser.text || ''),
     counted = !cmdIs(pc, 'browse');
   const next = app.state.next - 1;
-  app.state = compat(clone(prevSnap.snap));
+  app.state = fromSnap(prevSnap.snap);
   app.state.next = next;
   if (app.state.turnNo == null && tn != null) app.state.turnNo = Math.max(0, tn - (counted ? 1 : 0)); // an older snapshot without the count takes it from before
   await persist();
@@ -256,7 +255,7 @@ async function rerollIntro(last, sys, fix) {
   if (!run || run.abandoned) return;
   app.turns.pop();
   const next = app.state.next - 1;
-  app.state = compat(clone(sys.snap));
+  app.state = fromSnap(sys.snap);
   app.state.next = next;
   app.state.introReq = uid();
   app.state.introText =
@@ -310,7 +309,7 @@ async function makeBranch(t, i) {
     await storeError(e);
     return;
   }
-  const st = compat(clone(t.snap));
+  const st = fromSnap(t.snap);
   st.next = i + 1;
   await dset(`states/items/${meta.id}`, st);
   await dset(`saves/items/${meta.id}`, meta);

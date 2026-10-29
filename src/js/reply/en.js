@@ -36,4 +36,19 @@ export default {
   ],
   weekday:
     /\s*\((?:sun|mon|tue|wed|thu|fri|sat)[a-z]*\.?\)|\b(?:sun|mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?)day\b,?\s*/,
+  // the keys of a pasted character list (roster.js), spaces removed
+  roster: {
+    name: /^(?:name|fullname)$/,
+    aliases: /^(?:alias|aliases|aka|epithet|nickname|nicknames|othernames?)$/,
+    faction: /^(?:faction|affiliation|sect|clan|house|group|organi[sz]ation)$/,
+    gender: /^(?:gender|sex)$/,
+    position: /^(?:position|title|role|job|occupation)$/,
+    power: /^(?:power|realm|level|rank|tier|grade|strength)$/,
+    looks: /^(?:looks?|appearance)$/,
+    traits: /^(?:personality|traits?|character)$/,
+    speech: /^(?:speech|speechstyle|voice|tone|catchphrases?)$/,
+    signature: /^(?:signature|weapons?|skills?|abilit(?:y|ies)|arts?|techniques?)$/,
+    ties: /^(?:ties|relationships?|relations)$/,
+    secret: /^secrets?$/,
+  },
 };

@@ -8,6 +8,7 @@ import { abandonAction, app } from './app.js';
 import { saveSettings } from './settings.js';
 import { logErr } from './diag.js';
 import { compat } from './compat.js';
+import { adoptRosterNames } from './people.js';
 import { closeSheet, openSheet } from './sheet.js';
 import { showTab } from './shell.js';
 import { forgetPendingCasts } from './casting.js';
@@ -141,6 +142,15 @@ async function persistNow() {
   if (i >= 0) app.saves[i] = clone(app.currentSave);
   else app.saves.unshift(clone(app.currentSave));
 }
+// What the player wrote is not story: a snapshot brought back (a rewrite, a branch, a saved state that fell behind)
+// keeps the notes and character lists of the state open now (snapshots hold no lists, roster.js snapOf)
+const PLAYER_KEYS = ['userNotes', 'roster'];
+export function fromSnap(snap) {
+  const st = compat(clone(snap));
+  for (const k of PLAYER_KEYS) if (app.state && app.state[k] !== undefined) st[k] = clone(app.state[k]);
+  adoptRosterNames(st); // the older story, with the latest list
+  return st;
+}
 // keepAction: the running action opens this save itself (a new branch) and goes on holding the game
 export async function openSave(id, { keepAction = false } = {}) {
   if (GONE_SAVES.has(id)) return;
@@ -187,7 +197,7 @@ export async function openSave(id, { keepAction = false } = {}) {
     if (lastRow && app.state.next <= lastRow.i) {
       const snapT = [...app.turns].reverse().find(t => t.snap);
       if (snapT) {
-        app.state = compat(clone(snapT.snap));
+        app.state = fromSnap(snapT.snap); // with the saved state's notes and lists
         app.state.next = lastRow.i + 1;
         toast(T('Restored to the last saved point'), 3000);
         persist().catch(e => noteIgnored('persistence: persist', e));

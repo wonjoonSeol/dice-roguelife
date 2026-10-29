@@ -1,6 +1,7 @@
 /* ============ people: names, aliases, relations ============ */
 import { app } from './app.js';
 import { N_, tIn, UI_LANGS } from './i18n.js';
+import { rosterFor, setRoster } from './roster.js';
 
 // how a person stands with the player, in a world whose add-on turns bonds on (state.bonds: name -> { s, up })
 export const BONDS = [
@@ -61,16 +62,20 @@ export function bondOf(name) {
 // the last reply of the story itself, not an answer to a judge or skills question
 export const lastStoryReply = () => [...app.turns].reverse().find(t => t.kind === 'ai' && t.out && !t.out.judge);
 
+// the label a person is kept under: merged labels followed, and a roster alias is its person's roster name
 export function canonName(n) {
-  let x = String(n || '').trim();
   const A = (app.state && app.state.aliases) || {};
-  for (let k = 0; k < 4 && A[x]; k++) x = A[x];
-  return x;
+  const follow = x => {
+    for (let k = 0; k < 4 && A[x]; k++) x = A[x];
+    return x;
+  };
+  const x = follow(String(n || '').trim());
+  const r = rosterFor(x);
+  return r ? follow(r.name) : x;
 }
+// a merged label or a roster alias used again is the kept person, before faces or notes are touched
 export function aliasOut(o) {
-  const A = app.state && app.state.aliases;
-  if (!A || !Object.keys(A).length || !o)
-    return o; /* a merged label used again is the kept person, before faces or notes are touched */
+  if (!o) return o;
   if (o.speaker) o.speaker = canonName(o.speaker);
   if (Array.isArray(o.also_present))
     o.also_present.forEach(p => {
@@ -81,21 +86,23 @@ export function aliasOut(o) {
     m.relations.forEach(r => {
       if (r && r.name) r.name = canonName(r.name);
     });
+  if (m && Array.isArray(m.died)) m.died = m.died.map(n => (typeof n === 'string' ? canonName(n) : n)); // their face retires
   if (typeof o.narration === 'string')
     o.narration = o.narration.replace(/\[\[(?!@)([^\]]+)\]\]/g, (x, n) => `[[${canonName(n)}]]`);
   return o;
 }
-export function renamePerson(a, b) {
+// label a becomes label b, in st (the open state by default)
+export function renamePerson(a, b, st = app.state) {
   let moved = false;
   if (a && b && a !== b) {
-    app.state.aliases = app.state.aliases || {};
-    if (app.state.aliases[b] === a) delete app.state.aliases[b];
-    app.state.aliases[a] = b;
-    for (const k of Object.keys(app.state.aliases)) if (app.state.aliases[k] === a) app.state.aliases[k] = b;
+    st.aliases = st.aliases || {};
+    if (st.aliases[b] === a) delete st.aliases[b];
+    st.aliases[a] = b;
+    for (const k of Object.keys(st.aliases)) if (st.aliases[k] === a) st.aliases[k] = b;
     moved = true;
   } /* one person under two labels: the kept label takes the face, its weight and the notes */
   for (const k of ['cast', 'castW', 'castWhy', 'seen', 'bonds']) {
-    const m = app.state[k];
+    const m = st[k];
     if (m && Object.prototype.hasOwnProperty.call(m, a)) {
       if (m[b] == null) m[b] = m[a];
       else if (k === 'seen') m[b] = (m[b] || 0) + (m[a] || 0);
@@ -103,28 +110,43 @@ export function renamePerson(a, b) {
       moved = true;
     }
   }
-  const R = app.state.relations;
+  const R = st.relations;
   if (R && R[a] != null) {
     R[b] = R[b] ? (R[b] + ' ' + R[a]).slice(0, 300) : R[a];
     delete R[a];
     moved = true;
   }
-  if (app.state.meta && app.state.meta[a]) {
-    const ma = app.state.meta[a],
-      mb = app.state.meta[b];
+  if (st.meta && st.meta[a]) {
+    const ma = st.meta[a],
+      mb = st.meta[b];
     if (mb) {
       mb.f = Math.min(mb.f, ma.f);
       mb.l = Math.max(mb.l || 0, ma.l || 0);
-    } else app.state.meta[b] = ma;
-    delete app.state.meta[a];
+    } else st.meta[b] = ma;
+    delete st.meta[a];
     moved = true;
   }
-  if (Array.isArray(app.state.noFace)) {
-    const n = app.state.noFace.length;
-    app.state.noFace = app.state.noFace.filter(x => x !== a);
-    if (app.state.noFace.length !== n) moved = true;
+  if (Array.isArray(st.noFace)) {
+    const n = st.noFace.length;
+    st.noFace = st.noFace.filter(x => x !== a);
+    if (st.noFace.length !== n) moved = true;
   }
   return moved;
+}
+export function saveRoster(worldId, text) {
+  setRoster(app.state, worldId, text);
+  adoptRosterNames();
+}
+// canonName turns a person's other names into their roster name, so what the story kept under one of those (a face,
+// notes, a bond) moves to the roster name, unless that already holds its own. After a list is saved, and when a rewrite
+// or a branch brings back older story with the latest list (st: that state).
+const HELD = ['cast', 'relations', 'bonds'];
+export function adoptRosterNames(st = app.state) {
+  const holds = n => HELD.some(m => (st[m] || {})[n] != null);
+  for (const x of new Set(HELD.flatMap(m => Object.keys(st[m] || {})))) {
+    const e = rosterFor(x, st);
+    if (e && x !== e.name && holds(x) && !holds(e.name)) renamePerson(x, e.name, st);
+  }
 }
 const REL_FRESH = 200;
 function ledgerNames() {

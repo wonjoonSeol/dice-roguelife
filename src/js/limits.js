@@ -41,6 +41,12 @@ export const LIMITS = {
     places: 60, // named spots remembered with their background
     ledgerLine: 60, // characters of one ledger line
   },
+  // the character list a player pastes for a world of this save (roster.js); a profile field's length is PROFILE's
+  roster: {
+    text: 8000, // characters of the pasted list
+    people: 40,
+    aliases: 4, // other names per person
+  },
   statMax: 9999, // a main stat (hp, power, gold, fame) never goes above this
   skillLevelMax: 10,
   // how far one reply may move the story

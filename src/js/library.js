@@ -6,35 +6,10 @@ import { app } from './app.js';
 import { saveSettings } from './settings.js';
 import { logErr } from './diag.js';
 import { imagesChanged, imgUrl, picIds, picKeys, turnImg, turnKeys } from './images.js';
-import { N_, T } from './i18n.js';
+import { T } from './i18n.js';
 
 export let imgError = '';
 export const SETDOC = k => platform.shared.doc(`sets/${k}`);
-// a set card's optional profile (set.profile): who this face is, for worlds whose add-on sends profiles to the
-// narrator. Field -> longest kept text and the editor's placeholder
-export const PROFILE = {
-  position: { max: 40, label: N_('Position (e.g. sect elder)') },
-  power: { max: 30, label: N_('Power (e.g. peak realm)') },
-  looks: { max: 80, label: N_('Looks (e.g. silver hair, scar)') },
-  traits: { max: 80, label: N_('Personality') },
-  speech: { max: 40, label: N_('Speech (e.g. formal, curt)') },
-  signature: { max: 60, label: N_('Signature art or weapon') },
-  ties: { max: 80, label: N_("Ties (e.g. the sect leader's disciple)") },
-  secret: { max: 120, label: N_('Secret (only the narrator knows)') },
-};
-export const PROFILE_FIELDS = Object.keys(PROFILE);
-// a profile as a pack or the set card editor gives it: known fields, trimmed; undefined when nothing is left
-export function cleanProfile(p) {
-  if (!p || typeof p !== 'object') return undefined;
-  const out = {};
-  for (const f of PROFILE_FIELDS) {
-    const v = String(p[f] == null ? '' : p[f])
-      .trim()
-      .slice(0, PROFILE[f].max);
-    if (v) out[f] = v;
-  }
-  return Object.keys(out).length ? out : undefined;
-}
 export const IMGX = {
   // image index pages: imgidx/<p> = {p,n,rows}. Same 5,000-document cap as everything else, so ~120 images per document.
   max: 120,

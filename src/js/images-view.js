@@ -6,18 +6,8 @@ import { app } from './app.js';
 import { saveSettings } from './settings.js';
 import { logErr } from './diag.js';
 import { answerDialog, askConfirm, askPrompt, askReview, openDialog, openSheet } from './sheet.js';
-import {
-  cleanProfile,
-  fillHashes,
-  findManifestAsset,
-  IMGDOC,
-  imgError,
-  IMGX,
-  PROFILE,
-  PROFILE_FIELDS,
-  restoreFromManifest,
-  SETDOC,
-} from './library.js';
+import { fillHashes, findManifestAsset, IMGDOC, imgError, IMGX, restoreFromManifest, SETDOC } from './library.js';
+import { cleanProfile, PROFILE, PROFILE_FIELDS } from './roster.js';
 import {
   charSetsAll,
   fitsWorld,
