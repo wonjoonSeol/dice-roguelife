@@ -171,7 +171,8 @@ function drawGrid(p) {
     })
     .sort((a, b) => hitsOf(p, b).length - hitsOf(p, a).length || p.score(b) - p.score(a))
     .slice(0, 24);
-  const owner = k => Object.keys(app.state.cast).find(n => n !== npc && app.state.cast[n] === k);
+  // a faceless figure is shared by any number of people, so it never shows as someone's
+  const owner = k => !isGeneric(k) && Object.keys(app.state.cast).find(n => n !== npc && app.state.cast[n] === k);
   const retired = k => {
     const o = owner(k);
     return o && app.state.deadNpc && app.state.deadNpc[o] && !isGeneric(k) ? o : null;
@@ -193,11 +194,12 @@ function drawGrid(p) {
 }
 
 /* ---- changes ---- */
-// k: the set to give the person, or null for none. A face another person holds is swapped, so nobody gets a twin.
+// k: the set to give the person, or null for none. A face another person holds is swapped, so nobody gets a twin; a
+// faceless figure (isGeneric) is shared instead
 async function applyFace(p, k) {
   const { npc, cur, t } = p;
   app.state.noFace = (app.state.noFace || []).filter(n => n !== npc);
-  const other = k && Object.keys(app.state.cast).find(n => n !== npc && app.state.cast[n] === k);
+  const other = k && !isGeneric(k) && Object.keys(app.state.cast).find(n => n !== npc && app.state.cast[n] === k);
   if (other) {
     if (cur) app.state.cast[other] = cur;
     else delete app.state.cast[other];
