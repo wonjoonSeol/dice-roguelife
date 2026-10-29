@@ -24,7 +24,7 @@ import {
   castCandidates,
   castFor,
   castScorer,
-  isGeneric,
+  holderOf,
   isIdTag,
   presentOf,
   speakerOf,
@@ -171,18 +171,13 @@ function drawGrid(p) {
     })
     .sort((a, b) => hitsOf(p, b).length - hitsOf(p, a).length || p.score(b) - p.score(a))
     .slice(0, 24);
-  const owner = k => Object.keys(app.state.cast).find(n => n !== npc && app.state.cast[n] === k);
-  const retired = k => {
-    const o = owner(k);
-    return o && app.state.deadNpc && app.state.deadNpc[o] && !isGeneric(k) ? o : null;
-  };
   $('#castGrid').innerHTML =
     cands
       .map(k => {
         const f = faceOf(p, k);
         const m = app.setMeta[k] || {};
-        const o = owner(k);
-        const rt = retired(k);
+        const o = holderOf(npc, k);
+        const rt = o && app.state.deadNpc && app.state.deadNpc[o];
         const hits = hitsOf(p, k).length;
         return `<button type="button" data-pick="${esc(k)}" ${rt ? `disabled title="${T('The face of someone who died in this life; it cannot be used again')}"` : ''} class="fp-cell">${f ? `<img src="${imgUrl(f.id)}" loading="lazy" alt="" class="fp-thumb${o ? ' taken' : ''}">` : '<span class="fp-thumb"></span>'}${o ? `<span class="fp-badge">${rt ? '✝ ' : ''}${esc(o)}</span>` : ''}<span class="fp-label">${esc(m.charName || k)}${hits ? ` <b class="fp-hits">✓${hits}</b>` : ''}</span></button>`;
       })
@@ -193,11 +188,12 @@ function drawGrid(p) {
 }
 
 /* ---- changes ---- */
-// k: the set to give the person, or null for none. A face another person holds is swapped, so nobody gets a twin.
+// k: the set to give the person, or null for none. A face another person holds is swapped, so nobody gets a twin; a
+// faceless figure (isGeneric) is shared instead
 async function applyFace(p, k) {
   const { npc, cur, t } = p;
   app.state.noFace = (app.state.noFace || []).filter(n => n !== npc);
-  const other = k && Object.keys(app.state.cast).find(n => n !== npc && app.state.cast[n] === k);
+  const other = k && holderOf(npc, k);
   if (other) {
     if (cur) app.state.cast[other] = cur;
     else delete app.state.cast[other];
