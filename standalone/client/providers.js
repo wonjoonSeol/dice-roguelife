@@ -31,12 +31,32 @@ export const PROVIDERS = [
   ['custom', N_('Custom'), ''],
 ].map(([id, name, endpoint, protocol = 'compatible']) => ({ id, name, endpoint, protocol }));
 
+// recommended models per provider: [model, summary model, max output tokens]. The first is what picking the provider
+// fills in; the rest are in the model list. A model that always thinks (Opus 5.5, Sonnet 5.5) needs room for it in the
+// token limit. A provider without an entry stays free text.
+export const MODELS = {
+  anthropic: [
+    ['claude-opus-5-5', 'claude-haiku-5-5', 32768],
+    ['claude-sonnet-5-5', 'claude-haiku-5-5', 32768],
+    ['claude-haiku-5-5', 'claude-haiku-5-5', 16384],
+  ],
+};
+export const modelPreset = (provider, model) => (MODELS[provider] || []).find(m => m[0] === model);
+export const DEFAULT_MAX = 16384; // reasoning models count their thinking in it
+// the token limits the form fills in itself; any other value is the player's and is never replaced
+export const STOCK_MAX = new Set([
+  DEFAULT_MAX,
+  ...Object.values(MODELS)
+    .flat()
+    .map(m => m[2]),
+]);
+
 const DEFAULTS = {
   provider: 'openai',
   endpoint: PROVIDERS[0].endpoint,
   protocol: 'openai',
   model: '',
-  maxTokens: 16384, // reasoning models count their thinking in it
+  maxTokens: DEFAULT_MAX,
   retries: 0,
   promptBytes: 200000,
   jsonMode: false,
@@ -76,6 +96,7 @@ const BLOCKING = new Set(['not_granted', 'insufficient_credit']);
 const TEXT = {
   not_configured: N_('Choose an AI provider and model in Settings to start playing.'),
   no_server: N_('Start the app with npm start, then reload this page.'),
+  stale_page: N_('The server restarted after this page opened. Reload the page.'),
   no_profile: N_('That profile is gone. Choose another in Settings.'),
   invalid_config: N_('Check the endpoint, model and limits in Settings.'),
   not_granted: N_('Authentication failed. Check your API key and access to this model.'),
@@ -88,6 +109,9 @@ const TEXT = {
   output_limit: N_('The reply hit the output limit. Increase it in Settings.'),
   timeout: N_('The provider timed out.'),
   provider_error: N_('Could not reach the provider. Check your connection and endpoint.'),
+  provider_certificate: N_(
+    'This computer does not trust the certificate the provider sent. Security software that checks HTTPS connections often causes this: update Node.js to the latest version, so the app trusts what the system trusts.',
+  ),
   no_vision: N_('Turn on image analysis and choose a vision model in Settings.'),
   bad_image: N_('Use a PNG, JPEG, WebP or GIF image smaller than 8 MB.'),
   rate_limited: N_('The provider rate limit was reached. Wait before trying again.'),

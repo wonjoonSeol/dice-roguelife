@@ -83,3 +83,47 @@ export function shot(name) {
 
 // a fresh copy of fixtures/library.json: a trimmed real image library (set cards and image rows, no image files)
 export const library = () => JSON.parse(readFileSync(join(HERE, 'fixtures', 'library.json'), 'utf8'));
+
+// Page snippets for the images tab, run as pg.evaluate(`(${SNIPPET})(args)`).
+
+// A file store that keeps what is uploaded and serves it at /_blob/<id>; each install mints its own ids (tag + n). It
+// counts uploads (window.__uploads) and keeps deleted ids (window.__deleted) and downloaded files (window.__files).
+export const ASSET_STORE = String.raw`(tag='a')=>{
+  window.__blobs={};window.__files={};window.__deleted=[];window.__uploads=0;let n=0;
+  DR.platform.assets={
+    upload:async blob=>{const id=tag+(++n);window.__uploads++;window.__blobs[id]=blob;return{id}},
+    list:async()=>({assets:[],files:0,usage:{files:0,maxFiles:5000,bytes:0,maxBytes:1e9}}),
+    delete:async id=>{window.__deleted.push(id)},
+  };
+  const f=window.fetch;
+  window.fetch=(u,...a)=>{const s=String(u);if(!s.startsWith('/_blob/'))return f(u,...a);const b=window.__blobs[s.slice(7)];
+    return Promise.resolve(b?new Response(b):new Response('',{status:404}))};
+  DR.platform.limits=Object.assign({},DR.platform.limits,{images:true});
+  DR.useCapability=async c=>c==='downloads'?{save:async({filename,data})=>{window.__files[filename]=data}}:null;
+}`;
+
+// a blob's bytes as base64
+export const B64 = String.raw`async blob=>{const u8=new Uint8Array(await blob.arrayBuffer());let s='';
+  for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode(...u8.subarray(i,i+0x8000));return btoa(s)}`;
+
+// png pictures ([name, hue, w = 60, h = 100]) as [name, base64]: a flat colour with a dark block, so the same hue and
+// size draw the same bytes
+export const DRAW = String.raw`async list=>{
+  const out=[];
+  for(const [name,hue,w,h] of list){
+    const cv=document.createElement('canvas');cv.width=w||60;cv.height=h||100;const c=cv.getContext('2d');
+    c.fillStyle='hsl('+hue+',60%,50%)';c.fillRect(0,0,cv.width,cv.height);
+    c.fillStyle='#111';c.fillRect(cv.width/4,cv.height/4,cv.width/3,cv.height/5);
+    out.push([name,await (${B64})(await new Promise(r=>cv.toBlob(r,'image/png')))]);
+  }
+  return out;
+}`;
+
+// picks files ([name, base64]) in the images tab's upload button
+export const PICK_FILES = String.raw`list=>{
+  const TYPE={webp:'image/webp',png:'image/png',jpg:'image/jpeg',zip:'application/zip'};
+  const dt=new DataTransfer();
+  for(const [name,b64] of list)dt.items.add(new File([Uint8Array.from(atob(b64),c=>c.charCodeAt(0))],name,
+    {type:TYPE[name.split('.').pop().toLowerCase()]||''}));
+  const inp=document.querySelector('#upl');inp.files=dt.files;inp.dispatchEvent(new Event('change'));
+}`;

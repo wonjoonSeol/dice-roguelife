@@ -1,6 +1,7 @@
 // The standalone app: a server on this computer only (127.0.0.1) that serves the game page, keeps saves, images and
 // the AI connection on disk (store.js) and relays narration requests to the chosen provider (relay.js). See README.md.
 import { createServer } from 'node:http';
+import tls from 'node:tls';
 import { randomBytes } from 'node:crypto';
 import { cpSync, createReadStream, existsSync, mkdirSync, readFileSync, statfsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -81,6 +82,16 @@ export async function checkUpdate(fetcher = fetch) {
 }
 
 // config.json, written by hand or from ⚙ Settings → Server settings; every field is optional (dataDir '': the default)
+// Security software that inspects HTTPS (work PCs, antivirus web scanning) signs with a root the system trusts and
+// Node's own list lacks; trust the system's store too, as a browser does. Older Node versions lack the call.
+export function trustSystemCertificates() {
+  if (!tls.setDefaultCACertificates) return false;
+  tls.setDefaultCACertificates([...new Set([...tls.getCACertificates('default'), ...tls.getCACertificates('system')])]);
+  return true;
+}
+// only the chain errors HTTPS inspection causes; a self-signed local server, an expired or misnamed one stay generic
+const CERT_ERROR = /^(SELF_SIGNED_CERT_IN_CHAIN|UNABLE_TO_GET_ISSUER_CERT(_LOCALLY)?|UNABLE_TO_VERIFY_LEAF_SIGNATURE)$/;
+
 export function checkConfig(c) {
   const ok =
     c &&
@@ -250,7 +261,9 @@ export async function startServer({
     if (!route) return res.writeHead(404).end();
     const origin = req.headers.origin;
     const fromHere = local().some(h => origin === 'http://' + h) || names.some(n => origin === 'https://' + n);
-    if (req.headers['x-dr-token'] !== token || (origin && !fromHere)) return res.writeHead(403).end();
+    if (origin && !fromHere) return res.writeHead(403).end();
+    // from this app, with another start's token: a page opened before the server restarted
+    if (req.headers['x-dr-token'] !== token) return sendJson(res, 403, { code: 'stale_page' });
     res.setHeader('Cache-Control', 'no-store');
     if (route === 'sample') return relay(req, res, store, fetcher);
     try {
@@ -306,7 +319,17 @@ async function relay(req, res, store, fetcher) {
     res.end();
   } catch (e) {
     // only a code goes back: provider bodies and keys never reach logs or the page
-    const code = controller.signal.aborted ? 'timeout' : typeof e.code === 'string' ? e.code : 'provider_error';
+    const reason = (e.cause && e.cause.code) || '';
+    const code = controller.signal.aborted
+      ? 'timeout'
+      : typeof e.code === 'string'
+        ? e.code
+        : CERT_ERROR.test(reason)
+          ? 'provider_certificate'
+          : 'provider_error';
+    // a request that got no answer: its network or certificate code, or the error kind (never a message, body or key)
+    if (code === 'provider_error' || code === 'provider_certificate')
+      console.error(`Provider request failed: ${reason || e.name}`);
     if (res.destroyed) return;
     if (res.headersSent) res.end(JSON.stringify({ error: { code } }) + '\n');
     else sendJson(res, 400, { code });

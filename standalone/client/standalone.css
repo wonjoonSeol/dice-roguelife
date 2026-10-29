@@ -9,6 +9,9 @@
 .provider-fields .field {
   margin-top: 10px;
 }
+.provider-fields [hidden] {
+  display: none;
+}
 .provider-fields input:not([type='checkbox']),
 .provider-fields select,
 .provider-fields textarea {

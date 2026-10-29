@@ -7,7 +7,8 @@ try {
   );
   process.exit(1);
 }
-const { adoptOldData, appHome, checkUpdate, startServer } = await import('./server.js');
+const { adoptOldData, appHome, checkUpdate, startServer, trustSystemCertificates } = await import('./server.js');
+trustSystemCertificates();
 let server;
 try {
   for (const old of adoptOldData()) console.log(`Copied ${old} to ${appHome()}. You can delete the old copy.`);

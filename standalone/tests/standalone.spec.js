@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { startLife } from '../../tests/support/harness.js';
+import { DRAW, PICK_FILES, startLife } from '../../tests/support/harness.js';
 import { buildPage } from '../page.js';
 import { openServer, tempDir } from './support.js';
 
@@ -199,6 +199,55 @@ test('several connection profiles: the one chosen narrates, and one can be delet
   expect(models.at(-1)).toBe('mock-model');
 });
 
+test('a provider with recommended models fills the first one, its summary model and token limit', async ({ page }) => {
+  await page.goto(url);
+  await page.locator('#nm').waitFor();
+  await page.evaluate(() => DR.openSettingsSheet());
+  const pick = model => page.click(`#apiPresets button[data-model="${model}"]`);
+  await page.selectOption('#apiProvider', 'anthropic');
+  await expect(page.locator('#apiModel')).toHaveValue('claude-opus-5-5');
+  await expect(page.locator('#apiSummary')).toHaveValue('claude-haiku-5-5');
+  await expect(page.locator('#apiMax')).toHaveValue('32768');
+  // the Azure version shows only for Azure
+  await expect(page.locator('#apiVersion')).toBeHidden();
+  await page.selectOption('#apiProtocol', 'azure');
+  await expect(page.locator('#apiVersion')).toBeVisible();
+  await page.selectOption('#apiProtocol', 'anthropic');
+  await expect(page.locator('#apiVersion')).toBeHidden();
+  await expect(page.locator('#apiPresets button')).toHaveText([
+    'claude-opus-5-5',
+    'claude-sonnet-5-5',
+    'claude-haiku-5-5',
+  ]);
+  // a model picked from the buttons moves the token limit while it is still a stock value
+  await pick('claude-haiku-5-5');
+  await expect(page.locator('#apiModel')).toHaveValue('claude-haiku-5-5');
+  await expect(page.locator('#apiMax')).toHaveValue('16384');
+  // a limit the player chose stays
+  await page.evaluate(() => (document.querySelector('#apiMax').value = '20000'));
+  await pick('claude-sonnet-5-5');
+  await expect(page.locator('#apiModel')).toHaveValue('claude-sonnet-5-5');
+  await expect(page.locator('#apiMax')).toHaveValue('20000');
+  // a provider with no recommendations starts empty and has no buttons; the player's limit survives the switch
+  await page.selectOption('#apiProvider', 'ollama');
+  await expect(page.locator('#apiModel')).toHaveValue('');
+  await expect(page.locator('#apiPresets button')).toHaveCount(0);
+  await expect(page.locator('#apiMax')).toHaveValue('20000');
+  await page.selectOption('#apiProvider', 'anthropic');
+  await expect(page.locator('#apiMax')).toHaveValue('20000');
+  // a stock limit does not follow the player to a provider that has no use for it
+  await page.evaluate(() => (document.querySelector('#apiMax').value = '32768'));
+  await page.selectOption('#apiProvider', 'openai');
+  await expect(page.locator('#apiMax')).toHaveValue('16384');
+  // a model typed by hand fires the same change, and a summary model that is already there stays
+  await page.selectOption('#apiProvider', 'anthropic');
+  await page.fill('#apiSummary', 'my-summary');
+  await page.fill('#apiModel', 'claude-sonnet-5-5');
+  await page.locator('#apiModel').dispatchEvent('change');
+  await expect(page.locator('#apiSummary')).toHaveValue('my-summary');
+  await expect(page.locator('#apiMax')).toHaveValue('32768');
+});
+
 test('the image list the game saves for copies comes back intact', async ({ page }) => {
   await configure(page);
   const back = await page.evaluate(async () => {
@@ -207,4 +256,31 @@ test('the image list the game saves for copies comes back intact', async ({ page
     return (await fetch(DR.imgUrl(id))).json();
   });
   expect(back).toEqual({ kind: 'dr-image-manifest', images: [] });
+});
+
+test('a page opened before the server restarted is told to reload, and its upload stops at once', async ({ page }) => {
+  await configure(page);
+  await page.click('[data-tab="images"]');
+  await page.waitForSelector('#upl', { state: 'attached' });
+  const files = await page.evaluate(
+    `(${DRAW})(${JSON.stringify([...Array(10)].map((_, i) => [`bg_x${i}_day.png`, i * 30, 120, 70]))})`,
+  );
+  const before = models.length;
+  await page.evaluate(() => {
+    window.DR_SERVER_TOKEN = 'from-an-earlier-start'; // what a restart leaves this page holding
+    window.__uploads = 0;
+    const f = window.fetch;
+    window.fetch = (u, ...a) => {
+      if (String(u).includes('/api/assets/upload')) window.__uploads++;
+      return f(u, ...a);
+    };
+  });
+  await page.evaluate(`(${PICK_FILES})(${JSON.stringify(files)})`);
+  await page.locator('.upl-failed').waitFor({ timeout: 30000 });
+  const lines = (await page.locator('.upl-failed').textContent()).split('\n').filter(Boolean);
+  expect(lines.length, 'only the pictures already on their way failed').toBeLessThanOrEqual(3);
+  for (const l of lines) expect(l).toContain('The server restarted after this page opened. Reload the page.');
+  expect(await page.evaluate(() => window.__uploads), 'one try each, and no more pictures sent').toBe(lines.length);
+  expect(await page.evaluate(() => DR.app.images.length)).toBe(0);
+  expect(models.length, 'no model was called').toBe(before);
 });

@@ -7,6 +7,15 @@ import { canonName } from './people.js';
 import { T } from './i18n.js';
 
 export const imgUrl = id => host().assetUrl(id);
+// picture file extensions and their types: what a zip upload takes, and the extension an exported pack gives each type
+export const IMAGE_TYPES = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  avif: 'image/avif',
+};
 export function sceneHtml(sc, people) {
   // background banner on top, the people present in a row underneath (never layered)
   const ppl = (people || []).filter(p => p && p.x).slice(0, 3);
@@ -26,6 +35,15 @@ export function turnPeople(ti, o) {
 export const picKeys = x => [
   ...new Set([x.shash, x.hash].filter(h => typeof h === 'string' && h).map(h => h.slice(0, 16))),
 ];
+const listOf = v => (Array.isArray(v) ? v.filter(Boolean) : []);
+export const aliasKeys = x => listOf(x.akeys);
+// the content keys a row keeps for pictures retired in its favor (akeys): the newest first, never its own
+export const inheritKeys = (keep, old) => {
+  const own = picKeys(keep);
+  return [...new Set([...picKeys(old), ...aliasKeys(old), ...aliasKeys(keep)])]
+    .filter(k => !own.includes(k))
+    .slice(0, 6);
+};
 // bumped on every write of the list (library.js), since rows also change in place; what is built from the list keys on it
 let ver = 0;
 export const imagesChanged = () => ver++;
@@ -35,10 +53,14 @@ function imgIndex() {
   const list = app.images;
   if (IX && IX.list === list && IX.n === list.length && IX.ver === ver) return IX;
   IX = { list, n: list.length, ver, id: new Map(), key: new Map() };
+  const aliased = [];
   for (const x of list) {
     if (!IX.id.has(x.id)) IX.id.set(x.id, x);
     for (const k of picKeys(x)) if (!IX.key.has(k)) IX.key.set(k, x);
+    if (x.akeys) aliased.push(x);
   }
+  // after every row's own keys, so a picture that is really here wins over an alias
+  for (const x of aliased) for (const k of aliasKeys(x)) if (!IX.key.has(k)) IX.key.set(k, x);
   return IX;
 }
 export function imgById(id) {
@@ -63,7 +85,6 @@ export function turnImg(ti, id) {
   if (x) return x.shash || x.hash ? null : x;
   return imgById(id);
 }
-const listOf = v => (Array.isArray(v) ? v.filter(Boolean) : []);
 export const picIds = ti =>
   [ti.scene, ti.char, ...listOf(ti.chars).map(c => c.id), ...listOf(ti.places).map(p => p.id)].filter(Boolean);
 export function setCover(k, imgs) {

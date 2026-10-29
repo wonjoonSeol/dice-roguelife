@@ -173,7 +173,9 @@ test('local relay rejects missing token, foreign origins and rebinding hosts', a
   const s = await openServer({ hosts: ['my-pc.tailnet.ts.net'] });
   try {
     assert.equal((await fetch(s.url + '/api/sample', { method: 'POST', body: '{}' })).status, 403);
-    assert.equal((await s.call('/api/sample', '{}', { Origin: 'https://attacker.example' })).status, 403);
+    const foreign = await s.call('/api/sample', '{}', { Origin: 'https://attacker.example' });
+    assert.equal(foreign.status, 403);
+    assert.equal(await foreign.text(), '', 'a foreign origin learns nothing');
     assert.equal(await hostStatus(s.url, 'attacker.example'), 403);
     // a name in hosts (a Tailscale address) is let in, from its own https origin
     assert.equal(await hostStatus(s.url, 'my-pc.tailnet.ts.net'), 200);

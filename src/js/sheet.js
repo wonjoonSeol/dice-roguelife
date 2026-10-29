@@ -56,9 +56,9 @@ export function askReview(title, pairs, { checked = () => true, pics } = {}) {
   if ($('#rvAll')) $('#rvAll').onclick = () => boxes.forEach(c => (c.checked = true));
   return answer;
 }
-export let askConfirm = function askConfirm(msg, ok = T('OK')) {
+export let askConfirm = function askConfirm(msg, ok = T('OK'), no = T('Cancel')) {
   const answer = openDialog(
-    `<p class="dlg-msg pre confirm">${esc(msg)}</p><div class="row"><button class="btn primary" id="dlgOk">${esc(ok)}</button><button class="btn ghost" id="dlgNo">${T('Cancel')}</button></div>`,
+    `<p class="dlg-msg pre confirm">${esc(msg)}</p><div class="row"><button class="btn primary" id="dlgOk">${esc(ok)}</button><button class="btn ghost" id="dlgNo">${esc(no)}</button></div>`,
   );
   $('#dlgOk').onclick = () => answerDialog(true);
   $('#dlgNo').onclick = () => answerDialog(false);
