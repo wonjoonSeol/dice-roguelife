@@ -133,6 +133,8 @@
  "jsonTail": "(출력은 { 로 시작하는 JSON 객체 하나만. 설명이나 코드 블록 없이.)",
  "lenShort": "[분량] 서술은 3~5문장으로 짧게.",
  "lenLong": "[분량] 서술은 8문장 이상으로 길고 풍부하게.",
+ "scenarioEnding": "다음은 인터랙티브 스토리 「{scenario}」의 기록이다. 주인공 {name}의 이야기를 여기서 맺는 엔딩 카드를 써라. 점수는 매기지 않는다. JSON만:\n{\"title\":\"엔딩 제목, 짧게\",\"epitaph\":\"이 이야기를 한 문장으로\",\"summary\":\"어떻게 끝났는지 3~5문장\",\"highlights\":[\"기억할 장면 2~4개, 한 문장씩\"]}{langLine}\n[지난 요약] {summary}\n[최근 기록]\n{recent}",
+ "noChoices": "[선택지] 선택지를 주지 않는다. choices는 빈 배열로 두고, 본문에도 고를 행동 목록을 쓰지 않는다.",
  "styles": {
   "jinyong": "[문체: 김용체] 플레이어가 이 게임에 고른 문체다. 서술은 이렇게 쓴다.\n- 김용(金庸)식 서술: 고풍스럽고 문학적인 필체, 만연체에 가까운 유려한 호흡.\n- 장면과 인물의 기세를 한문투 어휘와 비유로 그린다.\n- 싸움은 초식 이름, 기의 흐름, 지형과 수싸움을 한 합씩 그린다.\n- 무협 호칭 체계를 지킨다(사형, 사매, 대협, 소협, 선배, 노선배 등).\n- 대사는 짧고 무게 있게.\n문체는 글의 결만 바꾼다. 출력 형식(JSON과 그 키, 2인칭 서술)과 플레이어 캐릭터에 관한 규칙은 그대로 따른다."
  },
@@ -309,6 +311,7 @@
   "jsonTail": "(Output only one JSON object, starting with {. No explanation, no code block.)",
   "lenShort": "[Length] Keep the narration short: 3-5 sentences.",
   "lenLong": "[Length] Make the narration long and rich: 8 sentences or more.",
+  "noChoices": "[Choices] Offer no choices: leave choices an empty array, and list no options in the narration either.",
   "styles": {
    "jinyong": "[Prose style: Jin Yong] The prose style the player chose for this game. Write the narration this way:\n- In the manner of Jin Yong (金庸): classical, literary prose with a long, flowing breath, close to the ornate style.\n- Draw the force and bearing of scenes and people with classical, Chinese-flavored wording and imagery.\n- Fights go one exchange at a time: the names of the moves, the flow of qi, the ground and the reading of each other's next move.\n- Keep the wuxia forms of address, in the story's language (senior brother, junior sister, great hero, young hero, senior, venerable senior and the like).\n- Dialogue is short and weighty.\nThe style changes only how the writing reads. For this game it takes the place of any plain, contemporary prose the language block asks for; the rest of that block, the output format (the JSON and its keys, second-person narration) and the rules about the player's character stay as they are."
   },

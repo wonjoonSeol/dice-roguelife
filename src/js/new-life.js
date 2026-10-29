@@ -195,6 +195,7 @@ export function startNewLifeForm(inherit) {
   bindProfileCount();
   bindNotePicker();
   bindOnePicker('sty');
+  bindOnePicker('per', id => fillPersona(noteById(id)));
   bindWorldNoteSave();
   bindScenarioForm();
   bindFormLang();
@@ -301,7 +302,8 @@ function newLifeHtml(inherit, play) {
     ${
       inherit
         ? ''
-        : `<div class="field"><label for="nm">${T('Name')}</label><input id="nm" maxlength="20" placeholder="${T('Name')}"></div>
+        : `<div class="field"><label>${T('Persona (optional)')}</label>${onePickerHtml('per', null)}</div>
+    <div class="field"><label for="nm">${T('Name')}</label><input id="nm" maxlength="20" placeholder="${T('Name')}"></div>
     <div class="field"><label>${T('Gender')}</label><div class="seg" id="gseg">${GENDERS.map(g => `<button type="button" data-g="${g}" aria-pressed="${g === GENDER.MALE}">${T(GENDER_LABEL[g])}</button>`).join('')}</div></div>`
     }
     <div class="field"><label for="prof">${T('Character profile (optional): looks, personality, verbal tics, backstory, anything weird you like')}</label><textarea id="prof" rows="3" maxlength="600" placeholder="${esc(T('e.g. Worked the night shift at a convenience store in a past life and is obsessed with instant noodles. Ends every sentence with "I mean, though." Loses all reason around cats.'))}">${esc(inherit ? app.state.life.profile || '' : app.settings.profile || '')}</textarea><div class="row profile-head"><label class="row profile-toggle"><input type="checkbox" id="profSave" checked> ${T('Save as the default for my next life')}</label><span class="muted count-note" id="profCount"></span></div></div>
@@ -467,6 +469,43 @@ function untickInForm(id) {
   box.dispatchEvent(new Event('change'));
 }
 // the profile box shows how much of its 600 characters is used
+// A persona note fills the name, gender and profile: a labelled line (or a part of one split by " / ") sets its field,
+// everything else is the profile
+// i18n-ignore-start: the labels and gender words a persona note may be written with
+const PERSONA_FIELD = [
+  ['name', /^(?:이름|name|名前)\s*[:：]\s*/i],
+  ['gender', /^(?:성별|gender|性別)\s*[:：]\s*/i],
+  ['profile', /^(?:캐릭터 설정|프로필|설정|profile|キャラクター設定|プロフィール)\s*[:：]\s*/i],
+];
+const PERSONA_GENDER = [
+  [GENDER.MALE, /^(?:남|남자|남성|male|man|m|男|男性)$/i],
+  [GENDER.FEMALE, /^(?:여|여자|여성|female|woman|f|女|女性)$/i],
+];
+// i18n-ignore-end
+function fillPersona(note) {
+  if (!note) return;
+  const got = { profile: [] };
+  for (const line of String(note.text || '').split(/\r?\n/)) {
+    const parts = PERSONA_FIELD.some(([, re]) => re.test(line.trim())) ? line.split(/\s+\/\s+/) : [line];
+    for (const part of parts) {
+      const hit = PERSONA_FIELD.find(([, re]) => re.test(part.trim()));
+      const value = hit ? part.trim().replace(hit[1], '').trim() : part;
+      if (hit && hit[0] !== 'profile') got[hit[0]] = value;
+      else got.profile.push(value);
+    }
+  }
+  const nm = $('#nm');
+  if (nm) nm.value = String(got.name || note.name).slice(0, 20);
+  const g = got.gender && PERSONA_GENDER.find(([, re]) => re.test(got.gender.trim()));
+  const gb = g && $(`#gseg button[data-g="${g[0]}"]`);
+  if (gb) gb.click();
+  const prof = $('#prof'),
+    text = got.profile.join('\n').trim();
+  if (!prof) return;
+  prof.value = text.slice(0, prof.maxLength);
+  prof.dispatchEvent(new Event('input'));
+  if (text.length > prof.maxLength) toast(T('The profile was cut to {n} characters', { n: prof.maxLength }));
+}
 function bindProfileCount() {
   const ta = $('#prof'),
     pc = $('#profCount');

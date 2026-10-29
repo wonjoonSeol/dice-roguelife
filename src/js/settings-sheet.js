@@ -51,6 +51,7 @@ function settingsHtml() {
       ['normal', N_('Up to the model')],
       ['long', N_('Long')],
     ])}</select></div></div>
+    <label class="row opt settings-opt"><input type="checkbox" id="choicesOn"> ${T('Suggest choices after each turn (every game)')}</label>
     <p class="muted tier-probe"><span id="tierProbe">${lastTierCheck ? tierProbeHtml(lastTierCheck) : T('Your plan may substitute a lower tier for the narration model.')}</span><button class="btn ghost chip-sm" id="tierCheck">${T('Check now')}</button></p>
     <div class="field recent-field"><label for="recentSel">${T('Recent memory (how much goes in word for word; older turns are summarized)')}</label><select id="recentSel">${options(
       [
@@ -216,6 +217,7 @@ const redrawLog = () => {
 const PLAIN_SETTINGS = [
   { id: 'tierSel', key: 'tier', saved: SAVED },
   { id: 'lenSel', key: 'len', saved: SAVED },
+  { id: 'choicesOn', key: 'choices', show: v => v !== false, apply: redrawLog, saved: NEXT_TURN },
   {
     id: 'recentSel',
     key: 'recentBytes',

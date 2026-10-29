@@ -1322,5 +1322,16 @@
   "Merge {from} into": "{from}を統合する先",
   "Its pictures get the other situation, and it leaves the dictionary.": "その画像は選んだ状況になり、この状況は辞書から外れます。",
   "Delete {label} from the dictionary? {n} {n|picture|pictures} lose it.": "{label}を辞書から削除しますか？画像{n}枚から外れます。",
-  "Situation dictionary": "状況辞書"
+  "Situation dictionary": "状況辞書",
+  "Suggest choices after each turn (every game)": "毎ターンの最後に選択肢を出す（すべてのゲーム）",
+  "Endings ({n})": "エンディング（{n}）",
+  "End the story": "物語を終える",
+  "End the story here and write its ending card? You can keep playing after it.": "ここで物語を締めくくり、エンディングカードを書きますか？そのあとも続けて遊べます。",
+  "Writing the ending": "エンディングを書いています",
+  "Ending saved in Memory": "エンディングを記憶に保存しました",
+  "Persona": "ペルソナ",
+  "Persona (optional)": "ペルソナ（任意）",
+  "Play as {name}": "{name}で遊ぶ",
+  "A persona is a note about who you play: name, gender and profile, one per line (Name: ..., Gender: ...). Picking one fills the fields below, and you can still change them.": "ペルソナは自分が演じる人物を書いたノートです。名前、性別、キャラクター設定を1行ずつ書くと（名前: ...、性別: ...）、選んだときに下の欄が埋まり、そのあとも変えられます。",
+  "The profile was cut to {n} characters": "キャラクター設定を{n}文字に切りました"
 }

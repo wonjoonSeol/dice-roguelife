@@ -359,8 +359,8 @@ function refreshNotePicker() {
   bindNotePicker();
 }
 
-/* ---- one-note pickers: a scenario game's scenario (sc), and a prose style from a note on the new game screen
-   (sty) and in the Memory tab (msty) ---- */
+/* ---- one-note pickers: a scenario game's scenario (sc), a persona on the new game screen (per), and a prose style
+   from a note on the new game screen (sty) and in the Memory tab (msty) ---- */
 const STYLE_HINT = N_(
   'The note says how the narrator writes: voice, tone, sentence length, words to use or avoid. It goes to Claude whole every turn.',
 );
@@ -372,6 +372,13 @@ const ONE = {
     ),
     type: NOTE_TYPE.SCENARIO,
     size: true,
+  },
+  per: {
+    label: N_('Play as {name}'),
+    hint: N_(
+      'A persona is a note about who you play: name, gender and profile, one per line (Name: ..., Gender: ...). Picking one fills the fields below, and you can still change them.',
+    ),
+    type: NOTE_TYPE.PERSONA,
   },
   sty: { label: N_('Write in the style of {name}'), hint: STYLE_HINT, type: NOTE_TYPE.STYLE },
   msty: { label: N_('Write in the style of {name}'), hint: STYLE_HINT, type: NOTE_TYPE.STYLE },

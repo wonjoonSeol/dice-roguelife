@@ -30,6 +30,8 @@ let loaded = false; // set once boot has read the stored settings: before that a
 export function setting(key) {
   return app.settings[key] || SETTING_DEFAULTS[key];
 }
+// suggested choices after each turn, in every save and both game modes; on unless turned off
+export const choicesOff = () => app.settings.choices === false;
 // the narrator's language: the open save's own (kept from the day its first life began), else the one a new game gets
 export function storyLang() {
   return (app.state && app.state.lang) || newStoryLang();

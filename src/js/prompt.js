@@ -7,7 +7,7 @@ import { LIMITS } from './limits.js';
 import { withWeekday } from './calendar.js';
 import { platform, sget } from './db.js';
 import { app } from './app.js';
-import { promptLang, setting, storyLang } from './settings.js';
+import { choicesOff, promptLang, setting, storyLang } from './settings.js';
 import { N_, T, Tc, tIn } from './i18n.js';
 import { logErr } from './diag.js';
 import {
@@ -793,11 +793,12 @@ export function buildPrompt(text, cmd, turn = {}) {
     if (P.ext) P.ext = [pr('scenarioExt'), P.ext, ladderStart()].filter(Boolean).join('\n');
   }
   const LEN = { short: pr('lenShort'), normal: '', long: pr('lenLong') }[setting('len')] || '';
+  const noChoices = choicesOff() ? pr('noChoices') : '';
   const tip = app.settings.langTip ? prLang('tip') : '';
   const extra = prLang(scen || !adminOn() ? 'scenarioLang' : 'lang') + (tip ? pl('\n[Extra output field] ') + tip : '');
   const style = styleBlock(); // after the language block, whose plain prose it replaces
   const base = prFor('rules') || '';
-  const rulesWith = st => withPlayerSettings(base, [LEN, extra, st].filter(Boolean).join('\n'));
+  const rulesWith = st => withPlayerSettings(base, [LEN, noChoices, extra, st].filter(Boolean).join('\n'));
   let rules = rulesWith(style);
   const build = skip =>
     rules +
@@ -1015,7 +1016,8 @@ export function normalize(o) {
   o.narration = noDash(o.narration || '');
   o.admin = noDash(o.admin || '');
   o.system = Array.isArray(o.system) ? o.system.map(x => noDash(x)).slice(0, LIMITS.perReply.system) : [];
-  o.choices = Array.isArray(o.choices) ? o.choices.map(x => noDash(x)).slice(0, LIMITS.perReply.choices) : [];
+  o.choices =
+    Array.isArray(o.choices) && !choicesOff() ? o.choices.map(x => noDash(x)).slice(0, LIMITS.perReply.choices) : [];
   if (o.widget && typeof o.widget === 'object') {
     const walk = v =>
       typeof v === 'string'

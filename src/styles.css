@@ -4621,3 +4621,10 @@ textarea.mem-edit {
     text-shadow: 0 0 6px rgba(214, 178, 94, 0.8);
   }
 }
+
+/* a scenario ending card in Memory */
+.ending-moment {
+  margin: 4px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}

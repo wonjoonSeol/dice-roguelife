@@ -1,7 +1,7 @@
 /* ============ log rendering ============ */
 import { $, esc, fmt, MARK_RE, stripMarks, toast } from './util.js';
 import { T, tIn } from './i18n.js';
-import { storyLang } from './settings.js';
+import { choicesOff, storyLang } from './settings.js';
 import { cmdName, EMO_FB, moneyText, normEmo, STAT_LABEL } from './data.js';
 import { withWeekday } from './calendar.js';
 import { platform } from './db.js';
@@ -451,7 +451,7 @@ function renderTurnInner(t, isLast) {
       : '';
   if (o.judge)
     return `<div class="turn"><div class="ai judge"><div class="body"><div class="sysmsg turn-head"><span>[ ${o.judge === 'skills' ? T('Skills') : T('Why the check went this way')} ]</span></div><div class="narr judge-narr">${narrHtml(o.narration)}</div>
-    ${isLast && !app.state.dead && o.choices && o.choices.length ? `<div class="choices">${o.choices.map(choiceRow).join('')}</div>` : ''}</div></div></div>`;
+    ${isLast && !app.state.dead && !choicesOff() && o.choices && o.choices.length ? `<div class="choices">${o.choices.map(choiceRow).join('')}</div>` : ''}</div></div></div>`;
   const er = t.errata
     ? `<details class="objection"><summary>${T('⚖ Correction: {fact}', { fact: esc(t.errata.fact || '') })}</summary>${t.errata.q ? `<div class="oq">${T('Question: {q}', { q: esc(t.errata.q) })}</div>` : ''}<div class="oq">${T('This record stays as it was; the fix was applied to the state after it.')}</div></details>`
     : '';
@@ -490,7 +490,7 @@ function renderTurnInner(t, isLast) {
         : ''
     }
     ${o.widget ? renderWidget(o.widget, t.i) : ''}
-    ${isLast && !app.state.dead && ((o.choices && o.choices.length) || o.widget) ? `<div class="choices">${(o.choices || []).map(choiceRow).join('')}${widgetFollowups(o.widget)}</div>` : ''}
+    ${isLast && !app.state.dead && ((!choicesOff() && o.choices && o.choices.length) || o.widget) ? `<div class="choices">${(choicesOff() ? [] : o.choices || []).map(choiceRow).join('')}${widgetFollowups(o.widget)}</div>` : ''}
     </div><div class="tools">${isLast && !waitingForReply() ? `<button data-reroll="${t.i}">${T('Rewrite')}</button>` : ''}${turnPeople(t.img || {}, o).some(p => p.npc) ? `<button data-face="${t.i}">${T('Change face')}</button>` : ''}<button data-fork="${t.i}">${T('Branch here')}</button></div></div></div>`;
 }
 // the buttons a screen offers under itself (widgets.js), each sending its text or running its action (followUp)

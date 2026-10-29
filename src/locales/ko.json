@@ -1391,5 +1391,16 @@
   "Merge {from} into": "{from}을(를) 합칠 상황",
   "Its pictures get the other situation, and it leaves the dictionary.": "그 그림들은 고른 상황이 되고, 이 상황은 사전에서 빠져요.",
   "Delete {label} from the dictionary? {n} {n|picture|pictures} lose it.": "{label}을(를) 사전에서 지울까요? 그림 {n}장에서 빠져요.",
-  "Situation dictionary": "상황 사전"
+  "Situation dictionary": "상황 사전",
+  "Suggest choices after each turn (every game)": "매 턴 끝에 선택지 제안하기 (모든 게임)",
+  "Endings ({n})": "엔딩 ({n})",
+  "End the story": "이야기 끝내기",
+  "End the story here and write its ending card? You can keep playing after it.": "이야기를 여기서 맺고 엔딩 카드를 쓸까요? 그 뒤에도 계속 플레이할 수 있어요.",
+  "Writing the ending": "엔딩을 쓰는 중",
+  "Ending saved in Memory": "엔딩을 기억에 저장했어요",
+  "Persona": "페르소나",
+  "Persona (optional)": "페르소나 (선택)",
+  "Play as {name}": "{name}(으)로 플레이",
+  "A persona is a note about who you play: name, gender and profile, one per line (Name: ..., Gender: ...). Picking one fills the fields below, and you can still change them.": "페르소나는 내가 플레이할 인물을 적은 노트예요. 이름, 성별, 캐릭터 설정을 한 줄씩 적으면(이름: ..., 성별: ...) 고를 때 아래 칸이 채워지고, 채운 뒤에도 고칠 수 있어요.",
+  "The profile was cut to {n} characters": "캐릭터 설정을 {n}자로 잘랐어요"
 }
