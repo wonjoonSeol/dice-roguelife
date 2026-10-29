@@ -30,12 +30,19 @@ const formatter = (kind, lang) =>
   ));
 const weekday = (dt, lang) => formatter('wd', lang).format(dt);
 
-// a world's own calendar date without the days-since count the screen adds to it ("정월 열사흘 (+2일)")
-const SINCE = /\s*[(（]\+\d+[^)）]*[)）]\s*$/;
+// a world's own calendar date without the days-since count the screen adds to it ("정월 열사흘 (+2일)"), in half or
+// full width
+const SINCE = /\s*[(（][+＋][0-9０-９]+[^)）]*[)）]\s*$/;
 export const ownDateText = s =>
   String(s || '')
     .replace(SINCE, '')
     .trim();
+// the same own-calendar date written a little differently ("정월열사흘", "정월 열사흘날")
+const bareDate = s =>
+  String(s || '')
+    .replace(/[\s.,、。]/g, '')
+    .replace(/날$/, ''); // i18n-ignore
+export const sameOwnDate = (a, b) => !!a && bareDate(a) === bareDate(b);
 // the date to show for a clock (a turn's copy or the save's): a real date with its weekday; a world's own calendar with
 // the days since the narrator last named it, until it names the next
 export function clockDate(ck, lang) {
@@ -46,7 +53,7 @@ export function clockDate(ck, lang) {
 export function parseKDate(x) {
   const s = String(x || '');
   for (const p of profiles()) {
-    const f = dateBy(p, s);
+    const f = dateBy(p, s.trim(), true); // at the start: "제국력 1203년 3월 5일" is a world's own calendar
     if (f) return utcDate(f.y, f.m, f.d) ? isoOf(f.y, f.m, f.d) : null;
   }
   return null;

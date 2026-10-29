@@ -99,5 +99,23 @@ test('clock', async ({ game }) => {
     echoed[1] === '정월 열사흘 (+3일)' && base[1] === '정월 열사흘 (+3일)',
   );
   check(errs, 'a named date replaces the count', named[0] === '정월 열이레' && named[1] === '정월 열이레');
+  // the same date respelled, a count alone, and a full-width count are no new date; a world's year-month-day is its own
+  const respelled = await own({ days_passed: 1, time: '오전 8시', date: '정월열이레날' });
+  const countOnly = await own({ days_passed: 0, time: '오전 9시', date: '(+1일)' });
+  const wide = await own({ days_passed: 0, time: '오전 10시', date: '정월 열이레（＋１日）' });
+  await pg.evaluate("DR.app.state.clock={day:1,date:'',time:'오전 6시',weather:'',place:''};0");
+  const empire = await own({ days_passed: 0, time: '오전 7시', date: '제국력 1203년 3월 5일' });
+  const empire2 = await own({ days_passed: 1, time: '오전 7시' });
+  console.log('variants:', JSON.stringify([respelled, countOnly, wide, empire, empire2]));
+  check(
+    errs,
+    'a respelled, count-only or full-width echo keeps the count',
+    [respelled, countOnly, wide].every(x => x[1] === '정월 열이레 (+1일)'),
+  );
+  check(
+    errs,
+    "a world's own year-month-day is not a real calendar",
+    empire[0] === '제국력 1203년 3월 5일' && empire2[1] === '제국력 1203년 3월 5일 (+1일)',
+  );
   expect(errs).toEqual([]);
 });
