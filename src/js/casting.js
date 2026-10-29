@@ -101,7 +101,53 @@ const idMatch = (a, b) => {
     y = idNorm(b.val);
   return !!(x && y && x.length >= 2 && y.length >= 2 && (x === y || x.includes(y) || y.includes(x)));
 };
-// scored from the person's side: how many of their identities this set answers (+12 each, +1 when the kind agrees). A set naming only other identities is a small minus; nothing on either side is 0
+// Camps, learned from the library: an identity seen on sets together with two or more other values of its kind
+// (faction:정파 with 화산파, 무당파, 청성파) groups them, and each value's camps are the ones it shares a set with.
+let campMemo = { key: '', camps: new Map() };
+function campsOf() {
+  const key = app.images.length + ':' + imagesVer();
+  if (campMemo.key === key) return campMemo.camps;
+  const partners = new Map(); // by kind and value: the other values of that kind on the same sets
+  for (const k of Object.keys(charSetsAll())) {
+    const ids = setIds(k).map(i => ({ key: i.key, val: idNorm(i.val) }));
+    for (const a of ids)
+      for (const b of ids)
+        if (a.key === b.key && a.val !== b.val) {
+          const id = a.key + ':' + a.val;
+          if (!partners.has(id)) partners.set(id, new Set());
+          partners.get(id).add(b.val);
+        }
+  }
+  const isCamp = id => (partners.get(id) || new Set()).size >= 2;
+  const camps = new Map(); // by kind and value: whether it is a camp, and the camps it belongs to
+  for (const [id, vals] of partners) {
+    const kind = id.slice(0, id.indexOf(':'));
+    camps.set(id, { camp: isCamp(id), of: new Set([...vals].filter(v => isCamp(kind + ':' + v))) });
+  }
+  campMemo = { key, camps };
+  return camps;
+}
+// a set that answers none of the person's identities and names, in the same kind, another member (another sect) or a
+// camp the person's own value is not in
+function idConflict(k, ids) {
+  if (!ids || !ids.length) return false;
+  const s = setIds(k);
+  if (!s.length || ids.some(a => s.some(b => idMatch(a, b)))) return false;
+  const C = campsOf(),
+    info = (key, val) => C.get(key + ':' + idNorm(val)) || { camp: false, of: new Set() };
+  return ids.some(a => {
+    const p = info(a.key, a.val),
+      mine = p.camp ? new Set([idNorm(a.val)]) : p.of;
+    return s.some(b => {
+      if (b.key !== a.key) return false;
+      const q = info(b.key, b.val);
+      if (q.camp) return mine.size > 0 && !mine.has(idNorm(b.val));
+      return !p.camp || (q.of.size > 0 && !q.of.has(idNorm(a.val)));
+    });
+  });
+}
+// scored from the person's side: how many of their identities this set answers (+12 each, +1 when the kind agrees). A
+// set of another group (idConflict) sinks; one naming only other identities is a small minus; nothing on either side is 0
 function idScore(k, ids) {
   if (!ids || !ids.length) return 0;
   const s = setIds(k);
@@ -114,7 +160,7 @@ function idScore(k, ids) {
       if (m.key === a.key) n += 1;
     }
   }
-  return n || -4;
+  return n || (idConflict(k, ids) ? -30 : -4);
 }
 // every real face that died in this life, whoever wore it; silhouettes are a kind, not a person, and never retire
 export const retiredSets = () =>
@@ -394,7 +440,9 @@ function wearable(who) {
 // the K nearest faces this person may wear, for the model to choose from
 export function castCandidates(who, K = 12) {
   const { hits, ids, score } = ranking(who);
-  const all = Object.keys(charSets()).filter(wearable(who));
+  const wear = Object.keys(charSets()).filter(wearable(who)),
+    fit = wear.filter(k => !idConflict(k, ids)),
+    all = fit.length ? fit : wear; // another group's face only when nothing else is left
   const signal = all.some(k => hits(k) > 0 || idScore(k, ids) > 0);
   // nothing overlaps anywhere: the words told us nothing, so hand the model a wider shelf
   return all
