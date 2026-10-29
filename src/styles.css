@@ -4165,10 +4165,34 @@ textarea.mem-edit {
 .count-note.over {
   color: var(--danger);
 }
-.nl-note-list {
+.nl-note-list,
+.imp-src {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+/* a note's name opens it */
+.note-name {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.note-row .note-name {
+  font-weight: 700;
+}
+.note-name:hover {
+  text-decoration: underline;
+}
+/* Import characters: the sources to read, and whether the result fits the list */
+.imp-src {
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-bottom: 6px;
+}
+.imp-fit .warn {
+  color: var(--danger);
 }
 /* saves, export, storage */
 .saves-tools {

@@ -740,6 +740,15 @@ test('a new game starts with the notes of the save played last, and its own pick
   check(errs, "the picker starts with the first save's notes", (await ticked(pg, ids.a)) && !(await ticked(pg, ids.b)));
   await pg.uncheck(`#nlNote-${ids.a}`);
   await pg.check(`#nlNote-${ids.b}`);
+  await pg.click(`#nlNotes [data-nl-open="${ids.a}"]`);
+  check(
+    errs,
+    "a note's name in the picker opens it, and only its box ticks",
+    (await pg.inputValue('#noteName')) === 'Alpha' &&
+      (await pg.inputValue('#noteText')) === A &&
+      !(await ticked(pg, ids.a)),
+  );
+  await pg.click('#sheet [data-close]');
   await begin(pg, { name: '설화' });
   check(errs, 'the second save keeps what its screen ticked', (await noteIds(pg)) === ids.b);
 

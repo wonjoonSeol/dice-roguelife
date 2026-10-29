@@ -194,14 +194,14 @@ test('roster', async ({ game }) => {
     ),
   );
   const caps = await pg.evaluate(() => {
-    const many = Array.from({ length: 41 }, (_, i) => `이름: 사람${i} / 직책: 제자`).join('\n');
+    const many = Array.from({ length: 121 }, (_, i) => `이름: 사람${i} / 직책: 제자`).join('\n');
     const long = DR.parseRoster('이름: 길이 / 비밀: ' + '가'.repeat(200));
     return { many: DR.parseRoster(many), long };
   });
   check(
     errs,
-    'at most 40 people, said once',
-    caps.many.people.length === 40 &&
+    'at most 120 people, said once',
+    caps.many.people.length === 120 &&
       same(
         caps.many.notes.map(x => x.why),
         ['over'],
@@ -675,6 +675,88 @@ test('roster', async ({ game }) => {
     errs,
     'within a group a mentioned card comes before an unmentioned roster person',
     ns.indexOf('혜정(') >= 0 && ns.indexOf('운학(') > ns.indexOf('혜정('),
+  );
+
+  // 4) Import characters from the save's notes: one model call, only once Read is pressed; the people join the list
+  // ({user} is the player, left out) and, with the box ticked, the notes keep only the rest
+  const listBefore = await pg.evaluate(() => {
+    DR.app.state.userNotes = '세계: 마교가 강하다.\n### 은둔고수\n-황보엽:48세+男/권왕/무뚝뚝\n-{user}:주인공';
+    window.__next = {
+      roster: '# 은둔고수\n이름: 황보엽 / 별칭: 권왕 / 성별: 남 / 직책: 48세\n이름: {user} / 직책: 주인공',
+      rest: '세계: 마교가 강하다.',
+    };
+    window.__lastPrompt = '';
+    DR.showTab('memory');
+    return DR.app.state.roster.murim;
+  });
+  await pg.click('#memBox .mem-roster [data-roster-import]');
+  await pg.waitForSelector('#impRead');
+  const askedEarly = await pg.evaluate('window.__lastPrompt');
+  await pg.click('#impRead');
+  await pg.click('#impAdd');
+  await pg.waitForFunction(() => !DR.app.state.userNotes.includes('황보엽'));
+  const imp = await pg.evaluate(() => ({
+    asked: window.__lastPrompt,
+    notes: DR.app.state.userNotes,
+    list: DR.app.state.roster.murim,
+    names: DR.rosterNow().map(e => e.name),
+    alias: (DR.rosterFor('권왕') || {}).name,
+  }));
+  await pg.evaluate('window.__next = null');
+  check(errs, 'no model call before Read is pressed', askedEarly === '');
+  check(errs, 'the import reads the notes', imp.asked.includes('-황보엽:48세+男') && imp.asked.includes('"roster"'));
+  check(
+    errs,
+    'the imported people join the list after its own, without {user}',
+    imp.list.startsWith(listBefore) && imp.alias === '황보엽' && !imp.names.includes('{user}') && imp.names.length > 1,
+  );
+  check(errs, 'the notes keep only the rest', imp.notes === '세계: 마교가 강하다.');
+
+  // 5) imported on the next life's form, from a ticked library note, before a world is picked: the note stays as it
+  // was and is unticked for this game, its rest goes into the setting box, and the people wait for the fate screen,
+  // where they follow that world's list in an open box
+  const NOTE = '세계: 마교가 강하다.\n-백무명: 떠돌이';
+  const noteId = await pg.evaluate(async text => {
+    window.__next = { roster: '# 낭인\n이름: 백무명 / 직책: 떠돌이', rest: '세계: 마교가 강하다.' };
+    const note = await DR.saveNote({ name: '설정집', text });
+    DR.showTab('play');
+    DR.startNewLifeForm({});
+    return note.id;
+  }, NOTE);
+  await pg.check(`#nlNote-${noteId}`);
+  await pg.click('#mseg [data-m="free"]');
+  await pg.fill('#worldNote', '마법은 없다.');
+  await pg.click('#worldNoteCast');
+  await pg.click(`[name="impSrc"][value="note:${noteId}"]`);
+  await pg.click('#impRead');
+  await pg.click('#impAdd');
+  await pg.waitForFunction(() => document.querySelector('#worldNote').value.includes('마교'));
+  const form = await pg.evaluate(
+    id => ({
+      box: document.querySelector('#worldNote').value,
+      ticked: document.querySelector(`#nlNote-${id}`).checked,
+      note: DR.noteById(id).text,
+    }),
+    noteId,
+  );
+  await pg.click('[data-w="murim"]');
+  await pg.click('#rollBtn');
+  await pg.waitForSelector('#acceptBtn');
+  const fate = await pg.evaluate(() => ({
+    open: document.querySelector('#fate .roster-box').open,
+    text: document.querySelector('#fate [data-roster]').value,
+    kept: DR.app.state.roster.murim,
+  }));
+  await pg.evaluate('window.__next = null');
+  check(
+    errs,
+    'a note read on the form stays as it was, is unticked for this game, and its rest joins the setting box',
+    form.note === NOTE && !form.ticked && form.box === '마법은 없다.\n\n세계: 마교가 강하다.',
+  );
+  check(
+    errs,
+    "the form's import joins the rolled world's list after its own, in an open box",
+    fate.open && fate.text.startsWith(fate.kept) && fate.text.endsWith('이름: 백무명 / 직책: 떠돌이'),
   );
   expect(errs).toEqual([]);
 });

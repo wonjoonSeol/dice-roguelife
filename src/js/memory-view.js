@@ -88,15 +88,10 @@ export function renderMemory() {
     toast(T('Notes saved'));
   };
   const rs = box.querySelector('.mem-roster');
-  bindRosterEditor(rs, app.state.life.world.id, app.state.life.name);
-  rs.querySelector('[data-roster-save]').onclick = async () => {
-    if (!isIdle()) {
-      toast(T('A reply is being written. You can change it when it is done'));
-      return;
-    }
+  const busy = () => (isIdle() ? '' : T('A reply is being written. You can change it when it is done'));
+  const saveCharacters = async () => {
     saveRoster(app.state.life.world.id, rs.querySelector('[data-roster]').value);
     await persist();
-    toast(T('Characters saved'));
     // moved notes and faces show in the tab again; what is typed in the other boxes and not saved stays
     const drafts = ['notes', 'loreK', 'loreV'].map(id => [id, $('#' + id) && $('#' + id).value]);
     renderMemory();
@@ -105,6 +100,24 @@ export function renderMemory() {
         $('#' + id).value = v;
         $('#' + id).dispatchEvent(new Event('input'));
       }
+  };
+  bindRosterEditor(rs, app.state.life.world.id, app.state.life.name, null, {
+    own: {
+      label: T('Your notes for this save'),
+      text: () => $('#notes').value,
+      put: rest => {
+        $('#notes').value = rest.slice(0, LIMITS.userNotes);
+        app.state.userNotes = $('#notes').value.trim(); // kept with the list (saveCharacters)
+      },
+    },
+    untick: id => (app.state.noteIds = app.state.noteIds.filter(x => x !== id)), // kept with the list too
+    busy,
+    commit: saveCharacters,
+  });
+  rs.querySelector('[data-roster-save]').onclick = async () => {
+    if (busy()) return toast(busy());
+    await saveCharacters();
+    toast(T('Characters saved'));
   };
   box.querySelectorAll('[data-merge]').forEach(
     sel =>
