@@ -34,12 +34,42 @@ test('worlds', async ({ game }) => {
     "(()=>{const t=DR.TRANSFER_RACES,k=l=>l.map(x=>DR.tIn('ko',x));return {other:k(t.other),earth:k(t.earth)}})()",
   );
   const ERR = '[데이터 없음(ERROR)]'; // one roll in a hundred is the glitch race
+  // a creature identity brings its own race; a typed race keeps out other races' creatures
+  const cr = await pg.evaluate(() => {
+    const ko = x => DR.tIn('ko', x);
+    const own = new Map(
+      Object.values(DR.ORIGINS)
+        .flat()
+        .filter(DR.creatureRace)
+        .map(x => [ko(x), ko(DR.creatureRace(x))]),
+    );
+    window.__creatures = [...own.keys()];
+    const free = { race: '인간', originTier: 'random', talentTier: 'random', age: '' };
+    const f = DR.ORIGINS.F.map(ko);
+    const n = { typed: 0, typedF: 0, notF: 0, rolled: 0, clash: 0 };
+    for (let i = 0; i < 1500; i++) {
+      const t = DR.rollLife('x', '남', 'murim', free, null);
+      if (own.has(t.origin)) n.typed++;
+      if (t.originTier === 'F') n.typedF++;
+      if (t.originTier === 'F' && !f.includes(t.origin)) n.notF++;
+      const l = DR.rollLife('x', '남', 'random', null, null);
+      if (own.has(l.origin)) n.rolled++;
+      if (own.has(l.origin) && l.race !== own.get(l.origin)) n.clash++;
+    }
+    return n;
+  });
+  console.log('creatures:', JSON.stringify(cr));
+  check(
+    errs,
+    'a typed 인간 never rolls a creature identity and gets an F person at F; a rolled creature is its own race',
+    cr.typed === 0 && cr.typedF > 0 && cr.notF === 0 && cr.rolled > 0 && cr.clash === 0,
+  );
   const hr = await pg.evaluate(
-    "(()=>{for(let i=0;i<500;i++){const l=DR.rollLife('x','남','hunter',null,null);if(l.entry==='transfer')return l.race}})()",
+    "(()=>{for(let i=0;i<500;i++){const l=DR.rollLife('x','남','hunter',null,null);if(l.entry==='transfer'&&!__creatures.includes(l.origin))return l.race}})()",
   );
   console.log('hunter transfer race:', hr);
   const fr = await pg.evaluate(
-    "(()=>{for(let i=0;i<500;i++){const l=DR.rollLife('x','남','fantasy',null,null);if(l.entry==='transfer')return l.race}})()",
+    "(()=>{for(let i=0;i<500;i++){const l=DR.rollLife('x','남','fantasy',null,null);if(l.entry==='transfer'&&!__creatures.includes(l.origin))return l.race}})()",
   );
   console.log('fantasy transfer race:', fr);
   check(

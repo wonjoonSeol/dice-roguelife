@@ -49,11 +49,15 @@ test('modern world', async ({ game }) => {
       sponsor: s,
     });
     const out = { n: 0, diff: new Set(), native: new Set(), transfer: new Set(), sponsor: 0, random: 0, on: 0 };
+    const creature = Object.values(DR.ORIGINS)
+      .flat()
+      .filter(DR.creatureRace)
+      .map(x => DR.tIn('ko', x)); // a dog or a cat is its own race
     for (let i = 0; i < 600; i++) {
       const l = DR.rollLife('x', 'male', 'modern', null, null);
       out.n += l.world.id === 'modern' ? 1 : 0;
       out.diff.add(l.diff);
-      out[l.entry === 'transfer' ? 'transfer' : 'native'].add(l.race);
+      if (!creature.includes(l.origin)) out[l.entry === 'transfer' ? 'transfer' : 'native'].add(l.race);
       if (l.sponsor) out.sponsor++;
       if (DR.rollLife('x', 'male', 'modern', free('random'), null).sponsor) out.random++;
       if (DR.rollLife('x', 'male', 'modern', free('on'), null).sponsor) out.on++;
@@ -181,6 +185,11 @@ test('modern world', async ({ game }) => {
       money: st.life.money,
       unit: DR.moneyUnit(st.life),
       race: st.life.race,
+      own: (k => k && DR.tIn('ko', DR.creatureRace(k)))(
+        Object.values(DR.ORIGINS)
+          .flat()
+          .find(x => DR.creatureRace(x) && DR.tIn('ko', x) === st.life.origin),
+      ),
       entry: st.life.entry,
       sponsor: st.life.sponsor,
       gold: st.stats.gold,
@@ -193,8 +202,8 @@ test('modern world', async ({ game }) => {
   check(errs, 'a Korean story counts won', s.money === 'won' && s.unit === '원' && s.gold === s.base * 1000);
   check(
     errs,
-    'the race is human (or the transmigrator one)',
-    s.entry === 'transfer' ? s.race !== '인간' : s.race === '인간' || s.race === ERR,
+    "the race is human (or the transmigrator one, or a creature identity's own)",
+    s.own ? s.race === s.own : s.entry === 'transfer' ? s.race !== '인간' : s.race === '인간' || s.race === ERR,
   );
   check(errs, 'no constellations', s.sponsor === null);
   check(
