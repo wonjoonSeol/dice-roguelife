@@ -1,6 +1,7 @@
+import { spawn } from 'node:child_process';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { providerRequest, normalizeEvent, readSSE, relaySample, httpError } from '../relay.js';
+import { providerRequest, normalizeEvent, readSSE, relaySample, httpError, claudeSample } from '../relay.js';
 import { hostStatus, openServer } from './support.js';
 
 const input = (protocol = 'compatible', extra = {}) => ({
@@ -181,4 +182,123 @@ test('local relay rejects missing token, foreign origins and rebinding hosts', a
   } finally {
     await s.stop();
   }
+});
+
+// stand-ins for the claude command: node running a script, started with the options the relay gave
+const fakeClaude = (script, seen) => (cmd, args, options) => {
+  seen?.push({ cmd, args, options });
+  return spawn(process.execPath, ['-e', script], options);
+};
+// prints these stream-json lines once stdin ends, then exits (with linger, 3 seconds later)
+const printing = (lines, linger = false) =>
+  `process.stdin.resume().on('end',()=>{process.stdout.write(${JSON.stringify(
+    lines.map(l => (typeof l === 'string' ? l : JSON.stringify(l))).join('\n') + '\n',
+  )});${linger ? 'setTimeout(()=>{},3000)' : ''}})`;
+const event = e => ({ type: 'stream_event', event: e });
+const usage = { input_tokens: 2, cache_read_input_tokens: 8 };
+const start = model => event({ type: 'message_start', message: { model, usage: { ...usage, output_tokens: 1 } } });
+const delta = text => event({ type: 'content_block_delta', delta: { type: 'text_delta', text } });
+const stopped = (stop_reason = 'end_turn') => [
+  event({ type: 'message_delta', delta: { stop_reason }, usage: { ...usage, output_tokens: 5 } }),
+  event({ type: 'message_stop' }),
+];
+const result = (extra = {}) => ({ type: 'result', is_error: false, result: 'ok', ...extra });
+const reply = [delta('x'), ...stopped()];
+const cliInput = extra => ({ ...input('claude-cli', { model: 'sonnet', ...extra }), apiKey: '' });
+const cliRun = async (input, script, seen) => {
+  const emitted = [];
+  await claudeSample(input, e => emitted.push(e), new AbortController().signal, fakeClaude(script, seen));
+  return emitted;
+};
+test('claude -p: streams text and usage, runs without tools or the player setup, under the output limit', async () => {
+  const seen = [];
+  const lines = [start('claude-sonnet-x'), delta('안'), delta('녕'), ...stopped(), 'not json', result()];
+  const emitted = await cliRun(cliInput(), printing(lines), seen);
+  assert.deepEqual(emitted, [
+    { text: '안' },
+    { text: '녕' },
+    { done: true, model: 'claude-sonnet-x', usage: { input: 10, output: 5 } },
+  ]);
+  const { cmd, args, options } = seen[0];
+  assert.equal(cmd, 'claude');
+  assert.equal(args[args.indexOf('--model') + 1], 'sonnet');
+  assert.equal(args[args.indexOf('--tools') + 1], '');
+  assert.equal(args[args.indexOf('--setting-sources') + 1], '');
+  assert.ok(args.includes('--no-session-persistence'));
+  assert.equal(options.env.CLAUDE_CODE_DISABLE_CLAUDE_MDS, '1');
+  assert.equal(options.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS, '512');
+});
+test('claude -p: the prompt goes on stdin, and the reply ends at the result while claude still runs', async () => {
+  const echo = `let t='';process.stdin.on('data',d=>t+=d).on('end',()=>{const ev=event=>console.log(JSON.stringify({type:'stream_event',event}));ev({type:'content_block_delta',delta:{type:'text_delta',text:t}});ev({type:'message_stop'});console.log(JSON.stringify({type:'result',is_error:false}))})`;
+  const emitted = await cliRun({ ...cliInput(), prompt: '이야기를 들려줘' }, echo);
+  assert.equal(emitted[0].text, '이야기를 들려줘');
+  const began = Date.now();
+  const lingering = await cliRun(cliInput(), printing([...reply, result()], true));
+  assert.equal(lingering.at(-1).done, true);
+  assert.ok(Date.now() - began < 2000, 'waited for claude to exit');
+});
+test('claude -p: a profile key goes to the command only, and a keyless profile inherits the environment', async () => {
+  const seen = [];
+  await cliRun({ ...cliInput(), apiKey: 'sk-profile' }, printing([...reply, result()]), seen);
+  assert.equal(seen[0].options.env.ANTHROPIC_API_KEY, 'sk-profile');
+  const before = process.env.ANTHROPIC_API_KEY;
+  process.env.ANTHROPIC_API_KEY = 'sk-from-env';
+  try {
+    await cliRun(cliInput(), printing([...reply, result()]), seen);
+    assert.equal(seen[1].options.env.ANTHROPIC_API_KEY, 'sk-from-env');
+  } finally {
+    if (before === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = before;
+  }
+});
+test('claude -p: failures map to the game error codes', async () => {
+  const fail = text => cliRun(cliInput(), printing([result({ is_error: true, result: text })]));
+  const cases = [
+    ['Credit balance is too low', 'insufficient_credit'],
+    ['Invalid API key. Fix external API key', 'not_granted'], // the CLI's words for a bad key
+    ['Not logged in. Please run /login', 'not_granted'],
+    ['Rate limit reached for requests', 'rate_limited'],
+    ['Claude usage limit reached. Your limit will reset at 5pm', 'rate_limited'],
+    ['There is an issue with the selected model (x)', 'no_model'],
+    ["Claude's response exceeded the 64 output token maximum", 'output_limit'],
+    ['Prompt is too long', 'prompt_too_large'],
+    ['Failed to load the context of a plugin', 'provider_error'],
+  ];
+  await Promise.all(cases.map(([text, code]) => assert.rejects(fail(text), { code }, text)));
+  const run = lines => cliRun(cliInput(), printing(lines));
+  await Promise.all([
+    assert.rejects(run([delta('x'), ...stopped('refusal'), result()]), { code: 'refused' }),
+    assert.rejects(run([delta('x'), ...stopped('max_tokens'), result()]), { code: 'output_limit' }),
+    assert.rejects(run([delta('x'), result()]), { code: 'provider_error' }), // no message_stop
+    assert.rejects(run([delta('partial')]), { code: 'provider_error' }), // no result
+    // an older claude without one of the options
+    assert.rejects(cliRun(cliInput(), `process.stderr.write("error: unknown option '--tools'\n");process.exit(1)`), {
+      code: 'old_cli',
+    }),
+    assert.rejects(
+      claudeSample(
+        cliInput(),
+        () => {},
+        new AbortController().signal,
+        (cmd, args, options) => spawn('claude-does-not-exist-xyz', args, options),
+      ),
+      { code: 'no_cli' },
+    ),
+  ]);
+});
+test('claude -p: the relay sends it the request, and checks it like any other', async () => {
+  const signal = new AbortController().signal;
+  const image = { type: 'image/png', data: 'YQ==' };
+  await assert.rejects(
+    relaySample({ ...cliInput(), image }, () => {}, signal),
+    { code: 'invalid_config' },
+  );
+  await assert.rejects(
+    relaySample(cliInput({ promptBytes: 2 }), () => {}, signal),
+    { code: 'prompt_too_large' },
+  );
+  await assert.rejects(
+    relaySample(cliInput({ model: ' ' }), () => {}, signal),
+    { code: 'invalid_config' },
+  );
 });

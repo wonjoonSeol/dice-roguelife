@@ -120,6 +120,16 @@ test('connection profiles: keys stay on the server, kept per profile, renamed, s
       config: { ...paid, endpoint: 'https://b.example/v1' },
     });
     assert.equal(v.profiles.find(p => p.name === 'Work').hasKey, false);
+    // so does another protocol at the same endpoint (an Anthropic key must not reach claude -p)
+    const keyAfter = async (config, apiKey) => {
+      await call('/api/connection/set', { name: 'Work', previous: 'Work', config: paid, apiKey: 'secret-2' });
+      v = await call('/api/connection/set', { name: 'Work', previous: 'Work', config, apiKey });
+      return v.profiles.find(p => p.name === 'Work').hasKey;
+    };
+    assert.equal(await keyAfter({ ...paid, model: 'm3' }), true);
+    assert.equal(await keyAfter({ ...paid, protocol: 'claude-cli' }), false);
+    // and a null key removes it on purpose
+    assert.equal(await keyAfter(paid, null), false);
     assert.equal((await call('/api/connection/use', { name: 'Local' })).active, 'Local');
     assert.equal((await call('/api/connection/use', { name: 'Nope' })).status, 400);
     v = await call('/api/connection/delete', { name: 'Local' });

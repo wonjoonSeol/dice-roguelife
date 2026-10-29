@@ -27,6 +27,7 @@ export const PROVIDERS = [
   ['llamacpp', 'llama.cpp', 'http://localhost:8080/v1'],
   ['vllm', 'vLLM', 'http://localhost:8000/v1'],
   ['azure', 'Azure OpenAI', '', 'azure'],
+  ['claudecode', 'Claude Code (claude -p)', '', 'claude-cli'],
   ['custom', N_('Custom'), ''],
 ].map(([id, name, endpoint, protocol = 'compatible']) => ({ id, name, endpoint, protocol }));
 
@@ -81,6 +82,8 @@ const TEXT = {
   insufficient_credit: N_('The API account has insufficient credit or quota.'),
   provider_unavailable: N_('The provider is temporarily unavailable.'),
   invalid_request: N_('The provider rejected this request. Check the endpoint, model, JSON mode and output limit.'),
+  no_cli: N_('Claude Code was not found. Install it, run claude once to log in, then try again.'),
+  old_cli: N_('This Claude Code is too old for the game. Run claude update, then try again.'),
   no_model: N_('The provider does not know this model ID. Check its exact name in the model list of the provider.'),
   output_limit: N_('The reply hit the output limit. Increase it in Settings.'),
   timeout: N_('The provider timed out.'),
