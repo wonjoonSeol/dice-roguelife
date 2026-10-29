@@ -3,7 +3,7 @@ import { $, esc, fmt, MARK_RE, stripMarks, toast } from './util.js';
 import { T, tIn } from './i18n.js';
 import { choicesOff, storyLang } from './settings.js';
 import { cmdName, EMO_FB, moneyText, normEmo, STAT_LABEL } from './data.js';
-import { clockDate } from './calendar.js';
+import { clockParts } from './calendar.js';
 import { platform } from './db.js';
 import { app, exclusive, waitingForReply } from './app.js';
 import { adminOn, critOf, statusVisible, TITLES_MAX, titlesOn } from './rules.js';
@@ -447,7 +447,7 @@ function renderTurnInner(t, isLast) {
   const ck = t.clock;
   const head =
     ck && (ck.date || ck.place)
-      ? `<div class="clock">D+${ck.day} | ${[clockDate(ck, storyLang()), ck.time, ck.weather, ck.place].filter(Boolean).map(esc).join(' | ')}</div>`
+      ? `<div class="clock">D+${ck.day} | ${clockParts(ck, storyLang()).map(esc).join(' | ')}</div>`
       : '';
   if (o.judge)
     return `<div class="turn"><div class="ai judge"><div class="body"><div class="sysmsg turn-head"><span>[ ${o.judge === 'skills' ? T('Skills') : T('Why the check went this way')} ]</span></div><div class="narr judge-narr">${narrHtml(o.narration)}</div>

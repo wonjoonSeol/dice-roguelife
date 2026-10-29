@@ -572,14 +572,12 @@ function applyClock(ctx) {
     if (iso) {
       ck.anchor = { date: iso, day: ck.day };
       ck.date = fmtKDate(iso, storyLang());
-      delete ck.dateDay;
     } else {
       // the date shown to the narrator, said back, is not a new one (ARCHITECTURE.md, calendar.js)
       const named = ownDateText(c.date).slice(0, LIMITS.text.label);
       if (named && !sameOwnDate(named, ck.date)) [ck.date, ck.dateDay] = [named, ck.day];
-      else if (ck.date && ck.dateDay == null) ck.dateDay = before;
     }
-  } else if (d > 0 && ck.date && ck.dateDay == null) ck.dateDay = before; // a save from before the count
+  }
 }
 
 // the world's add-on: its ladder (one step at a time), the standing, then its own part

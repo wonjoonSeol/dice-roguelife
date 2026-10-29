@@ -78,7 +78,7 @@ test('clock', async ({ game }) => {
       const ck = DR.app.state.clock;
       return [ck.date, DR.clockDate(ck, 'ko'), DR.buildPrompt('간다', null).includes(DR.clockDate(ck, 'ko'))];
     }, clock);
-  await pg.evaluate("DR.app.state.clock={day:1,date:'정월 열사흘',time:'오전 6시 30분',weather:'',place:''};0");
+  await pg.evaluate("DR.app.state.clock={day:1,date:'정월 열사흘',dateDay:1,time:'오전 6시 30분',weather:'',place:''};0");
   const twoLater = await own({ days_passed: 2, time: '오후 6시 40분' });
   const oneMore = await own({ days_passed: 1, time: '오전 6시 30분' });
   const echoed = await own({ days_passed: 0, time: '오전 7시', date: '정월 열사흘 (+3일)' });
@@ -100,7 +100,7 @@ test('clock', async ({ game }) => {
   );
   check(errs, 'a named date replaces the count', named[0] === '정월 열이레' && named[1] === '정월 열이레');
   // the same date respelled, a count alone, and a full-width count are no new date; a world's year-month-day is its own
-  const respelled = await own({ days_passed: 1, time: '오전 8시', date: '정월열이레날' });
+  const respelled = await own({ days_passed: 1, time: '오전 8시', date: '정월열이레' });
   const countOnly = await own({ days_passed: 0, time: '오전 9시', date: '(+1일)' });
   const wide = await own({ days_passed: 0, time: '오전 10시', date: '정월 열이레（＋１日）' });
   await pg.evaluate("DR.app.state.clock={day:1,date:'',time:'오전 6시',weather:'',place:''};0");
