@@ -250,7 +250,9 @@ export async function startServer({
     if (!route) return res.writeHead(404).end();
     const origin = req.headers.origin;
     const fromHere = local().some(h => origin === 'http://' + h) || names.some(n => origin === 'https://' + n);
-    if (req.headers['x-dr-token'] !== token || (origin && !fromHere)) return res.writeHead(403).end();
+    if (origin && !fromHere) return res.writeHead(403).end();
+    // from this app, with another start's token: a page opened before the server restarted
+    if (req.headers['x-dr-token'] !== token) return sendJson(res, 403, { code: 'stale_page' });
     res.setHeader('Cache-Control', 'no-store');
     if (route === 'sample') return relay(req, res, store, fetcher);
     try {

@@ -5,6 +5,7 @@ import { tr } from './i18n.js';
 
 const TEXT = {
   no_server: N_('Start the app with npm start, then reload this page.'),
+  stale_page: N_('The server restarted after this page opened. Reload the page.'),
   name_taken: N_('A profile with that name already exists.'),
   bad_name: N_('Enter a profile name (up to 40 characters).'),
   no_profile: N_('That profile is gone. Choose another in Settings.'),
@@ -29,7 +30,10 @@ export async function post(path, body, { type = 'application/json', signal, raw 
     throw failed('no_server');
   }
   // a restarted server has a new token: this page must be reloaded
-  if (response.status === 403) throw failed('no_server');
+  if (response.status === 403) {
+    const { code } = await response.json().catch(() => ({}));
+    throw failed(code === 'stale_page' ? code : 'no_server');
+  }
   if (!response.ok) throw failed((await response.json().catch(() => ({}))).code);
   return raw ? response : response.json();
 }

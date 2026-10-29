@@ -35,6 +35,7 @@
   "Standalone version v{version}": "독립 실행판 v{version}",
   "Choose an AI provider and model in Settings to start playing.": "설정에서 AI 제공업체와 모델을 고르면 플레이할 수 있어요.",
   "Start the app with npm start, then reload this page.": "npm start로 앱을 실행한 뒤 이 페이지를 새로고침하세요.",
+  "The server restarted after this page opened. Reload the page.": "이 페이지를 연 뒤에 서버가 다시 시작됐어요. 페이지를 새로고침하세요.",
   "Check the endpoint, model and limits in Settings.": "설정에서 엔드포인트, 모델, 한도를 확인하세요.",
   "Authentication failed. Check your API key and access to this model.": "인증에 실패했어요. API 키와 이 모델의 사용 권한을 확인하세요.",
   "The API account has insufficient credit or quota.": "API 계정의 크레딧이나 사용 한도가 부족해요.",

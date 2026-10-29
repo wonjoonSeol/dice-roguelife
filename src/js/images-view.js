@@ -9,17 +9,21 @@ import { answerDialog, askConfirm, askPrompt, askReview, openDialog, openSheet }
 import { fillHashes, findManifestAsset, IMGDOC, imgError, IMGX, restoreFromManifest, SETDOC } from './library.js';
 import { cleanProfile, PROFILE, PROFILE_FIELDS } from './roster.js';
 import {
+  aliasKeys,
   charSetsAll,
   fitsWorld,
   genderOf,
+  IMAGE_TYPES,
   imgById,
   imgUrl,
+  inheritKeys,
   setCover,
   setWorlds,
   withModern,
   worldChips,
   worldsOf,
 } from './images.js';
+import { readZip } from './zip.js';
 import { WORLD_EXT } from './world-ext.js';
 import { capTags, isGeneric, isIdTag, setIds, setTier, TIERS_CAST, toEnglishTags } from './casting.js';
 import { exportPack } from './images-export.js';
@@ -71,9 +75,11 @@ function imagesHeaderHtml(usage, orphan, canAuto) {
       <p>${T("<b>File name rules</b> (you'll be asked when a name doesn't fit)")}</p>
       <div class="g"><code>{set}_{emotion}</code><span>${T('Character. <code>female1_smile.png</code>. A set is one person with several expressions.')}</span><code>shadow_{gender}</code><span>${T('Silhouette for extras. <code>shadow_male_neutral.png</code>, <code>shadow_female_2.png</code>. Grouped into a set per gender')}</span><code>bg_{place}_{time}</code><span>${T('Background. <code>bg_tavern_night.png</code>')}</span><code>admin_{emotion}</code><span>${T('Game master')}</span><code>dice</code><span>${T('Dice effect. <code>dice</code>, <code>dice_success</code>, <code>dice_fail</code>. Needs no labels and auto-sort skips it')}</span></div>
       <p>${T('Uploading the same file again skips it.')}</p>
+      <p>${T('A file with the same name as a picture in the library but different content replaces it (you are asked first). Its set, tags and cover stay, and past turns show the new picture.')}</p>
+      <p>${T("A zip goes in as is: its pictures from every folder (a name found in two folders gets the folder's name in front), and its tags.json if it has one, so there is no need to unzip it or import the tags separately.")}</p>
     </details>
    ${usage ? `<div class="img-usage"><div class="row img-usage-head"><span>${T('{files} / {max} files', { files: usage.files, max: usage.maxFiles })}</span><span>${(usage.bytes / 1048576).toFixed(1)} / ${(usage.maxBytes / 1048576).toFixed(0)} MB</span></div><div class="meter"><i style="width:${Math.min(100, (usage.bytes / usage.maxBytes) * 100)}%"></i></div></div>` : ''}
-   <div class="row img-toolbar"><label class="btn primary file-btn">${T('Upload images')}<input type="file" id="upl" accept="image/*" multiple hidden></label>
+   <div class="row img-toolbar"><label class="btn primary file-btn">${T('Upload images')}<input type="file" id="upl" accept="image/*,.zip,application/zip" multiple hidden></label>
     <label class="btn file-btn">${T('Import tags.json')}<input type="file" id="tagsIn" accept=".json,application/json" hidden></label>
     ${canAuto && platform.sample ? `<button class="btn" id="autoTag">${T('Auto-sort')}</button>` : ''}<button class="btn" id="dedupe">${T('Clean up duplicates')}</button><button class="btn" id="expPack" title="${T('Download a zip of the images under their upload names, with tags.json')}">${T('Export pack')}</button><button class="btn" id="expTags" title="${T('Download tags.json only, without images')}">${T('Export tags only')}</button><button class="btn" id="saveMan" title="${T('Save so a copy of this app can restore the image list on its own')}">${T('Save list for copies')}</button><button class="btn" id="tagsEn" title="${T('Turn Korean and other non-English tags into English')}">${T('Tags to English')}</button><button class="btn" id="idTags" title="${T('Pull affiliations such as sects, houses and companies out of set descriptions as identity tags (faction:name). Shows the list before applying')}">${T('Find faction tags')}</button><button class="btn danger" id="wipeAll">${T('Delete all')}</button><span class="muted img-upl-stat" id="uplStat">${esc(statText())}</span></div>`;
 }
@@ -705,20 +711,213 @@ async function exclusiveJob(name, job) {
     busy = '';
   }
 }
+const isZip = f => /\.zip$/i.test(f.name) || /zip/i.test(f.type || '');
+// why a file or a zip entry didn't go in, by error code
+const WHY = {
+  quota_or_state: N_('Storage full'),
+  too_large: N_('File too large'),
+  bad_entry: N_('Damaged inside the zip'),
+  not_zip: N_('not a zip file'),
+  zip64: N_('ZIP64, used for zips over 4 GB'),
+  encrypted: N_('password protected'),
+  method: N_('an unknown compression method'),
+};
+// a code with no label here is told in the host's own words, never as the bare code
+const why = e => (WHY[e.code] ? T(WHY[e.code]) : e.message || e.code || T('Failed'));
+const someNames = (names, n) => names.slice(0, n).join(', ') + (names.length > n ? ', ...' : '');
+// one file of the batch: its name, open() for the File, and hash(), worked out once (from the file in hand if given)
+function uploadItem(name, open) {
+  let h = null;
+  return { name, open, hash: f => (h = h || (f ? Promise.resolve(f) : open()).then(sha256Hex).catch(() => null)) };
+}
+// The batch as uploads: loose files as they are, a zip's pictures by file name, and each zip's shallowest tags.json,
+// imported once the pictures are in. Mac archive litter (__MACOSX/, ._name) and every other file stay out.
+async function expandUploads(files) {
+  const items = [],
+    tagFiles = [];
+  for (const f of files) {
+    if (!isZip(f)) {
+      items.push(uploadItem(f.name, async () => f));
+      continue;
+    }
+    let entries;
+    try {
+      entries = await readZip(f);
+    } catch (e) {
+      toast(T("Can't read {zip} ({why})", { zip: f.name, why: why(e) }), 6000);
+      continue;
+    }
+    const pics = [],
+      cant = [];
+    let tags = null;
+    for (const en of entries) {
+      const dirs = en.path.split(/[\\/]/);
+      const name = dirs.pop();
+      const type = IMAGE_TYPES[(/\.(\w+)$/.exec(name.toLowerCase()) || [])[1]];
+      const isTags = name.toLowerCase() === 'tags.json';
+      if (dirs.includes('__MACOSX') || name.startsWith('._') || !(type || isTags)) continue;
+      if (en.skip) cant.push(en.skip);
+      else if (type) pics.push({ dirs, name, type, en });
+      else if (!tags || dirs.length < tags.depth) tags = { depth: dirs.length, open: en.open };
+    }
+    const uses = new Map();
+    for (const p of pics) uses.set(p.name.toLowerCase(), (uses.get(p.name.toLowerCase()) || 0) + 1);
+    for (const { dirs, name, type, en } of pics) {
+      // alice/smile.png and bob/smile.png would be one name: the folder goes in front (alice_smile.png, set alice)
+      const nm = uses.get(name.toLowerCase()) > 1 && dirs.length ? `${dirs[dirs.length - 1]}_${name}` : name;
+      items.push(uploadItem(nm, async () => new File([await en.open()], nm, { type })));
+    }
+    if (tags) tagFiles.push(tags);
+    if (cant.length)
+      toast(
+        T("{zip}: skipped {n} {n|file|files} that can't be opened ({why})", {
+          zip: f.name,
+          n: cant.length,
+          why: [...new Set(cant)].map(k => T(WHY[k])).join(', '),
+        }),
+        6000,
+      );
+    else if (!pics.length && !tags) toast(T('No pictures in {zip}', { zip: f.name }), 4000);
+  }
+  return { items, tagFiles };
+}
+const stem = name =>
+  String(name)
+    .replace(/\.[^.]+$/, '')
+    .toLowerCase();
+// Same name, different content: that picture is replaced. A file matches the rows with exactly its name, else those
+// whose name differs only in extension or case. Each matched file gets a target (the one row it replaces) or a skip:
+// 'same' (same content, or a row without the original's hash to compare, where a same name is the same file as
+// before) or 'twice' (another file of the batch replaces that row). Returns the files whose name several rows share.
+async function matchReplacements(items, contents) {
+  const byStem = new Map();
+  for (const x of app.images)
+    if (x.file) {
+      const k = stem(x.file);
+      if (byStem.has(k)) byStem.get(k).push(x);
+      else byStem.set(k, [x]);
+    }
+  const named = items.filter(s => byStem.has(stem(s.name)));
+  if (!named.length) return [];
+  let n = 0;
+  await inParallel(named, UPLOAD_PAR, async s => {
+    setStat(T('Comparing with the library {i}/{n}', { i: ++n, n: named.length }));
+    await s.hash();
+  });
+  const taken = new Set(),
+    unclear = [];
+  for (const s of named) {
+    const all = byStem.get(stem(s.name));
+    const exact = all.filter(x => x.file === s.name);
+    const rows = exact.length ? exact : all;
+    const h = await s.hash();
+    if ((h && contents.has(h)) || (rows.length === 1 && !rows[0].hash)) s.skip = 'same';
+    else if (rows.length > 1) unclear.push(s);
+    else if (taken.has(rows[0].id)) s.skip = 'twice';
+    else {
+      taken.add(rows[0].id);
+      s.target = rows[0];
+    }
+  }
+  return unclear;
+}
+// Retires pictures in favor of others (old id -> new id), for an upload that replaced them and for 중복 정리: past
+// turns follow dupMap, set covers move, the new row takes the old one's content keys (akeys), the old rows go and
+// their files last. A step that fails puts memory back, keeps both pictures and throws. Resolves how many went.
+async function retireImages(redirect, say = () => {}) {
+  const final = id => {
+    let t = id;
+    for (let i = 0; i < 20 && redirect.has(t); i++) t = redirect.get(t);
+    return t;
+  };
+  const olds = app.images.filter(x => redirect.has(x.id));
+  if (!olds.length) return 0;
+  const byId = new Map(app.images.map(x => [x.id, x]));
+  const map0 = app.settings.dupMap;
+  const dm = { ...(map0 || {}) };
+  for (const [a, b] of Object.entries(dm)) if (redirect.has(b)) dm[a] = final(b);
+  for (const x of olds) dm[x.id] = final(x.id);
+  const covers = Object.entries(app.setMeta)
+    .filter(([, m]) => m && redirect.has(m.cover))
+    .map(([k, m]) => ({ k, m, was: m.cover }));
+  const keys = new Map(); // a kept row whose akeys change -> its akeys before
+  for (const x of olds) {
+    const keep = byId.get(final(x.id));
+    if (!keep || redirect.has(keep.id)) continue;
+    const next = inheritKeys(keep, x);
+    if (String(next) === String(aliasKeys(keep))) continue;
+    if (!keys.has(keep)) keys.set(keep, keep.akeys);
+    keep.akeys = next;
+  }
+  const undo = [() => keys.forEach((was, keep) => (keep.akeys = was))];
+  try {
+    app.settings.dupMap = dm;
+    undo.push(() => (app.settings.dupMap = map0));
+    await saveSettings();
+    for (const c of covers) c.m.cover = final(c.was);
+    undo.push(() => covers.forEach(c => (c.m.cover = c.was)));
+    await inParallel(covers, 8, c => SETDOC(c.k).set(c.m));
+    await IMGX.flush([...keys.keys()].map(x => x.id));
+    app.images = app.images.filter(x => !redirect.has(x.id));
+    undo.push(() => app.images.push(...olds));
+    await IMGX.dropMany(olds.map(x => x.id));
+  } catch (e) {
+    for (const u of undo.reverse()) u();
+    throw e;
+  }
+  let n = 0;
+  await inParallel(olds, 6, async x => {
+    say(++n, olds.length);
+    await deleteAsset(x.id);
+  });
+  return olds.length;
+}
+const retireFailed = e => {
+  logErr('images', e);
+  toast(T("Couldn't finish, so the old pictures are kept as well: {err}", { err: e.code || e.message }), 5000);
+};
 const UPLOAD_PAR = 3; // pictures sent at the same time (it drops to 1 when uploads start failing, and climbs back)
 const UPLOAD_RETRIES = 2;
 const MAX_UNSAVED = 9; // pictures sent but not yet in the saved list: the most a closed window could lose
-const NO_RETRY = new Set(['quota_or_state', 'quota_exceeded', 'too_large']);
+// the store is full or out of this page's reach (host.js): the rest of the batch would fail the same way
+const STOP = new Set(['quota_or_state', 'quota_exceeded', 'stale_page', 'no_server']);
+const NO_RETRY = new Set([...STOP, 'too_large']);
 const wait = ms => new Promise(r => setTimeout(r, ms));
-async function uploadFiles(files) {
+async function uploadFiles(picked) {
+  const { items, tagFiles } = await expandUploads(picked);
   let done = 0,
-    skipped = 0,
     stop = false;
+  const count = { same: 0, kept: 0, twice: 0 };
   const failed = [],
     landed = [];
   await fillHashes(t => setStat(t), T('Checking existing images'));
+  // the contents and names the library holds, with each picture this batch adds: a file that matches one is a repeat
+  const contents = new Set(app.images.flatMap(x => [x.hash, x.shash]).filter(Boolean)),
+    names = new Set(app.images.map(x => x.file).filter(Boolean));
+  const unclear = new Set(await matchReplacements(items, contents));
+  const files = items.filter(s => !unclear.has(s));
+  const swap = files.filter(s => s.target);
+  if (
+    swap.length &&
+    !(await askConfirm(
+      T('{n} {n|picture has|pictures have} the same name as {n|one|ones} in the library but different content.', {
+        n: swap.length,
+      }) +
+        `\n${someNames(
+          swap.map(s => s.name),
+          8,
+        )}\n` +
+        T('Replacing keeps their set, tags and cover, and past turns show the new pictures.'),
+      T('Replace them'),
+      T('Keep the old ones'),
+    ))
+  )
+    for (const s of swap) {
+      s.skip = 'kept';
+      delete s.target;
+    }
   const t0 = Date.now();
-  const unnamed = files.filter(f => parseName(f.name, true).guessed);
+  const unnamed = files.filter(s => !s.skip && !s.target && parseName(s.name, true).guessed);
   const plan = unnamed.length ? await askUploadPlan(unnamed.length) : null;
   let sharedKey = null;
   const newSets = new Set();
@@ -730,18 +929,12 @@ async function uploadFiles(files) {
     unsaved = 0;
   const saves = [];
   const fail = (f, e) => {
-    failed.push([
-      f.name,
-      e.code === 'quota_or_state'
-        ? T('Storage full')
-        : e.code === 'too_large'
-          ? T('File too large')
-          : e.code || e.message || T('Failed'),
-    ]);
-    if (e.code === 'quota_or_state' || e.code === 'quota_exceeded') stop = true;
+    failed.push([f.name, why(e)]);
+    if (STOP.has(e.code)) stop = true;
   };
   const say = () => {
     const el = done ? Math.round((((Date.now() - t0) / done) * (files.length - done)) / 1000) : 0;
+    const skipped = count.same + count.kept + count.twice;
     setStat(
       T('Uploading {done}/{total}', { done, total: files.length }) +
         (skipped ? T(', skipped {n}', { n: skipped }) : '') +
@@ -765,18 +958,49 @@ async function uploadFiles(files) {
       }
     }
   };
-  const one = async (f, lane) => {
-    const hash = await sha256Hex(f).catch(() => null);
-    // an exported pack holds the stored (already compressed) files under new names: they match by the stored file hash
-    if (
-      app.images.some(x => (hash && (x.hash === hash || x.shash === hash)) || x.file === f.name) ||
-      inflight.has(f.name) ||
-      (hash && inflight.has(hash))
-    ) {
-      skipped++;
+  // what a new picture's name says it is, or the batch's answer for names that say nothing
+  const labelNew = (name, portrait) => {
+    let parsed = parseName(name, portrait);
+    let guessed = !!parsed.guessed,
+      shadow = null;
+    delete parsed.guessed;
+    if (parsed.kind === 'char' && !parsed.set) {
+      const key = nextSetKey('other');
+      parsed.set = key;
+      parsed.name = key + '_neutral';
+      newSets.add(key);
+    } // a Korean file name cannot be a set key
+    if (parsed.shadowGender) {
+      shadow = parsed.shadowGender;
+      delete parsed.shadowGender;
+      app.setMeta[parsed.set] = Object.assign(app.setMeta[parsed.set] || {}, { gender: shadow, tier: 'generic' });
+    }
+    if (guessed && plan) {
+      const base = name.replace(/\.[^.]+$/, '');
+      guessed = false;
+      if (plan.kind === 'char') {
+        const key = plan.group === 'one' ? (sharedKey = sharedKey || nextSetKey(plan.gender)) : nextSetKey(plan.gender);
+        parsed = { kind: 'char', set: key, emotion: 'neutral', name: key + '_neutral', tags: [] };
+        newSets.add(key);
+      } else if (plan.kind === 'scene') parsed = { kind: 'scene', name: base.toLowerCase(), tags: [] };
+      else parsed = { kind: 'fx', name: base.toLowerCase(), tags: plan.fx || ['dice'] };
+    }
+    return { parsed, guessed, shadow };
+  };
+  const one = async (s, lane) => {
+    if (s.skip) {
+      count[s.skip]++;
       return;
     }
-    inflight.add(f.name);
+    const old = s.target;
+    const f = await s.open();
+    const hash = await s.hash(f);
+    // an exported pack holds the stored (already compressed) files under new names: they match by the stored file hash
+    if ((hash && (contents.has(hash) || inflight.has(hash))) || (!old && names.has(s.name)) || inflight.has(s.name)) {
+      count.same++;
+      return;
+    }
+    inflight.add(s.name);
     if (hash) inflight.add(hash);
     let row = null;
     try {
@@ -793,37 +1017,22 @@ async function uploadFiles(files) {
       const shash = await sha256Hex(blob).catch(() => null); // no hash: this upload just skips the duplicate check
       // From here to the push there is no await: set names are picked from what the list holds right now, so two
       // pictures sent at the same time never get the same new set.
-      let parsed = parseName(f.name, portrait);
-      let guessed = !!parsed.guessed;
-      delete parsed.guessed;
-      if (parsed.kind === 'char' && !parsed.set) {
-        const key = nextSetKey('other');
-        parsed.set = key;
-        parsed.name = key + '_neutral';
-        newSets.add(key);
-      } // a Korean file name cannot be a set key
-      let shadow = null;
-      if (parsed.shadowGender) {
-        shadow = parsed.shadowGender;
-        delete parsed.shadowGender;
-        app.setMeta[parsed.set] = Object.assign(app.setMeta[parsed.set] || {}, { gender: shadow, tier: 'generic' });
+      let label = { guessed: false, shadow: null };
+      // a replacement keeps every label of the old row (the player may have moved it by hand); its name is not read
+      if (old) {
+        const akeys = inheritKeys({ hash, shash }, old);
+        row = Object.assign({}, old, { id: r.id, file: f.name, hash, shash, akeys, createdAt: nowIso() });
+      } else {
+        label = labelNew(f.name, portrait);
+        row = Object.assign({ id: r.id, world: 'any', file: f.name, hash, shash, createdAt: nowIso() }, label.parsed);
       }
-      if (guessed && plan) {
-        const base = f.name.replace(/\.[^.]+$/, '');
-        guessed = false;
-        if (plan.kind === 'char') {
-          const key =
-            plan.group === 'one' ? (sharedKey = sharedKey || nextSetKey(plan.gender)) : nextSetKey(plan.gender);
-          parsed = { kind: 'char', set: key, emotion: 'neutral', name: key + '_neutral', tags: [] };
-          newSets.add(key);
-        } else if (plan.kind === 'scene') parsed = { kind: 'scene', name: base.toLowerCase(), tags: [] };
-        else parsed = { kind: 'fx', name: base.toLowerCase(), tags: plan.fx || ['dice'] };
-      }
-      row = Object.assign({ id: r.id, world: 'any', file: f.name, hash, shash, createdAt: nowIso() }, parsed);
       const page = IMGX.laneAssign(row.id, lane);
       app.images.push(row);
-      const mine = row,
-        setKey = parsed.set;
+      const added = [hash, shash].filter(h => h && !contents.has(h));
+      added.forEach(h => contents.add(h));
+      const newName = !names.has(f.name);
+      names.add(f.name);
+      const mine = row;
       row = null; // from here the save below owns the picture (and its rollback)
       unsaved++;
       const t1 = performance.now();
@@ -834,15 +1043,17 @@ async function uploadFiles(files) {
             async () => {
               time.save += performance.now() - t1;
               time.n++;
-              landed.push({ file: f.name, row: mine, guessed });
-              if (shadow)
-                await SETDOC(setKey)
-                  .set(app.setMeta[setKey])
+              landed.push({ file: f.name, row: mine, guessed: label.guessed, old });
+              if (label.shadow)
+                await SETDOC(mine.set)
+                  .set(app.setMeta[mine.set])
                   .catch(e => logErr('upload', e));
             },
             e => {
               app.images = app.images.filter(x => x !== mine); // the list write failed: the picture is not in the library
               IMGX.map.delete(mine.id);
+              added.forEach(h => contents.delete(h));
+              if (newName) names.delete(f.name);
               fail(f, e);
             },
           )
@@ -855,7 +1066,7 @@ async function uploadFiles(files) {
       }
       throw e;
     } finally {
-      inflight.delete(f.name);
+      inflight.delete(s.name);
       if (hash) inflight.delete(hash);
     }
   };
@@ -896,6 +1107,12 @@ async function uploadFiles(files) {
   } finally {
     window.removeEventListener('beforeunload', guard);
   }
+  let replaced = 0;
+  try {
+    replaced = await retireImages(new Map(landed.filter(x => x.old).map(x => [x.old.id, x.row.id])));
+  } catch (e) {
+    retireFailed(e);
+  }
   for (const key of newSets) {
     const m = (app.setMeta[key] = Object.assign(
       app.setMeta[key] || {},
@@ -919,7 +1136,22 @@ async function uploadFiles(files) {
     console.info('[upload]', msg);
     toast(msg, 6000);
   }
-  if (skipped) toast(T('Skipped {n} {n|image|images} already in the library', { n: skipped }));
+  if (replaced) toast(T('Replaced {n} {n|image|images}', { n: replaced }), 4000);
+  if (count.kept) toast(T('Kept {n} old {n|picture|pictures}', { n: count.kept }), 4000);
+  if (count.same) toast(T('Skipped {n} {n|image|images} already in the library', { n: count.same }));
+  if (count.twice)
+    toast(T('Skipped {n} {n|file|files} named like another file in this upload', { n: count.twice }), 4000);
+  if (unclear.size)
+    toast(
+      T('Skipped {n} {n|file|files} because several pictures in the library have {n|that name|those names}: {names}', {
+        n: unclear.size,
+        names: someNames(
+          [...unclear].map(s => s.name),
+          5,
+        ),
+      }),
+      6000,
+    );
   if (newSets.size) toast(T('Added as new sets: {sets}', { sets: [...newSets].join(', ') }), 4000);
   if (landed.length) {
     imgRecent = true;
@@ -928,6 +1160,8 @@ async function uploadFiles(files) {
     imgFilter = 'all';
   }
   renderImages();
+  // a zip's tags.json, now that its pictures are in; this job already holds the image lock
+  for (const t of tagFiles) await importTags({ text: async () => (await t.open()).text() });
   const guessed = landed.filter(x => x.guessed);
   if (guessed.length && !failed.length)
     openSheet(
@@ -1240,8 +1474,9 @@ export async function importTags(file) {
           .filter(Boolean);
   // only sets that have pictures here are used; a set in the file with no pictures uploaded is ignored (it would only
   // leave an empty set card behind and use up a database document)
-  const allSets = Object.entries(j.sets || {}),
-    setEntries = allSets.filter(([k]) => charSetsAll()[k]),
+  const sets = charSetsAll(),
+    allSets = Object.entries(j.sets || {}),
+    setEntries = allSets.filter(([k]) => sets[k]),
     setTagsIn = {};
   const replaceTags = j.merge_tags !== true; // the file's tags win; "merge_tags": true keeps the old ones too
   const imgHit = Object.keys(j.images || {}).filter(fn => findImg(fn)).length,
@@ -1343,8 +1578,8 @@ export async function importTags(file) {
   // a set's own tags go on every frame of that set; in replace mode a frame the file does not list keeps only them
   let nst = 0;
   for (const [k, st] of Object.entries(setTagsIn)) {
-    for (const x of app.images) {
-      if (x.kind !== 'char' || (x.set || x.name) !== k) continue;
+    for (const x of sets[k] || []) {
+      if (x.kind !== 'char') continue; // the file's backgrounds may have just made it one
       const own = replaceTags && !touched.has(x.id) ? [] : x.tags || [];
       x.tags = capTags([...st, ...own]);
       touched.add(x.id);
@@ -1440,6 +1675,7 @@ async function saveManifest() {
     worlds: x.worlds || [],
     world: x.world || 'any',
     variant: x.variant || '',
+    akeys: x.akeys,
   }));
   // a cover is an id, which a copy doesn't share, so it goes by its file's hash
   const sets = Object.fromEntries(
@@ -1589,26 +1825,16 @@ async function dedupeImages() {
     return;
   }
   const chosen = dups.filter((_, i) => sel.includes(pairs[i]));
-  app.settings.dupMap = app.settings.dupMap || {};
-  const redirect = new Map(chosen.map(x => [x.d.id, x.keep.id]));
-  const final = id => {
-    let t = id;
-    for (let i = 0; i < 20 && redirect.has(t); i++) t = redirect.get(t);
-    return t;
-  };
   let done = 0;
-  await inParallel(chosen, 6, async ({ d }) => {
-    say(T('Cleaning up {i}/{n}', { i: ++done, n: chosen.length }));
-    await deleteAsset(d.id);
-    app.settings.dupMap[d.id] = final(d.id);
-  });
-  const removed = new Set(chosen.map(x => x.d.id));
-  app.images = app.images.filter(i => !removed.has(i.id));
-  await IMGX.dropMany([...removed]).catch(e => noteIgnored('images-view: IMGX.dropMany', e));
-  for (const [a, b] of Object.entries(app.settings.dupMap)) if (redirect.has(b)) app.settings.dupMap[a] = final(b);
-  await saveSettings();
+  try {
+    done = await retireImages(new Map(chosen.map(x => [x.d.id, x.keep.id])), (i, n) =>
+      say(T('Cleaning up {i}/{n}', { i, n })),
+    );
+  } catch (e) {
+    retireFailed(e);
+  }
   say('');
-  toast(T('Cleaned up {n} {n|image|images}', { n: done }));
+  if (done) toast(T('Cleaned up {n} {n|image|images}', { n: done }));
   renderImages();
 }
 // asks a quick model what each untagged picture is; effect pictures (kind fx, e.g. the dice reveal) keep their kind

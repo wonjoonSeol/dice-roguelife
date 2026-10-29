@@ -35,6 +35,7 @@
   "Standalone version v{version}": "スタンドアロン版 v{version}",
   "Choose an AI provider and model in Settings to start playing.": "設定で AI プロバイダーとモデルを選ぶとプレイできます。",
   "Start the app with npm start, then reload this page.": "npm start でアプリを起動してから、このページを再読み込みしてください。",
+  "The server restarted after this page opened. Reload the page.": "このページを開いたあとにサーバーが再起動しました。ページを再読み込みしてください。",
   "Check the endpoint, model and limits in Settings.": "設定でエンドポイント、モデル、上限を確認してください。",
   "Authentication failed. Check your API key and access to this model.": "認証に失敗しました。API キーとこのモデルの利用権限を確認してください。",
   "The API account has insufficient credit or quota.": "API アカウントのクレジットまたは利用枠が不足しています。",

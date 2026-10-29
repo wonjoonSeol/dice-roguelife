@@ -47,6 +47,7 @@ import * as savesView from './saves-view.js';
 import * as memoryView from './memory-view.js';
 import * as rosterView from './roster-view.js';
 import * as imagesView from './images-view.js';
+import * as zip from './zip.js';
 
 // window.DR: the modules of this page, for the tests and for looking into a live game from the browser console.
 //   DR.app.state, DR.send('...'), DR.turnStore.pageMax = 900   any export of any module (modules' own bindings are read-only)
@@ -101,6 +102,7 @@ const MODULES = [
   memoryView,
   rosterView,
   imagesView,
+  zip,
 ];
 const originals = new Map();
 

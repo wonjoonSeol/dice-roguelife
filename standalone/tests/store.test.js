@@ -57,7 +57,10 @@ test('the server keeps saves and images across restarts, and images need the pag
     const png = new Uint8Array([137, 80, 78, 71]);
     const { id } = await (await s.call('/api/assets/upload', png, { 'Content-Type': 'image/png' })).json();
     assert.equal((await fetch(`${s.url}/assets/${id}`)).status, 403);
-    assert.equal((await s.call('/api/db', '{}', { 'X-DR-Token': 'wrong' })).status, 403);
+    // another start's token: the page is told to reload
+    const stale = await s.call('/api/db', '{}', { 'X-DR-Token': 'wrong' });
+    assert.equal(stale.status, 403);
+    assert.deepEqual(await stale.json(), { code: 'stale_page' });
     await s.stop({ keep: true });
 
     s = await openServer({ dataDir });

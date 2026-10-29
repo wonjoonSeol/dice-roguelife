@@ -847,7 +847,7 @@ db、sample、user、assets、downloads、artifact の機能をオンにして�
   </div>
 
   <h3 lang="ko">파일 이름 규칙</h3><h3 lang="en">File names</h3><h3 lang="ja">ファイル名</h3>
-  <figure class="wide"><img width="728" height="324" data-size-en="728x324" data-size-ko="728x304" data-size-ja="728x345" data-alt-en="In-app help: tags and file names" data-alt-ja="アプリ内のヘルプ：タグとファイル名" src="images/img-help-en.png" alt="앱 안의 도움말: 태그와 파일 이름" loading="lazy" style="max-width:46rem"><figcaption lang="ko">이미지 탭 맨 위의 <b>도움말: 태그와 파일 이름</b>에도 같은 내용이 있어요.</figcaption><figcaption lang="en">The same rules are in <b>Help: tags and file names</b> at the top of the Images tab.</figcaption><figcaption lang="ja">同じルールは画像タブの上の<b>ヘルプ：タグとファイル名</b>にもあります。</figcaption></figure>
+  <figure class="wide"><img width="728" height="414" data-size-en="728x414" data-size-ko="728x373" data-size-ja="728x434" data-alt-en="In-app help: tags and file names" data-alt-ja="アプリ内のヘルプ：タグとファイル名" src="images/img-help-en.png" alt="앱 안의 도움말: 태그와 파일 이름" loading="lazy" style="max-width:46rem"><figcaption lang="ko">이미지 탭 맨 위의 <b>도움말: 태그와 파일 이름</b>에도 같은 내용이 있어요.</figcaption><figcaption lang="en">The same rules are in <b>Help: tags and file names</b> at the top of the Images tab.</figcaption><figcaption lang="ja">同じルールは画像タブの上の<b>ヘルプ：タグとファイル名</b>にもあります。</figcaption></figure>
   <div class="tablewrap"><table lang="ko">
     <thead><tr><th>종류</th><th>이름</th><th>예</th></tr></thead>
     <tbody>
@@ -882,23 +882,26 @@ db、sample、user、assets、downloads、artifact の機能をオンにして�
       <tr><td>演出（ダイス）</td><td><code>dice.png</code> <code>dice_success.png</code> <code>dice_fail.png</code> <code>fx_*.png</code></td><td>大成功・大失敗のときだけ表示されます</td></tr>
     </tbody>
   </table></div>
-  <p lang="ko">표정은 <code>neutral smile joy anger sadness surprise smirk shy fear serious crying determined</code> 중 하나로 써요. 이름이 규칙에 맞지 않으면 올릴 때 물어봐요. 같은 파일(내용이나 이름이 같은 것)을 다시 올리면 건너뛰어요.</p><p lang="en">Use one of <code>neutral smile joy anger sadness surprise smirk shy fear serious crying determined</code> as the emotion. If a name doesn't follow the rules, the app asks when you upload. Uploading the same file again (same content or name) is skipped.</p><p lang="ja">表情は <code>neutral smile joy anger sadness surprise smirk shy fear serious crying determined</code> のどれかを使います。名前がルールに沿っていない場合は、アップロード時にアプリが確認します。同じファイル（内容か名前が同じ）をもう一度アップロードするとスキップされます。</p>
+  <p lang="ko">표정은 <code>neutral smile joy anger sadness surprise smirk shy fear serious crying determined</code> 중 하나로 써요. 이름이 규칙에 맞지 않으면 올릴 때 물어봐요. 같은 파일(내용이 같은 것)을 다시 올리면 건너뛰어요. 이름이 같고 내용이 다른 파일은 원래 그림을 바꿔요(아래 "잘못 등록된 이미지 고치기"). 그림을 zip으로 묶어 그대로 올려도 돼요. 폴더 안의 그림까지 다 들어가요. 두 폴더에 같은 이름의 그림이 있으면 폴더 이름이 앞에 붙어요(<code>alice/smile.png</code> → <code>alice_smile.png</code>).</p><p lang="en">Use one of <code>neutral smile joy anger sadness surprise smirk shy fear serious crying determined</code> as the emotion. If a name doesn't follow the rules, the app asks when you upload. Uploading the same file again (same content) is skipped. A file with the same name but different content replaces the old picture (see "Fixing mislabeled images" below). You can also upload a zip as is: the pictures in it go in, folders and all. A name found in two folders gets its folder's name in front (<code>alice/smile.png</code> becomes <code>alice_smile.png</code>).</p><p lang="ja">表情は <code>neutral smile joy anger sadness surprise smirk shy fear serious crying determined</code> のどれかを使います。名前がルールに沿っていない場合は、アップロード時にアプリが確認します。同じファイル（内容が同じもの）をもう一度アップロードするとスキップされます。名前が同じで内容が違うファイルは元の画像を差し替えます（下の「間違ったラベルを直す」）。画像をzipにまとめてそのままアップロードしてもかまいません。フォルダーの中の画像まで入ります。2つのフォルダーに同じ名前の画像があれば、フォルダー名が前に付きます（<code>alice/smile.png</code> → <code>alice_smile.png</code>）。</p>
 
   <h3 lang="ko">tags.json</h3><h3 lang="en">tags.json</h3><h3 lang="ja">tags.json</h3>
   <ul lang="ko">
     <li>이미지 탭 → <b>tags.json 가져오기</b>를 누르면 세트 정보와 태그를 한 번에 넣을 수 있어요.</li>
+    <li>tags.json이 든 zip을 <b>이미지 올리기</b>로 그대로 올리면 그림을 올린 다음 그 tags.json도 바로 가져와요(폴더 안에 있어도 되고, 여럿이면 가장 바깥 것). 이 버튼을 따로 누르지 않아도 돼요.</li>
     <li><b>sets</b>: gender(male/female/other), worlds, role, vibe, look, tier(extra/minor/major), tags, name, aliases, cover(표지 그림의 파일 이름)</li>
     <li><b>images</b>: 파일 이름별 emotion, tags, worlds</li>
     <li><b>backgrounds</b>: 파일 이름별 place, time, mood, tags, worlds</li>
     <li>태그는 이렇게 써요. 묘사는 영어 소문자로 3~6개 적고, 고유명사만 원래 언어로 적어요. 정체 태그는 <code>key:value</code> 형태예요 (예: <code>faction:사천당가</code>).</li>
   </ul><ul lang="en">
     <li>Images tab → <b>Import tags.json</b> adds set details and tags in one go.</li>
+    <li>Upload a zip that holds a tags.json as is with <b>Upload images</b>, and the tags.json is imported right after the pictures (it may sit in a folder; with several, the outermost one counts). No need to press this button for it.</li>
     <li><b>sets</b>: gender (male/female/other), worlds, role, vibe, look, tier (extra/minor/major), tags, name, aliases, cover (file name of the cover picture)</li>
     <li><b>images</b>: emotion, tags and worlds per file name</li>
     <li><b>backgrounds</b>: place, time, mood, tags and worlds per file name</li>
     <li>Tags: 3 to 6 descriptive tags in lowercase English; only proper nouns stay in their own language. Identity tags look like <code>key:value</code> (e.g. <code>faction:Tang Clan</code>).</li>
   </ul><ul lang="ja">
     <li>画像タブ → <b>tags.jsonを読み込む</b>で、セットの情報とタグを一度に追加できます。</li>
+    <li>tags.json を含むzipを<b>画像をアップロード</b>でそのままアップロードすると、画像のあとにその tags.json もすぐ読み込まれます（フォルダーの中でもよく、複数あれば一番外側のもの）。このボタンを別に押す必要はありません。</li>
     <li><b>sets</b>：gender（male/female/other）、worlds、role、vibe、look、tier（extra/minor/major）、tags、name、aliases、cover（表紙にする画像のファイル名）</li>
     <li><b>images</b>：ファイル名ごとの emotion、tags、worlds</li>
     <li><b>backgrounds</b>：ファイル名ごとの place、time、mood、tags、worlds</li>
@@ -1188,21 +1191,21 @@ tags.json（キーは新しいファイル名）
     <li>소속(문파, 가문, 회사)을 태그로 만들고 싶다면 <b>소속 태그 뽑기</b>를 누르세요. 적용하기 전에 목록을 보여 줘요.</li>
     <li>분류를 AI가 다시 하게 하고 싶다면 <b>자동 분류</b>를 누르세요.</li>
     <li>같은 그림이 두 번 올라갔다면 <b>중복 정리</b>를 누르세요. 먼저 올린 쪽이 남아요. 비슷하기만 한 그림은 체크가 풀린 채로 나오니, 보고 같은 것만 체크하세요.</li>
-    <li><b>그림을 바꾸고 싶다면</b>, 같은 이름이나 같은 내용의 파일은 건너뛰기 때문에 그냥 다시 올리면 안 돼요. 카드에서 <b>삭제</b>한 뒤 새 그림을 올리세요. 삭제한 다음에는 같은 파일 이름도 쓸 수 있어요.</li>
+    <li><b>그림을 바꾸고 싶다면</b>(고친 그림 등), 새 파일을 같은 이름으로 올리고 <b>새 그림으로 바꾸기</b>를 고르세요. 확장자와 대소문자는 달라도 돼요(<code>a.png</code>가 <code>a.webp</code>를 바꿔요). 세트, 표정, 태그, 세계, 표지가 그대로 이어지고 지난 턴에도 새 그림이 보여요. 그 이름의 그림이 여러 장이면 건너뛰니, 그때는 카드에서 먼저 <b>삭제</b>하세요.</li>
   </ul><ul lang="en">
     <li>Wrong kind, set or emotion? Change it in the card's dropdowns.</li>
     <li>Wrong tags? Fix them in the tag field or remove one with ✕. <b>Tags to English</b> converts every non-English tag at once.</li>
     <li>Want affiliations (sect, house, company) as tags? Press <b>Find faction tags</b>; it shows you the list before applying it.</li>
     <li>Want the AI to sort them again? Press <b>Auto-sort</b>.</li>
     <li>Uploaded the same picture twice? Press <b>Clean up duplicates</b>; the first upload stays. Pictures that only look the same come unchecked: compare them and check the ones that match.</li>
-    <li><b>To replace a picture</b>, don't just upload it again: files with the same name or content are skipped. <b>Delete</b> it from its card first, then upload the new one. After deleting, the same file name is free again.</li>
+    <li><b>To replace a picture</b> (a touched-up one, say), upload the new file under the same name and choose <b>Replace them</b>. The extension and upper or lower case may differ (<code>a.png</code> replaces <code>a.webp</code>). Its set, emotion, tags, worlds and cover carry over, and past turns show the new picture. If several pictures have that name it is skipped; then <b>Delete</b> the old one from its card first.</li>
   </ul><ul lang="ja">
     <li>種類、セット、表情が違う？ カードのドロップダウンで変えてください。</li>
     <li>タグが違う？ タグ欄で直すか、✕で1つ消します。<b>タグを英語に</b>で、英語以外のタグを一度に変換します。</li>
     <li>所属（宗派、家門、会社）をタグにしたい？ <b>勢力タグ抽出</b>を押すと、適用する前に一覧を見せてくれます。</li>
     <li>AIにもう一度分類させたい？ <b>自動分類</b>を押します。</li>
     <li>同じ画像を2回アップロードした？ <b>重複整理</b>を押すと、最初にアップロードしたものが残ります。似ているだけの画像はチェックが外れた状態で出るので、見比べて同じものだけチェックしてください。</li>
-    <li><b>画像を差し替える</b>ときは、そのままアップロードし直さないでください。同じ名前や内容のファイルはスキップされます。先にカードから<b>削除</b>してから、新しい画像をアップロードします。削除すると同じファイル名がまた使えます。</li>
+    <li><b>画像を差し替える</b>ときは（手直しした画像など）、新しいファイルを同じ名前でアップロードし、<b>差し替える</b>を選びます。拡張子や大文字小文字は違ってもかまいません（<code>a.png</code> が <code>a.webp</code> を差し替えます）。セット、表情、タグ、世界、表紙はそのまま引き継がれ、過去のターンにも新しい画像が表示されます。同じ名前の画像が複数あるとスキップされるので、その場合は先にカードから<b>削除</b>してください。</li>
   </ul>
 </section>
 
@@ -1290,21 +1293,21 @@ tags.json（キーは新しいファイル名）
       <li><a href="https://github.com/wonjoonSeol/dice-roguelife/releases/download/free-pack-v1/sample-pack.zip">샘플 팩 받기 (sample-pack.zip)</a>: 그림자 이미지 6장과 태그 파일이 한 파일에 들어 있어요. 그림자는 제가 직접 만든 거라 자유롭게 써도 돼요.</li>
       <li><a href="https://github.com/wonjoonSeol/dice-roguelife/releases/download/free-pack-v1/free_and_generated_tags.json">태그 파일만 받기 (free_and_generated_tags.json)</a></li>
     </ul>
-    <p>압축을 풀고 이미지 탭에서 <b>이미지 올리기</b>로 이미지를 올린 다음, <b>tags.json 가져오기</b>를 눌러요. 올린 이미지에 해당하는 태그만 적용되고, 없는 이미지의 태그는 무시돼요. 무료 팩 이미지는 들어 있지 않아요. 작가 페이지에서 직접 받아 주세요.</p>
+    <p>이미지 탭에서 <b>이미지 올리기</b>로 zip을 그대로 올리면 그림이 들어가고 안의 tags.json도 바로 적용돼요(압축을 풀어 그림을 올린 뒤 <b>tags.json 가져오기</b>를 눌러도 같아요). 올린 이미지에 해당하는 태그만 적용되고, 없는 이미지의 태그는 무시돼요. 무료 팩 이미지는 들어 있지 않아요. 작가 페이지에서 직접 받아 주세요.</p>
   </div><div class="callout" lang="en">
     <b class="label">Sample pack, ready to use</b>
     <ul>
       <li><a href="https://github.com/wonjoonSeol/dice-roguelife/releases/download/free-pack-v1/sample-pack.zip">Download the sample pack (sample-pack.zip)</a>: 6 shadow images and a tag file in one download. I made the shadows myself, so use them freely.</li>
       <li><a href="https://github.com/wonjoonSeol/dice-roguelife/releases/download/free-pack-v1/free_and_generated_tags.json">Tag file only (free_and_generated_tags.json)</a></li>
     </ul>
-    <p>Unzip it, upload the images with <b>Upload images</b> in the Images tab, then press <b>Import tags.json</b>. Only the tags for images you uploaded apply; the rest are ignored. The free pack images aren't included; get them from the artists' pages.</p>
+    <p>Upload the zip as is with <b>Upload images</b> in the Images tab: its pictures go in and its tags.json is applied right after (unzipping, uploading the images and pressing <b>Import tags.json</b> does the same). Only the tags for images you uploaded apply; the rest are ignored. The free pack images aren't included; get them from the artists' pages.</p>
   </div><div class="callout" lang="ja">
     <b class="label">すぐ使えるサンプルパック</b>
     <ul>
       <li><a href="https://github.com/wonjoonSeol/dice-roguelife/releases/download/free-pack-v1/sample-pack.zip">サンプルパックをダウンロード（sample-pack.zip）</a>：シャドウ画像6枚とタグファイルをまとめてダウンロードできます。シャドウは私が自分で作ったので、自由に使ってください。</li>
       <li><a href="https://github.com/wonjoonSeol/dice-roguelife/releases/download/free-pack-v1/free_and_generated_tags.json">タグファイルだけ（free_and_generated_tags.json）</a></li>
     </ul>
-    <p>解凍して、画像タブの<b>画像をアップロード</b>で画像を上げ、<b>tags.jsonを読み込む</b>を押します。アップロードした画像のタグだけが適用され、残りは無視されます。無料パックの画像は含まれていないので、作者のページから入手してください。</p>
+    <p>画像タブの<b>画像をアップロード</b>でzipをそのままアップロードすると、画像が入り、中の tags.json もすぐ適用されます（解凍して画像を上げ、<b>tags.jsonを読み込む</b>を押しても同じです）。アップロードした画像のタグだけが適用され、残りは無視されます。無料パックの画像は含まれていないので、作者のページから入手してください。</p>
   </div>
 
 

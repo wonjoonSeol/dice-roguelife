@@ -2,43 +2,10 @@
 // image pack, or the same files uploaded) past turns show them again, found by content (img.keys in the save file).
 import { unzipSync } from 'fflate';
 import { test, expect } from './support/test.js';
-import { check, claudeMock, same, startLife } from './support/harness.js';
-
-// a file store that keeps what is uploaded and serves it at /_blob/<id>; each install mints its own ids (tag + n)
-const STORE = String.raw`tag=>{
-  window.__blobs={};window.__files={};let n=0;
-  DR.platform.assets={
-    upload:async blob=>{const id=tag+(++n);window.__blobs[id]=blob;return{id}},
-    list:async()=>({assets:[],files:0,usage:{files:0,maxFiles:5000,bytes:0,maxBytes:1e9}}),
-    delete:async()=>{},
-  };
-  const f=window.fetch;
-  window.fetch=(u,...a)=>{const b=String(u).startsWith('/_blob/')&&window.__blobs[String(u).slice(7)];
-    return String(u).startsWith('/_blob/')?Promise.resolve(b?new Response(b):new Response('',{status:404})):f(u,...a)};
-  DR.platform.limits=Object.assign({},DR.platform.limits,{images:true});
-  DR.useCapability=async c=>c==='downloads'?{save:async({filename,data})=>{window.__files[filename]=data}}:null;
-}`;
-
-// picks files ([name, base64]) in the images tab's upload button
-const UPLOAD = String.raw`list=>{
-  const TYPE={webp:'image/webp',png:'image/png',jpg:'image/jpeg'};
-  const dt=new DataTransfer();
-  for(const [name,b64] of list)dt.items.add(new File([Uint8Array.from(atob(b64),c=>c.charCodeAt(0))],name,{type:TYPE[name.split('.').pop()]}));
-  const inp=document.querySelector('#upl');inp.files=dt.files;inp.dispatchEvent(new Event('change'));
-}`;
-const B64 = String.raw`async blob=>{const u8=new Uint8Array(await blob.arrayBuffer());let s='';
-  for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode(...u8.subarray(i,i+0x8000));return btoa(s)}`;
+import { ASSET_STORE, B64, check, claudeMock, DRAW, PICK_FILES, same, startLife } from './support/harness.js';
 
 // four distinct png pictures named the way the upload reads them; they are stored as webp, so the stored file differs
-const PICTURES = String.raw`async()=>{
-  const draw=(w,h,hue)=>{const cv=document.createElement('canvas');cv.width=w;cv.height=h;const c=cv.getContext('2d');
-    c.fillStyle='hsl('+hue+',60%,50%)';c.fillRect(0,0,w,h);c.fillStyle='#111';c.fillRect(w/4,h/4,w/3,h/5);
-    return new Promise(r=>cv.toBlob(r,'image/png'))};
-  const spec=[['female1_smile.png',60,100,10],['male1_neutral.png',60,100,120],['bg_street_day.png',120,70,200],['bg_market_night.png',120,70,300]];
-  const out=[];
-  for(const [nm,w,h,hue] of spec)out.push([nm,await (${B64})(await draw(w,h,hue))]);
-  return out;
-}`;
+const PICTURES = `(${DRAW})([['female1_smile.png',10,60,100],['male1_neutral.png',120,60,100],['bg_street_day.png',200,120,70],['bg_market_night.png',300,120,70]])`;
 
 // the content keys a save file's turns carry, by turn
 const KEYS = String.raw`async text=>{const f=JSON.parse(text);const j=await DR.gunzipBytes(DR.z85dec(f.d,f.n));
@@ -51,7 +18,7 @@ const SHOWN = String.raw`list=>Object.fromEntries(list.map(i=>{const t=DR.app.tu
 async function upload(pg, files) {
   await pg.click('[data-tab="images"]');
   await pg.waitForSelector('#upl', { state: 'attached' });
-  await pg.evaluate(`(${UPLOAD})(${JSON.stringify(files)})`);
+  await pg.evaluate(`(${PICK_FILES})(${JSON.stringify(files)})`);
   await pg.waitForFunction(`DR.app.images.length===${files.length}`, null, { timeout: 30000 });
   await pg.waitForFunction("document.querySelector('#uplStat').textContent===''", null, { timeout: 30000 });
 }
@@ -60,14 +27,14 @@ async function upload(pg, files) {
 async function firstInstall(game) {
   const { pg, errs } = await game(claudeMock(), { size: [900, 900] });
   await pg.waitForSelector('#rollBtn');
-  await pg.evaluate(`(${STORE})('a')`);
+  await pg.evaluate(`(${ASSET_STORE})('a')`);
   await startLife(pg);
   for (const k of [0, 1]) {
     await pg.fill('#input', `간다 ${k}`);
     await pg.press('#input', 'Enter');
     await pg.waitForFunction('DR.isIdle()', null, { timeout: 15000 });
   }
-  const originals = await pg.evaluate(`(${PICTURES})()`);
+  const originals = await pg.evaluate(PICTURES);
   await upload(pg, originals);
   check(
     errs,
@@ -137,7 +104,7 @@ async function firstInstall(game) {
 async function secondInstall(game, A, files, { reencoded = false } = {}) {
   const { pg, errs } = await game(claudeMock(), { size: [900, 900] });
   await pg.waitForSelector('#rollBtn');
-  await pg.evaluate(`(${STORE})('b')`);
+  await pg.evaluate(`(${ASSET_STORE})('b')`);
   await pg.evaluate(`DR.importSaveFile({text:async()=>${JSON.stringify(A.save)}})`);
   await pg.waitForFunction('DR.app.saves.length===1', null, { timeout: 20000 });
   await pg.evaluate('DR.openSave(DR.app.saves[0].id)');

@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { startLife } from '../../tests/support/harness.js';
+import { DRAW, PICK_FILES, startLife } from '../../tests/support/harness.js';
 import { buildPage } from '../page.js';
 import { openServer, tempDir } from './support.js';
 
@@ -207,4 +207,31 @@ test('the image list the game saves for copies comes back intact', async ({ page
     return (await fetch(DR.imgUrl(id))).json();
   });
   expect(back).toEqual({ kind: 'dr-image-manifest', images: [] });
+});
+
+test('a page opened before the server restarted is told to reload, and its upload stops at once', async ({ page }) => {
+  await configure(page);
+  await page.click('[data-tab="images"]');
+  await page.waitForSelector('#upl', { state: 'attached' });
+  const files = await page.evaluate(
+    `(${DRAW})(${JSON.stringify([...Array(10)].map((_, i) => [`bg_x${i}_day.png`, i * 30, 120, 70]))})`,
+  );
+  const before = models.length;
+  await page.evaluate(() => {
+    window.DR_SERVER_TOKEN = 'from-an-earlier-start'; // what a restart leaves this page holding
+    window.__uploads = 0;
+    const f = window.fetch;
+    window.fetch = (u, ...a) => {
+      if (String(u).includes('/api/assets/upload')) window.__uploads++;
+      return f(u, ...a);
+    };
+  });
+  await page.evaluate(`(${PICK_FILES})(${JSON.stringify(files)})`);
+  await page.locator('.upl-failed').waitFor({ timeout: 30000 });
+  const lines = (await page.locator('.upl-failed').textContent()).split('\n').filter(Boolean);
+  expect(lines.length, 'only the pictures already on their way failed').toBeLessThanOrEqual(3);
+  for (const l of lines) expect(l).toContain('The server restarted after this page opened. Reload the page.');
+  expect(await page.evaluate(() => window.__uploads), 'one try each, and no more pictures sent').toBe(lines.length);
+  expect(await page.evaluate(() => DR.app.images.length)).toBe(0);
+  expect(models.length, 'no model was called').toBe(before);
 });

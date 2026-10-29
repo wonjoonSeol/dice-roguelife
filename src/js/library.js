@@ -6,6 +6,7 @@ import { app } from './app.js';
 import { saveSettings } from './settings.js';
 import { logErr } from './diag.js';
 import {
+  aliasKeys,
   imagesChanged,
   imgUrl,
   picIds,
@@ -145,13 +146,19 @@ export const IMGX = {
     });
   },
   // Take pictures out of the list (they must already be gone from app.images): one write per page, pages side by side.
+  // A failed write puts their page entries back and throws; the caller puts its rows back.
   async dropMany(ids) {
-    const pages = new Set();
+    const was = new Map();
     for (const id of ids) {
-      if (this.map.has(id)) pages.add(this.map.get(id));
+      if (this.map.has(id)) was.set(id, this.map.get(id));
       this.map.delete(id);
     }
-    await Promise.all([...pages].map(p => this.save(p)));
+    try {
+      await Promise.all([...new Set(was.values())].map(p => this.save(p)));
+    } catch (e) {
+      for (const [id, p] of was) this.map.set(id, p);
+      throw e;
+    }
   },
   async clear() {
     const ps = [...new Set(this.map.values())];
@@ -500,7 +507,7 @@ export async function fillHashes(say, label, rows = app.images, save = true) {
   const ok = todo.filter(x => x.shash).map(x => x.id);
   if (save && ok.length) await IMGX.flush(ok, (i, t) => say(T('Saving {i}/{n}', { i, n: t })));
 }
-const KEYS_PER_PICTURE = 4; // this install's two first, then the ones it came with
+const KEYS_PER_PICTURE = 4; // this install's two first, then those of pictures it replaced, then the ones it came with
 // the turns as a save file carries them: each img with its pictures' content keys by id (ARCHITECTURE.md)
 export async function withPicKeys(turns, say) {
   if (imgError)
@@ -516,7 +523,8 @@ export async function withPicKeys(turns, say) {
     delete img.keys;
     for (const id of new Set(picIds(t.img))) {
       // the keys it came with stay: another install may hold only the files they match
-      const k = [...new Set([...picKeys(turnImg(t.img, id) || {}), ...turnKeys(t.img, id)])].slice(0, KEYS_PER_PICTURE);
+      const x = turnImg(t.img, id) || {};
+      const k = [...new Set([...picKeys(x), ...aliasKeys(x), ...turnKeys(t.img, id)])].slice(0, KEYS_PER_PICTURE);
       if (k.length) (img.keys = img.keys || {})[id] = k;
     }
     return Object.assign({}, t, { img });
