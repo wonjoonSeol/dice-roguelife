@@ -39,7 +39,8 @@ export default {
   // the keys of a pasted character list (roster.js), spaces removed
   roster: {
     name: /^(?:name|fullname)$/,
-    aliases: /^(?:alias|aliases|aka|epithet|nickname|nicknames|othernames?)$/,
+    aliases: /^(?:alias|aliases|aka|nickname|nicknames|othernames?)$/,
+    epithet: /^epithets?$/,
     faction: /^(?:faction|affiliation|sect|clan|house|group|organi[sz]ation)$/,
     gender: /^(?:gender|sex)$/,
     position: /^(?:position|title|role|job|occupation)$/,

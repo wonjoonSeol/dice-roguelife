@@ -13,10 +13,47 @@ export const ENTRY_LABEL = Object.freeze({
 
 export const MONEY = Object.freeze({ WON: 'won', YEN: 'yen', DOLLARS: 'dollars' }); // a modern life's money
 
-// a save's prose style (state.style): prompts.json styles holds each one's text, none for the default
-export const STYLE = Object.freeze({ DEFAULT: 'default', JINYONG: 'jinyong' });
+// a save's game mode (state.mode), fixed when it starts: the rolled roguelike, or a story from the player's own
+// scenario note (state.scenarioId)
+export const MODE = Object.freeze({ ROGUELIKE: 'roguelike', SCENARIO: 'scenario' });
+export const MODES = Object.freeze(Object.values(MODE));
+export const MODE_LABEL = Object.freeze({ roguelike: N_('Dice roguelike'), scenario: N_('Scenario') });
+// a library note's job (note.type): ticked and sent every turn, a scenario, a prose style, character sheets to import.
+// A note without one is general. Only the pickers go by it; a ticked note is sent whatever its type
+export const NOTE_TYPE = Object.freeze({ GENERAL: 'general', SCENARIO: 'scenario', STYLE: 'style', CAST: 'cast' });
+export const NOTE_TYPES = Object.freeze(Object.values(NOTE_TYPE));
+export const NOTE_TYPE_LABEL = Object.freeze({
+  general: N_('General'),
+  scenario: N_('Scenario'),
+  style: N_('Prose style'),
+  cast: N_('Cast'),
+});
+// A scenario save's extras (state.addons): the game's own systems it takes on, each one bringing only its own prompt
+// blocks and reply fields. ext is the world add-on of its world chip (world-ext.js), named by the add-on itself
+export const ADDON = Object.freeze({
+  ADMIN: 'admin',
+  EXT: 'ext',
+  DICE: 'dice',
+  LUCK: 'luck',
+  WIDGETS: 'widgets',
+  GROWTH: 'growth',
+});
+export const ADDONS = Object.freeze(Object.values(ADDON));
+export const ADDON_LABEL = Object.freeze({
+  admin: N_('ADMIN (constellation) commentary'),
+  dice: N_('🎲 Dice checks: risky choices show a chance and a d100 decides'),
+  luck: N_('Luck events: jackpot, doom and daily luck'),
+  widgets: N_('Widgets on their own: news or a board after a big event'),
+  growth: N_('Growth pace from the ⚙ settings'),
+});
+// the world id of a scenario save that picked no world: every picture fits it, and its character list is kept under it
+export const SCENARIO_WORLD = 'scenario';
+
+// a save's prose style (state.style): prompts.json styles holds each one's text, none for the default; note is a
+// library note's text (state.styleNoteId)
+export const STYLE = Object.freeze({ DEFAULT: 'default', JINYONG: 'jinyong', NOTE: 'note' });
 export const STYLES = Object.freeze(Object.values(STYLE));
-export const STYLE_LABEL = Object.freeze({ default: N_('Default'), jinyong: N_('Jin Yong') });
+export const STYLE_LABEL = Object.freeze({ default: N_('Default'), jinyong: N_('Jin Yong'), note: N_('From a note') });
 
 export const STANCE = Object.freeze({ INDIFFERENT: 'indifferent', RIVAL: 'rival', HOSTILE: 'hostile', ALLY: 'ally' });
 export const STANCES = Object.freeze(Object.values(STANCE)); // the order data.js STANCE_P weighs them in

@@ -29,7 +29,8 @@ export default {
   // the keys of a pasted character list (roster.js), spaces removed
   roster: {
     name: /^(?:名前|氏名)$/,
-    aliases: /^(?:別名|二つ名|愛称|あだ名)$/,
+    aliases: /^(?:別名|愛称|あだ名)$/,
+    epithet: /^(?:二つ名|異名)$/,
     faction: /^(?:所属|流派|門派|勢力|陣営|家門)$/,
     gender: /^性別$/,
     position: /^(?:役職|身分|地位|立場|役割)$/,

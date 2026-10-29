@@ -2678,6 +2678,47 @@ html.discreet .sk {
   flex-direction: column;
   gap: 14px;
 }
+/* the form shows one game mode's parts: a scenario's (sc) or the roguelike's */
+.newlife:not(.sc) .sc-only,
+.newlife.sc .rl-only {
+  display: none;
+}
+/* the note picker under the prose style chips */
+.style-note {
+  margin-top: 8px;
+}
+/* note types: the tag on a row, the library's groups and filter, a picker's other notes, the editor's head */
+.note-type {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 11px;
+  color: var(--sub);
+  white-space: nowrap;
+}
+.note-group {
+  margin: 10px 0 2px;
+  font-size: 12px;
+  color: var(--sub);
+}
+.note-filter {
+  margin: 4px 0 6px;
+}
+.other-notes summary {
+  font-size: 12.5px;
+  color: var(--sub);
+  cursor: pointer;
+  margin: 4px 0;
+}
+.other-notes[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.note-head {
+  gap: 8px;
+  align-items: flex-end;
+}
 .newlife h2 {
   font-family: var(--display);
   font-weight: 400;
@@ -4448,4 +4489,50 @@ textarea.mem-edit {
 /* a story picture opens full size on a tap (log.js big) */
 #log [data-big] {
   cursor: zoom-in;
+}
+
+/* a setting that only the dice roguelike reads, not scenario games */
+.only-note {
+  font-size: 0.85em;
+  margin-left: 4px;
+}
+
+/* the last prompt, as sent */
+.prompt-view {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font:
+    12px/1.5 ui-monospace,
+    Menlo,
+    monospace;
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--panel2);
+  padding: 10px;
+  border-radius: 8px;
+}
+
+/* the world add-on leads the extras, and its name glows like circulating inner power while it is on */
+.addon-ext:has(input:checked) {
+  color: #f3dc9a;
+  animation: qi-glow 2.4s ease-in-out infinite;
+}
+@keyframes qi-glow {
+  0%,
+  100% {
+    text-shadow:
+      0 0 4px rgba(214, 178, 94, 0.55),
+      0 0 10px rgba(120, 200, 170, 0.25);
+  }
+  50% {
+    text-shadow:
+      0 0 8px rgba(214, 178, 94, 0.95),
+      0 0 18px rgba(120, 200, 170, 0.5);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .addon-ext:has(input:checked) {
+    animation: none;
+    text-shadow: 0 0 6px rgba(214, 178, 94, 0.8);
+  }
 }

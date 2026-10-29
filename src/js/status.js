@@ -4,7 +4,8 @@ import { locale, N_, T } from './i18n.js';
 import { SKILL_SRC_LABEL } from './enums.js';
 import { moneyText, powerGrade, STAT_LABEL, SUB_STATS, tierRank } from './data.js';
 import { app } from './app.js';
-import { itemBonus, statusVisible, TITLES_MAX, titlesOn } from './rules.js';
+import { isScenario, itemBonus, statusVisible, TITLES_MAX, titlesOn } from './rules.js';
+import { scenarioName } from './notes.js';
 import { openSheet } from './sheet.js';
 import { persist } from './persistence.js';
 import { toggleTitle } from './log.js';
@@ -30,6 +31,11 @@ export function renderStrip() {
   const turnNo = app.state.turnNo != null ? app.state.turnNo : app.turns.filter(t => t.kind === 'ai').length;
   const el = $('#strip');
   el.classList.remove('hidden');
+  if (isScenario()) {
+    // no grade, numbers or condition: the scenario keeps its own
+    el.innerHTML = `<div class="who">${esc(l.name)}${X.ladder ? `<span class="realm">${T(X.ladder.steps[app.state.ladder])}</span>` : ''}<span class="meta">${T('{scenario}, turn {turn}', { scenario: esc(scenarioName()), turn: turnNo })}</span></div>`;
+    return;
+  }
   const meta = T('Age {age}, {world}, life {life}, turn {turn}', {
     age: s.age,
     world: esc(l.world.name),
@@ -66,8 +72,60 @@ function extSection(X) {
 }
 const STATUS_ORNAMENT =
   '<svg class="orn" viewBox="0 0 56 22" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M1 21 C1 8 8 1 21 1 M1 21 C1 14 4 9 9 6 M1 21 C6 21 10 18 12 14 M14 3 c3 -1 6 1 6 4 M4 17 c1 -3 4 -5 7 -5"/><circle cx="22" cy="6" r="1.2" fill="currentColor"/><circle cx="8" cy="20" r="1.2" fill="currentColor"/></svg>';
+const corners = () =>
+  ['tl', 'tr', 'bl', 'br'].map(c => STATUS_ORNAMENT.replace('class="orn"', `class="orn ${c}"`)).join('');
+// A scenario save's window: where the story stands, and each list its story keeps once it has something (no grades,
+// race, standing or past lives)
+function scenarioStatus() {
+  const st = app.state,
+    l = st.life,
+    s = st.stats,
+    E = st.energy,
+    place = st.clock.place;
+  const sec = (title, body) =>
+    body ? `<div class="sw-line"></div><div class="sw-sec"><h4>${T(title)}</h4>${body}</div>` : '';
+  const card = (name, sub, note) =>
+    `<div class="sk"><div><b>${esc(name)}</b>${sub ? `<span class="src">${esc(sub)}</span>` : ''}${note ? `<p>${esc(note)}</p>` : ''}</div></div>`;
+  const stats =
+    st.statsUsed || E
+      ? `<div class="sw-grid sw-grid-main"><div><small>HP</small><b>${fmt(s.hp)} / ${fmt(s.maxHp)}</b></div>${E ? `<div><small>${esc(E.name)}</small><b>${fmt(E.cur)} / ${fmt(E.max)}</b></div>` : ''}<div><small>${T(STAT_LABEL.gold)}</small><b>${esc(moneyText(s.gold, l))}</b></div><div><small>${T(STAT_LABEL.fame)}</small><b>${fmt(s.fame)}</b></div></div><div class="sw-subs">${SUB_STATS.map(([k, label]) => `<span><span class="sw-label">${T(label)}</span><b>${s[k] || 0}</b></span>`).join('')}</div>`
+      : '';
+  const skills = st.skills
+    .map(k => card(k.name, `Lv.${k.lv || 1}${k.cost ? ', ' + T('Cost {n}%', { n: k.cost }) : ''}`, k.desc))
+    .join('');
+  const items = (st.items || [])
+    .map(it =>
+      card(
+        it.name,
+        [it.qty > 1 ? 'x' + it.qty : '', (st.equipped || []).includes(it.name) ? T('Equipped') : '']
+          .filter(Boolean)
+          .join(', '),
+        it.note,
+      ),
+    )
+    .join('');
+  const quests = st.quests
+    .filter(q => q.status === 'active')
+    .map(q => card(q.title, '', q.note))
+    .join('');
+  const ledger = Object.entries(st.ledger || {})
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
+    .join('');
+  const titles = (st.titles || []).map(t => `<span class="sw-chip">${esc(t)}</span>`).join('');
+  openSheet(
+    `<div class="sw">${corners()}<span class="xx" role="button" tabindex="0" aria-label="${T('Close')}" data-close>✕</span>
+    <div class="sw-title">${T('Status Window')}</div>
+    <div class="sw-head"><div><div class="kv"><span>${T('Name')}</span><span>${esc(l.name)}</span></div>
+      <div class="kv"><span>${T('Scenario')}</span><span>${esc(scenarioName())}</span></div>
+      ${place ? `<div class="kv"><span>${T('Place')}</span><span>${esc(place)}</span></div>` : ''}</div></div>
+    ${extSection(worldExt())}${sec('STATS', stats)}${sec('SKILLS', skills && `<div class="sw-scroll">${skills}</div>`)}${sec('Inventory', items && `<div class="sw-scroll">${items}</div>`)}${sec('QUESTS', quests && `<div class="sw-scroll">${quests}</div>`)}${sec('LEDGER', ledger && `<dl class="sw-kv sw-kv-loose">${ledger}</dl>`)}${sec('TITLES', titles && `<div class="sw-chips">${titles}</div>`)}${sec('NOW', st.stateNote && `<p class="sw-state">${esc(st.stateNote)}</p>`)}
+  </div><div class="row sw-actions"><button class="btn" data-close>${T('Close')}</button></div>`,
+    { center: true, wide: true },
+  );
+}
 export function openStatus() {
   if (!app.state) return;
+  if (isScenario()) return scenarioStatus();
   const l = app.state.life,
     X = worldExt();
   const SV = statusVisible();
@@ -93,7 +151,7 @@ export function openStatus() {
       .map(q => `<div class="sw-q"><div><div>${esc(q.title)}</div>${q.note ? `<p>${esc(q.note)}</p>` : ''}</div></div>`)
       .join('') || none;
   openSheet(
-    `<div class="sw">${STATUS_ORNAMENT.replace('class="orn"', 'class="orn tl"')}${STATUS_ORNAMENT.replace('class="orn"', 'class="orn tr"')}${STATUS_ORNAMENT.replace('class="orn"', 'class="orn bl"')}${STATUS_ORNAMENT.replace('class="orn"', 'class="orn br"')}<span class="xx" role="button" tabindex="0" aria-label="${T('Close')}" data-close>✕</span>
+    `<div class="sw">${corners()}<span class="xx" role="button" tabindex="0" aria-label="${T('Close')}" data-close>✕</span>
     <div class="sw-title">${T('Status Window')}</div>
     <div class="sw-head">
       <div><div class="kv"><span>${T('Name')}</span><span>${esc(l.name)} <span class="tier ${l.originTier}">${l.originTier}</span></span></div>

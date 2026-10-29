@@ -2,6 +2,7 @@
 import { host } from './host.js';
 import { esc, pick } from './util.js';
 import { EMO_FB, EMOS, WORLD_ALIAS, WORLDS } from './data.js';
+import { SCENARIO_WORLD } from './enums.js';
 import { app } from './app.js';
 import { canonName } from './people.js';
 import { T } from './i18n.js';
@@ -163,13 +164,15 @@ export const openingWorlds = frames => [...new Set(frames.flatMap(worldsOf))];
 export const openingOff = frames => frames.some(x => x.off);
 // The first turn of a life: a sequence that fits the world, else a picture tagged game-master, else the admin set's
 // picture. Stored on the turn's img as opening (frame ids) or banner (one id).
-export function openingFor(w) {
+// noAdmin: a scenario save, which has no ADMIN to fall back on
+export function openingFor(w, noAdmin = false) {
   const seqs = Object.values(openingSets()).filter(f => !openingOff(f) && fitsWorld({ worlds: openingWorlds(f) }, w));
   if (seqs.length) return { opening: pick(seqs).map(x => x.id) };
   // a face is labelled on its set card
   const fits = x => fitsWorld(x, w) && (x.kind !== 'char' || fitsWorld(app.setMeta[x.set || x.name], w));
   const gm = app.images.filter(x => isGameMaster(x) && !x.off && fits(x));
   if (gm.length) return { banner: pick(gm).id };
+  if (noAdmin) return null;
   const adm = charSetsAll().admin || [];
   const emo = e => adm.find(x => (x.emotion || 'neutral') === e);
   const a = emo('neutral') || emo('smile') || adm[0];
@@ -252,10 +255,10 @@ export function setWorlds(x, ids) {
 // labels from before the modern world: a hunter picture fits it too, unless it is a monster or fantasy folk
 export const withModern = ws =>
   ws.includes('hunter') && !['modern', 'monster', 'fantasy'].some(w => ws.includes(w)) ? [...ws, 'modern'] : ws;
-// labels are the source of truth: list every world an image fits
+// labels are the source of truth: list every world an image fits. A scenario save with no world fits every picture
 export function fitsWorld(x, w) {
   const ws = worldsOf(x);
-  return !ws.length || ws.includes(w);
+  return !ws.length || ws.includes(w) || w === SCENARIO_WORLD;
 }
 export function worldChips(sel, attr) {
   const cur = new Set(sel || []);
@@ -291,12 +294,18 @@ const situationIn = (k, situation) => {
   return s && frameTags(k).includes(s) ? s : '';
 };
 export const hasSituation = (k, situation) => !!situationIn(k, situation);
-// situation: one of the set's frame tags the narrator named; only its frames are used, chosen by the feeling as usual
+// situation: one of the set's frame tags the narrator named; only its frames are used, chosen by the feeling as usual.
+// With none named, a situation's frames (fighting, hug, nsfw) stay out unless the set has nothing else.
 export function pickEmotion(k, emo, look, situation) {
   let imgs = charSets()[k];
   if (!imgs || !imgs.length) return null;
   const s = situationIn(k, situation);
   if (s) imgs = imgs.filter(x => lowTags(x).includes(s));
+  else {
+    const special = frameTags(k);
+    const plain = imgs.filter(x => !lowTags(x).some(t => special.includes(t)));
+    if (plain.length) imgs = plain;
+  }
   const by = e => imgs.filter(x => (x.emotion || 'neutral') === e);
   let c = by(emo);
   if (!c.length && EMO_FB[emo]) c = by(EMO_FB[emo]);

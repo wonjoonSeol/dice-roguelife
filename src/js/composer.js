@@ -2,6 +2,7 @@
 import { $, toast } from './util.js';
 import { allCmdNames, cmdName, cmdNames, CMDS } from './data.js';
 import { app } from './app.js';
+import { isScenario } from './rules.js';
 import { openStatus } from './status.js';
 import { inputPh } from './log.js';
 import { N_, T } from './i18n.js';
@@ -151,7 +152,7 @@ function slashMenu() {
     box.classList.add('hidden');
     return;
   }
-  const m = CMDS.filter(c => allCmdNames(c).some(k => k.startsWith(lv)));
+  const m = CMDS.filter(c => allCmdNames(c).some(k => k.startsWith(lv)) && !(c.id === 'star' && isScenario())); // a scenario has no constellations
   if (!m.length) {
     box.classList.add('hidden');
     return;

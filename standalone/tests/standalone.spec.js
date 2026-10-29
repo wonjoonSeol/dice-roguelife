@@ -260,6 +260,7 @@ test('a ticked library note reaches the narrator through the server, and the lib
     { name: 'Scenario.md', mimeType: 'text/markdown', buffer: Buffer.from(text) },
     { name: 'Other.md', mimeType: 'text/markdown', buffer: Buffer.from('OTHER-NOTE') },
   ]);
+  await page.click('[data-ask-type="general"]'); // several files at once ask what they are for
   await expect.poll(() => page.evaluate(() => (DR.app.notes || []).length)).toBe(2);
   const id = await page.evaluate(() => DR.noteByName('Scenario').id);
   await page.check(`[data-lib-use="${id}"]`);

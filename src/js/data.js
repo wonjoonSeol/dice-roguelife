@@ -307,11 +307,13 @@ export const ORIGINS = {
     N_('Nameless vagrant'),
   ],
 };
+// a talent that only a life with ADMIN can roll (new-life.js rollLife)
+export const ADMIN_TALENT = N_('Admin Privileges');
 export const TALENTS = {
   EX: [
     [magic(N_('Causality Manipulation')), N_('Once a day, reroll the outcome of what just happened')],
     [N_('Beloved of the World'), N_('Cancels one fatal crisis')],
-    [N_('Admin Privileges'), N_('Can talk and trade with ADMIN directly')],
+    [ADMIN_TALENT, N_('Can talk and trade with ADMIN directly')],
   ],
   SSS: [
     [magic(N_('Sense of Endings')), N_('Faintly foresees the outcome of one choice')],
@@ -360,6 +362,7 @@ const CURRENCY = {
   hunter: LOCAL,
   academy: LOCAL,
   modern: LOCAL,
+  scenario: LOCAL, // a scenario with no world (enums.js SCENARIO_WORLD) counts in the story language's money
   cyber: [N_('credits'), 10],
   apoc: [N_('ration tickets'), 1],
   murim: [N_('nyang'), 1],

@@ -8,6 +8,9 @@ import { abandonAction, app } from './app.js';
 import { saveSettings } from './settings.js';
 import { logErr } from './diag.js';
 import { compat } from './compat.js';
+import { extFill } from './world-ext.js';
+import { isScenario } from './rules.js';
+import { scenarioName } from './notes.js';
 import { adoptRosterNames } from './people.js';
 import { closeSheet, openSheet } from './sheet.js';
 import { showTab } from './shell.js';
@@ -91,7 +94,11 @@ export const cardFields = st => ({
   lifeNo: st.lifeNo,
   noteIds: st.noteIds,
   style: st.style, // a new game starts with the last save's (new-life.js)
+  ...(st.styleNoteId ? { styleNoteId: st.styleNoteId } : {}),
   ...(st.turnNo != null ? { lifeTurns: st.turnNo } : {}),
+  ...(isScenario(st)
+    ? { mode: st.mode, scenarioId: st.scenarioId, scenarioName: scenarioName(st), addons: st.addons }
+    : {}),
 });
 let persistQueue = Promise.resolve();
 // one state write at a time, so they never trip each other's check
@@ -151,10 +158,11 @@ async function persistNow() {
 }
 // What the player wrote or chose is not story: a snapshot brought back (a rewrite, a branch, a saved state that fell
 // behind) keeps the notes, character lists and prose style of the state open now (snapshots hold no lists, roster.js snapOf)
-const PLAYER_KEYS = ['userNotes', 'roster', 'noteIds', 'style'];
+const PLAYER_KEYS = ['userNotes', 'roster', 'noteIds', 'style', 'styleNoteId', 'addons'];
 export function fromSnap(snap) {
   const st = compat(clone(snap));
   for (const k of PLAYER_KEYS) if (app.state && app.state[k] !== undefined) st[k] = clone(app.state[k]);
+  extFill(st); // an add-on ticked after that snapshot
   adoptRosterNames(st); // the older story, with the latest list
   return st;
 }

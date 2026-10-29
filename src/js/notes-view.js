@@ -6,6 +6,7 @@ import { app } from './app.js';
 import { answerDialog, askConfirm, askPrompt, closeSheet, openDialog, openSheet } from './sheet.js';
 import { persist } from './persistence.js';
 import { notesShare } from './prompt.js';
+import { NOTE_TYPE, NOTE_TYPE_LABEL, NOTE_TYPES } from './enums.js';
 import {
   cleanNoteName,
   deleteNote,
@@ -15,6 +16,7 @@ import {
   NOTE_NAME_MAX,
   noteById,
   noteByName,
+  noteType,
   saveNote,
   saveNotes,
   savesUsing,
@@ -40,25 +42,44 @@ const retry = async () => {
   await loadNotes();
   libraryChanged();
 };
+const typeLabel = t => T(NOTE_TYPE_LABEL[t]);
+const typeTag = n => `<span class="note-type">${esc(typeLabel(n.type))}</span>`;
+// A picker's notes: its own type first, the rest behind a toggle that starts open when one of them is picked
+// (shown). row(note, other) draws one; the others carry their type
+export function typedRows(notes, type, row, shown = () => false) {
+  const own = notes.filter(n => n.type === type),
+    rest = notes.filter(n => n.type !== type);
+  return (
+    own.map(n => row(n, false)).join('') +
+    (rest.length
+      ? `<details class="other-notes"${rest.some(shown) ? ' open' : ''}><summary>${T('Show other notes too ({n})', { n: rest.length })}</summary>${rest.map(n => row(n, true)).join('')}</details>`
+      : '')
+  );
+}
+export const otherTag = (n, other) => (other ? typeTag(n) : '');
 
-// how much of the narrator prompt the ticked notes take, with a warning past a third
-function showSize(root, ids) {
+// how much of the narrator prompt the ticked notes take, with a warning past a third. story: the ids start with a
+// scenario note
+function showSize(root, ids, story = false) {
   const el = root.querySelector('[data-note-size]');
   if (!el) return;
   const { bytes, max, heavy } = notesShare(ids);
   el.classList.toggle('warn', heavy);
+  const vars = { kb: kb(bytes), max: kb(max), pct: Math.round((bytes / max) * 100) };
   el.textContent = !bytes
     ? ''
     : !max
-      ? T('Ticked notes: {kb}', { kb: kb(bytes) })
-      : T('Ticked notes: {kb} of the {max} prompt budget ({pct}%).', {
-          kb: kb(bytes),
-          max: kb(max),
-          pct: Math.round((bytes / max) * 100),
-        }) + (heavy ? ' ' + T('That is over a third, so fewer recent turns fit beside them.') : '');
+      ? story
+        ? T('Scenario and ticked notes: {kb}', vars)
+        : T('Ticked notes: {kb}', vars)
+      : (story
+          ? T('Scenario and ticked notes: {kb} of the {max} prompt budget ({pct}%).', vars)
+          : T('Ticked notes: {kb} of the {max} prompt budget ({pct}%).', vars)) +
+        (heavy ? ' ' + T('That is over a third, so fewer recent turns fit beside them.') : '');
 }
 
 /* ---- the Memory tab ---- */
+let libFilter = 'all'; // the library's type filter: all, or one NOTE_TYPE
 export function renderNoteLibrary() {
   const root = $('#noteLib');
   if (!root) return;
@@ -66,15 +87,21 @@ export function renderNoteLibrary() {
     lib = app.notes;
   const used = new Set(st ? st.noteIds : []);
   // the box ticks; the name opens the note, like Edit
-  const rows = (lib || [])
-    .map(
-      n =>
-        `<div class="note-row">${st ? `<input type="checkbox" data-lib-use="${esc(n.id)}" aria-label="${esc(T('Use {name} in this game', { name: n.name }))}"${used.has(n.id) ? ' checked' : ''}>` : ''}<button type="button" class="note-name grow" data-lib-open="${esc(n.id)}">${esc(n.name)}</button><span class="muted count-note">${kb(n.bytes)}</span><button class="btn ghost chip-sm" data-lib-edit="${esc(n.id)}">${T('Edit')}</button><button class="x" data-lib-del="${esc(n.id)}" aria-label="${T('Delete')}">✕</button></div>`,
-    )
+  const row = n =>
+    `<div class="note-row">${st && n.id === st.scenarioId ? `<span class="muted count-note">${T("This game's scenario")}</span>` : st ? `<input type="checkbox" data-lib-use="${esc(n.id)}" aria-label="${esc(T('Use {name} in this game', { name: n.name }))}"${used.has(n.id) ? ' checked' : ''}>` : ''}<button type="button" class="note-name grow" data-lib-open="${esc(n.id)}">${esc(n.name)}</button>${typeTag(n)}<span class="muted count-note">${kb(n.bytes)}</span><button class="btn ghost chip-sm" data-lib-edit="${esc(n.id)}">${T('Edit')}</button><button class="x" data-lib-del="${esc(n.id)}" aria-label="${T('Delete')}">✕</button></div>`;
+  const shown = (lib || []).filter(n => libFilter === 'all' || n.type === libFilter);
+  // grouped by type, in NOTE_TYPES order
+  const rows = NOTE_TYPES.map(t => [t, shown.filter(n => n.type === t)])
+    .filter(([, l]) => l.length)
+    .map(([t, l]) => `<h5 class="note-group">${esc(typeLabel(t))} (${l.length})</h5>${l.map(row).join('')}`)
     .join('');
+  const filter = (lib || []).length
+    ? `<div class="seg note-filter" role="group" aria-label="${T('Note type')}">${['all', ...NOTE_TYPES].map(t => `<button type="button" class="chip-sm" data-lib-filter="${t}" aria-pressed="${t === libFilter}">${t === 'all' ? T('All') : esc(typeLabel(t))}</button>`).join('')}</div>`
+    : '';
+  const preset = libFilter === 'all' ? NOTE_TYPE.GENERAL : libFilter; // a new note takes the type in view
   root.innerHTML = `<h4>${T('Note library ({n})', { n: (lib || []).length })}</h4><p class="muted mem-hint">${T(st ? HINT_GAME : formUp() ? HINT_FORM : HINT)}</p>${
     lib
-      ? `${rows || `<p class="muted empty">${T('No notes yet. Upload .md or .txt files, or write one here.')}</p>`}
+      ? `${filter}${rows || `<p class="muted empty">${T('No notes yet. Upload .md or .txt files, or write one here.')}</p>`}
     <div class="row note-tools"><label class="btn ghost file-btn">${T('Upload notes')}<input type="file" data-lib-upload multiple accept=".md,.txt,.markdown,text/markdown,text/plain" hidden></label><button class="btn ghost" data-lib-new>${T('New note')}</button></div>${st ? '<p class="muted field-note note-size" data-note-size></p>' : ''}`
       : unread('data-lib-retry')
   }`;
@@ -82,6 +109,13 @@ export function renderNoteLibrary() {
     root.querySelector('[data-lib-retry]').onclick = retry;
     return;
   }
+  root.querySelectorAll('[data-lib-filter]').forEach(
+    b =>
+      (b.onclick = () => {
+        libFilter = b.dataset.libFilter;
+        renderNoteLibrary();
+      }),
+  );
   const ticked = () => [...root.querySelectorAll('[data-lib-use]:checked')].map(c => c.dataset.libUse);
   if (st) showSize(root, st.noteIds);
   root.querySelectorAll('[data-lib-use]').forEach(
@@ -97,27 +131,32 @@ export function renderNoteLibrary() {
     .querySelectorAll('[data-lib-edit],[data-lib-open]')
     .forEach(b => (b.onclick = () => openNoteEditor(noteById(b.dataset.libEdit || b.dataset.libOpen))));
   root.querySelectorAll('[data-lib-del]').forEach(b => (b.onclick = () => removeNote(b.dataset.libDel)));
-  root.querySelector('[data-lib-new]').onclick = () => openNoteEditor(null);
+  root.querySelector('[data-lib-new]').onclick = () => openNoteEditor(null, null, preset);
   root.querySelector('[data-lib-upload]').onchange = async e => {
     const files = [...(e.target.files || [])];
     e.target.value = ''; // the same files can be picked again
     try {
-      if (files.length) await uploadNotes(files);
+      if (files.length) await uploadNotes(files, libFilter === 'all' ? '' : libFilter);
     } catch (err) {
       toast(T('Save failed: {err}', { err: err.code || err.message }));
     }
   };
 }
-// the library changed: the Memory tab and a new game's picker show it again
+// the library changed: the Memory tab and a new game's pickers show it again
 export function libraryChanged() {
   renderNoteLibrary();
   refreshNotePicker();
+  refreshOnePickers();
 }
 
-function openNoteEditor(note) {
+// the type choices, the current one selected
+const typeOptions = cur =>
+  NOTE_TYPES.map(t => `<option value="${t}"${t === cur ? ' selected' : ''}>${esc(typeLabel(t))}</option>`).join('');
+// onSaved: what to do with the note once it is saved (a picker picks a new one); preset: a new note's type
+function openNoteEditor(note, onSaved, preset) {
   openSheet(
     `<h3 class="sheet-title">${note ? T('Edit note') : T('New note')}</h3>
-   <div class="field"><label for="noteName">${T('Name')}</label><input id="noteName" maxlength="${NOTE_NAME_MAX}" value="${esc(note ? note.name : '')}"></div>
+   <div class="row note-head"><div class="field grow"><label for="noteName">${T('Name')}</label><input id="noteName" maxlength="${NOTE_NAME_MAX}" value="${esc(note ? note.name : '')}"></div><div class="field"><label for="noteType">${T('Note type')}</label><select id="noteType">${typeOptions(note ? note.type : noteType(preset))}</select></div></div>
    <div class="field"><label for="noteText">${T('Text')}</label><textarea id="noteText" rows="14" class="note-text">${esc(note ? note.text : '')}</textarea><span class="muted count-note" id="noteBytes"></span></div>
    <div class="row actions"><button class="btn primary" id="noteSave">${T('Save note')}</button><button class="btn ghost" data-close>${T('Cancel')}</button></div>`,
     { wide: true, modal: true },
@@ -140,18 +179,31 @@ function openNoteEditor(note) {
     else if (bytes > NOTE_MAX) toast(T('A note can be up to 32 KB. This one is {kb}', { kb: kb(bytes) }));
     else
       try {
-        await saveNote({ id: note ? note.id : undefined, name, text });
+        const saved = await saveNote({ id: note ? note.id : undefined, name, text, type: $('#noteType').value });
         closeSheet();
         toast(T('Note saved'));
         libraryChanged();
+        if (onSaved) onSaved(saved);
       } catch (e) {
         toast(T('Save failed: {err}', { err: e.code || e.message }));
       }
   };
 }
 
-// files picked at once, each read in the encoding it was written in
-export async function uploadNotes(files) {
+// What several files at once are for, asked once (preset, else general, is the main button). A single file takes
+// preset, else general, and the editor changes it. null: cancelled
+function askType(n, preset) {
+  const def = noteType(preset);
+  const answer = openDialog(
+    `<p class="dlg-msg">${esc(T('What are these {n} notes for?', { n }))}</p><div class="row">${NOTE_TYPES.map(t => `<button class="btn${t === def ? ' primary' : ''}" data-ask-type="${t}">${esc(typeLabel(t))}</button>`).join('')}<button class="btn ghost" data-ask-type="">${T('Cancel')}</button></div>`,
+  );
+  document
+    .querySelectorAll('[data-ask-type]')
+    .forEach(b => (b.onclick = () => answerDialog(b.dataset.askType || null)));
+  return answer;
+}
+// files picked at once, each read in the encoding it was written in; preset: the type of the picker they came from
+export async function uploadNotes(files, preset) {
   const read = await Promise.allSettled(files.map(f => f.arrayBuffer()));
   const legacy = legacyEncodings(uiLang());
   const batch = [],
@@ -167,14 +219,18 @@ export async function uploadNotes(files) {
     taken.add(name);
     batch.push({ name, text });
   });
+  const asked = batch.length > 1 ? await askType(batch.length, preset) : null;
+  if (batch.length > 1 && !asked) return;
   const clash = batch.filter(n => noteByName(n.name)).map(n => n.name);
   const answer = clash.length ? await askSameName(clash) : 'add';
   const writes = [];
   let skipped = 0;
   for (const n of answer ? batch : []) {
     const old = noteByName(n.name);
+    // a replaced note keeps its type unless the batch was asked for one
+    const type = asked || (old ? undefined : noteType(preset));
     if (old && answer !== 'replace') skipped++;
-    else writes.push({ id: old ? old.id : uid(), name: n.name, text: n.text, old: !!old });
+    else writes.push({ id: old ? old.id : uid(), name: n.name, text: n.text, type, old: !!old });
   }
   const { saved, error } = await saveNotes(writes);
   libraryChanged();
@@ -269,19 +325,19 @@ function pickerInner(ids) {
   if (!lib.length)
     return `<p class="muted field-note">${T('Notes you use in every game can be uploaded once to the note library in the Memory tab, then ticked here.')}</p>`;
   const on = new Set(ids);
-  return `<div class="field" id="nlNotes"><label>${T('Notes from your library (sent to Claude every turn)')}</label><div class="nl-note-list">${lib
-    .map(
-      n =>
-        `<div class="row opt"><input type="checkbox" id="nlNote-${esc(n.id)}" data-nl-note="${esc(n.id)}" aria-label="${esc(T('Use {name} in this game', { name: n.name }))}"${on.has(n.id) ? ' checked' : ''}><button type="button" class="note-name" data-nl-open="${esc(n.id)}">${esc(n.name)}</button><span class="muted">${kb(n.bytes)}</span><button type="button" class="btn ghost chip-sm" data-nl-edit="${esc(n.id)}">${T('Edit')}</button></div>`,
-    )
-    .join('')}</div><p class="muted field-note note-size" data-note-size></p></div>`;
+  const row = (n, other) =>
+    `<div class="row opt"><input type="checkbox" id="nlNote-${esc(n.id)}" data-nl-note="${esc(n.id)}" aria-label="${esc(T('Use {name} in this game', { name: n.name }))}"${on.has(n.id) ? ' checked' : ''}><button type="button" class="note-name" data-nl-open="${esc(n.id)}">${esc(n.name)}</button>${otherTag(n, other)}<span class="muted">${kb(n.bytes)}</span><button type="button" class="btn ghost chip-sm" data-nl-edit="${esc(n.id)}">${T('Edit')}</button></div>`;
+  return `<div class="field" id="nlNotes"><label>${T('Notes from your library (sent to Claude every turn)')}</label><div class="nl-note-list">${typedRows(lib, NOTE_TYPE.GENERAL, row, n => on.has(n.id))}</div><p class="muted field-note note-size" data-note-size></p></div>`;
 }
 export function bindNotePicker() {
   const box = $('#nlNotesBox');
   if (!box) return;
   const again = box.querySelector('[data-nl-retry]');
   if (again) again.onclick = retry;
-  const sync = () => showSize(box, pickedInForm());
+  const sync = () => {
+    showSize(box, pickedInForm());
+    scenarioSize();
+  };
   box.querySelectorAll('[data-nl-note]').forEach(c => (c.onchange = sync));
   box
     .querySelectorAll('[data-nl-open],[data-nl-edit]')
@@ -301,4 +357,98 @@ function refreshNotePicker() {
   if (!box) return;
   box.innerHTML = pickerInner(pickedInForm() ?? pickerStart);
   bindNotePicker();
+}
+
+/* ---- one-note pickers: a scenario game's scenario (sc), and a prose style from a note on the new game screen
+   (sty) and in the Memory tab (msty) ---- */
+const STYLE_HINT = N_(
+  'The note says how the narrator writes: voice, tone, sentence length, words to use or avoid. It goes to Claude whole every turn.',
+);
+const ONE = {
+  sc: {
+    label: N_('Play {name}'),
+    hint: N_(
+      "The scenario is a note: its world, rules, characters, style and first message. It goes to Claude whole every turn, and wins over the game's own conventions.",
+    ),
+    type: NOTE_TYPE.SCENARIO,
+    size: true,
+  },
+  sty: { label: N_('Write in the style of {name}'), hint: STYLE_HINT, type: NOTE_TYPE.STYLE },
+  msty: { label: N_('Write in the style of {name}'), hint: STYLE_HINT, type: NOTE_TYPE.STYLE },
+};
+const oneStart = {}; // the note each picker opened with
+const oneChange = {}; // what a pick does at once (the Memory tab saves it)
+export function onePickerHtml(key, id) {
+  oneStart[key] = id;
+  return `<div id="${key}NoteBox">${oneInner(key, id)}</div>`;
+}
+function oneInner(key, id) {
+  const lib = app.notes,
+    c = ONE[key];
+  if (!lib) return unread('data-one-retry');
+  const row = (n, other) =>
+    `<div class="row opt"><input type="radio" name="${key}Note" id="${key}Note-${esc(n.id)}" data-one-note="${esc(n.id)}" aria-label="${esc(T(c.label, { name: n.name }))}"${n.id === id ? ' checked' : ''}><button type="button" class="note-name" data-one-open="${esc(n.id)}">${esc(n.name)}</button>${otherTag(n, other)}<span class="muted">${kb(n.bytes)}</span><button type="button" class="btn ghost chip-sm" data-one-open="${esc(n.id)}">${T('Edit')}</button></div>`;
+  const rows = typedRows(lib, c.type, row, n => n.id === id);
+  return `${rows ? `<div class="nl-note-list">${rows}</div>` : ''}<p class="muted field-note">${T(c.hint)}</p>
+   <div class="row note-tools"><button type="button" class="btn ghost" data-one-new>${T('New note')}</button><label class="btn ghost file-btn">${T('Upload notes')}<input type="file" data-one-upload multiple accept=".md,.txt,.markdown,text/markdown,text/plain" hidden></label></div>${c.size ? '<p class="muted field-note note-size" data-note-size></p>' : ''}`;
+}
+// the note a picker has picked, or null
+export const oneInForm = key => {
+  const r = $(`#${key}NoteBox [data-one-note]:checked`);
+  return r ? r.dataset.oneNote : null;
+};
+export const scenarioPickerHtml = id => onePickerHtml('sc', id);
+export const scenarioInForm = () => oneInForm('sc');
+function onePicked(key) {
+  if (key === 'sc') scenarioSize();
+  if (oneChange[key]) oneChange[key](oneInForm(key));
+}
+// the scenario counts with the ticked notes: both go to the narrator whole
+const scenarioSize = () => {
+  const box = $('#scNoteBox'),
+    id = scenarioInForm();
+  if (box) showSize(box, id ? [id, ...(pickedInForm() || []).filter(x => x !== id)] : [], true);
+};
+// onChange(id): what a pick does at once
+export function bindOnePicker(key, onChange) {
+  const box = $(`#${key}NoteBox`);
+  if (!box) return;
+  if (onChange) oneChange[key] = onChange;
+  const again = box.querySelector('[data-one-retry]');
+  if (again) {
+    again.onclick = retry; // an unread library shows only this
+    return;
+  }
+  box.querySelectorAll('[data-one-note]').forEach(r => (r.onchange = () => onePicked(key)));
+  box.querySelectorAll('[data-one-open]').forEach(b => (b.onclick = () => openNoteEditor(noteById(b.dataset.oneOpen))));
+  box.querySelector('[data-one-new]').onclick = () =>
+    openNoteEditor(
+      null,
+      n => {
+        const r = $(`#${key}Note-${n.id}`);
+        if (!r) return;
+        r.checked = true;
+        onePicked(key);
+      },
+      ONE[key].type,
+    );
+  box.querySelector('[data-one-upload]').onchange = async e => {
+    const files = [...(e.target.files || [])];
+    e.target.value = ''; // the same files can be picked again
+    try {
+      if (files.length) await uploadNotes(files, ONE[key].type);
+    } catch (err) {
+      toast(T('Save failed: {err}', { err: err.code || err.message }));
+    }
+  };
+  if (key === 'sc') scenarioSize();
+}
+export const bindScenarioPicker = () => bindOnePicker('sc');
+function refreshOnePickers() {
+  for (const key of Object.keys(ONE)) {
+    const box = $(`#${key}NoteBox`);
+    if (!box) continue;
+    box.innerHTML = oneInner(key, oneInForm(key) ?? oneStart[key]);
+    bindOnePicker(key);
+  }
 }

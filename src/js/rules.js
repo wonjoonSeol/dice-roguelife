@@ -1,8 +1,20 @@
 /* ============ rules: what a save froze at its start, growth, checks, titles ============ */
 import { WORLDS } from './data.js';
+import { ADDON, MODE } from './enums.js';
 import { app } from './app.js';
 import { setting } from './settings.js';
 import { N_ } from './i18n.js';
+
+// a scenario save: the player's scenario note sets the story, without the roguelike's framing
+export const isScenario = (st = app.state) => !!st && st.mode === MODE.SCENARIO;
+// whether a save has this system (enums.js ADDON): a roguelike save has them all, a scenario save the extras it ticked
+export const addonOn = (k, st = app.state) => !isScenario(st) || !!(st.addons && st.addons[k]);
+// the rules a scenario save's extras decide instead of its start snapshot: dice checks, and the gambler's fate
+const ADDON_RULE = { dice: ADDON.DICE, gambler: ADDON.LUCK };
+// the ⚙ ADMIN persona that turns ADMIN off for every save
+export const ADMIN_OFF = 'off';
+// whether ADMIN speaks in this save: not when ⚙ turns it off, and in a scenario only with its ADMIN extra
+export const adminOn = () => addonOn(ADDON.ADMIN) && setting('adminPersona') !== ADMIN_OFF;
 
 const RULE_KEYS = ['growth', 'knowledgeGuard', 'dice', 'gambler', 'gamblerP'];
 export function snapshotRules() {
@@ -11,6 +23,7 @@ export function snapshotRules() {
   return r;
 }
 export function rule(k) {
+  if (isScenario() && ADDON_RULE[k]) return addonOn(ADDON_RULE[k]);
   if (app.state && app.state.rules && k in app.state.rules) {
     const v = app.state.rules[k];
     return v === null ? undefined : v;
@@ -33,6 +46,7 @@ export function lifeDiff(l) {
   return Array.isArray(d) ? Math.round((d[0] + d[1]) / 2) : d || 3;
 }
 export function growthLevel() {
+  if (!addonOn(ADDON.GROWTH)) return GROWTH_LEVELS.normal; // a scenario without the growth extra
   const g = rule('growth') || 'auto';
   if (GROWTH_LEVELS[g] && g !== 'auto') return GROWTH_LEVELS[g];
   const d = lifeDiff();

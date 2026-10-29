@@ -10,8 +10,13 @@ import { askConfirm } from './sheet.js';
 import { charSets } from './images.js';
 import { persist } from './persistence.js';
 import { seenSpan } from './reroll.js';
-import { renderNoteLibrary } from './notes-view.js';
-import { bindChoice, styleChips } from './new-life.js';
+import { bindOnePicker, oneInForm, renderNoteLibrary } from './notes-view.js';
+import { isScenario } from './rules.js';
+import { noteById, scenarioName, scenarioNote } from './notes.js';
+import { ADDON, STYLE } from './enums.js';
+import { addonRowsHtml, bindChoice, styleChips, styleNoteHtml } from './new-life.js';
+import { extFill, WORLD_EXT, worldExt } from './world-ext.js';
+import { renderStrip } from './status.js';
 
 export function renderMemory() {
   const box = $('#memBox');
@@ -22,13 +27,15 @@ export function renderMemory() {
   }
   const none = `<span class="muted">${T('None')}</span>`;
   const styleOpen = !!app.currentSave && !$('#log .newlife'); // a new life's screen picks it while it is up
+  const scen = isScenario();
   box.innerHTML = `<h3 class="view-title">${T('Memory')}</h3><p class="muted mem-intro">${T('This applies to this save slot only. It never mixes with other saves or other chats.')}</p>
+   ${scen ? `<div class="field"><label>${T('Scenario')}</label><p class="lore mem-profile">${esc(scenarioName())}${scenarioNote() ? '' : ` <span class="muted">${T('(not in your note library)')}</span>`}</p></div><div class="field mem-addons"><label>${T('Extras')}</label>${addonRowsHtml('mem', app.state.addons || {}, WORLD_EXT[app.state.life.world.id])}<p class="muted field-note">${T('Each extra brings in only its own part of the game, from the next reply on.')}</p></div>` : ''}
    <div class="field"><label>${T('Character profile (fixed for this life; you can change it on the new game screen of your next life)')}</label><p class="lore mem-profile">${app.state.life.profile ? esc(app.state.life.profile) : none}</p></div>
-   <div class="field"><label>${T('Prose style')}</label><div class="seg" id="memStyle">${styleChips(app.state.style, !styleOpen)}</div><p class="muted field-note">${styleOpen ? T('How the narrator writes this save, from the next reply on.') : T('Pick it on the new life screen.')}</p></div>
+   <div class="field"><label>${T('Prose style')}</label><div class="seg" id="memStyle">${styleChips(app.state.style, !styleOpen)}</div>${styleOpen ? styleNoteHtml('msty', app.state.style, app.state.styleNoteId) : ''}<p class="muted field-note">${styleOpen ? T('How the narrator writes this save, from the next reply on.') : T('Pick it on the new life screen.')}</p></div>
    <div class="field"><label for="notes">${T('Notes: sent to Claude every turn')}</label><textarea id="notes" rows="5" maxlength="${LIMITS.userNotes}" placeholder="${T('e.g. Make ADMIN more cynical. Keep fight scenes short. There is no magic in this world. My childhood friend Seoyun lives next door.')}">${esc(app.state.userNotes)}</textarea>
     <div class="row"><button class="btn" id="saveNotes">${T('Save notes')}</button><span class="muted count-note" id="notesCount">${app.state.userNotes.length}/${LIMITS.userNotes}</span></div></div>
    <div class="sec note-lib" id="noteLib"></div>
-   <div class="sec mem-roster"><h4>${T('Characters ({n})', { n: rosterNow().length })}</h4><p class="muted mem-hint">${T("For {world} lives in this save; a life in another world keeps its own list. A name that matches a set card's name or alias in the Images tab wears that face.", { world: esc(app.state.life.world.name) })}</p>${rosterEditorHtml(rosterTextOf(app.state, app.state.life.world.id))}
+   <div class="sec mem-roster"><h4>${T('Characters ({n})', { n: rosterNow().length })}</h4><p class="muted mem-hint">${scen ? T("For this story. A name that matches a set card's name or alias in the Images tab wears that face.") : T("For {world} lives in this save; a life in another world keeps its own list. A name that matches a set card's name or alias in the Images tab wears that face.", { world: esc(app.state.life.world.name) })}</p>${rosterEditorHtml(rosterTextOf(app.state, app.state.life.world.id))}
     <div class="row"><button class="btn" data-roster-save>${T('Save characters')}</button></div></div>
    <div class="sec"><h4>${T('Current situation')}</h4><p class="lore mem-state">${app.state.stateNote ? esc(app.state.stateNote) : none}</p></div>
    <div class="sec"><h4>${T('Story so far ({n})', { n: app.state.summaries.length })}</h4><p class="muted mem-hint">${T('Long-term memory. If a wrong fact sticks, fix it here. Sent to Claude every turn.')}</p>${app.state.summaries.map((x, i) => `<div class="lore"><b>${x.era ? T('Era') : T('life {n}', { n: x.life })}</b><textarea data-esum="${i}" rows="3" maxlength="1600" class="mem-edit">${esc(x.text)}</textarea><button class="x" data-dsum="${i}" aria-label="${T('Delete')}">✕</button></div>`).join('') || `<p class="muted mem-note">${T('Once more than 22 turns have scrolled out of the window, they are summarized automatically.')}</p>`}</div>
@@ -81,14 +88,40 @@ export function renderMemory() {
         )
         .join('') || `<p class="muted empty">${T('None yet')}</p>`
     }</div>
-   <div class="sec"><h4>${T('Past lives ({n})', { n: app.state.pastLives.length })}</h4>${app.state.pastLives.map(p => `<div class="lore"><b>${T('life {n}', { n: p.lifeNo })}</b><p>${esc(p.world)}, ${esc(p.origin)}(${esc(p.tier)}), ${T('{score} pts.', { score: esc(p.score) })} ${esc(p.epitaph)}</p></div>`).join('') || `<p class="muted empty">${T('None yet')}</p>`}</div>
+   ${scen ? '' : `<div class="sec"><h4>${T('Past lives ({n})', { n: app.state.pastLives.length })}</h4>${app.state.pastLives.map(p => `<div class="lore"><b>${T('life {n}', { n: p.lifeNo })}</b><p>${esc(p.world)}, ${esc(p.origin)}(${esc(p.tier)}), ${T('{score} pts.', { score: esc(p.score) })} ${esc(p.epitaph)}</p></div>`).join('') || `<p class="muted empty">${T('None yet')}</p>`}</div>`}
    <p class="muted mem-footer">${T('App settings (model, language and more) are under the ⚙ button at the top.')}</p>`;
   renderNoteLibrary();
-  bindChoice(box, '#memStyle', 'sty', async v => {
-    app.state.style = v;
+  // From a note takes effect once a note is picked under it (or with the save's last one)
+  const setStyle = async (style, styleNoteId) => {
+    app.state.style = style;
+    if (styleNoteId) app.state.styleNoteId = styleNoteId;
     await persist();
     toast(T('Prose style changed'));
+  };
+  bindChoice(box, '#memStyle', 'sty', async v => {
+    const wrap = $('#mstyWrap');
+    if (wrap) wrap.classList.toggle('hidden', v !== STYLE.NOTE);
+    if (v !== STYLE.NOTE) return setStyle(v);
+    const id = oneInForm('msty');
+    if (noteById(id)) return setStyle(v, id);
+    toast(T('Pick a note for the prose style'));
   });
+  bindOnePicker('msty', id => noteById(id) && setStyle(STYLE.NOTE, id));
+  box.querySelectorAll('.mem-addons [data-addon]').forEach(
+    c =>
+      (c.onchange = async () => {
+        const k = c.dataset.addon;
+        app.state.addons = { ...app.state.addons, [k]: c.checked };
+        // an add-on ticked mid-story starts its state, and the narrator names where on its ladder the story is
+        if (k === ADDON.EXT && c.checked && app.state.ladder == null) {
+          extFill(app.state);
+          if (worldExt().ladder) app.state.ladderPending = true;
+        }
+        await persist();
+        renderStrip();
+        toast(T('Saved'));
+      }),
+  );
   $('#notes').oninput = e => ($('#notesCount').textContent = e.target.value.length + '/' + LIMITS.userNotes);
   $('#saveNotes').onclick = async () => {
     app.state.userNotes = $('#notes').value.trim().slice(0, LIMITS.userNotes);

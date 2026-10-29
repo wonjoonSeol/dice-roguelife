@@ -1,6 +1,8 @@
 /* ============ world add-ons: systems only some worlds have ============ */
 import { MURIM } from './murim.js';
 import { app } from './app.js';
+import { addonOn } from './rules.js';
+import { ADDON } from './enums.js';
 
 // by world id; what an add-on may hold is in ARCHITECTURE.md, in the world add-on section
 export const WORLD_EXT = {
@@ -11,15 +13,18 @@ export const WORLD_EXT = {
 const NONE = Object.freeze({});
 export const STANDING_KEYS = ['faction', 'position', 'epithet', 'trait'];
 
-// a world without an add-on gets an empty one, so callers read its fields directly
-export const extOf = st => (st && st.life && st.life.world && WORLD_EXT[st.life.world.id]) || NONE;
+// a world without an add-on gets an empty one, so callers read its fields directly. A scenario save has its world's
+// add-on only as an extra (state.addons.ext)
+export const extOf = st =>
+  (st && st.life && st.life.world && addonOn(ADDON.EXT, st) && WORLD_EXT[st.life.world.id]) || NONE;
 export const worldExt = () => extOf(app.state);
 
-// what a new life of this world starts with
-export function extStart(worldId, tier) {
+// what a new life of this world starts with: step, a scenario's chosen start on the ladder; with no tier (a
+// scenario) the bottom
+export function extStart(worldId, tier, step = null) {
   const ext = WORLD_EXT[worldId] || NONE;
   const st = {};
-  if (ext.ladder) st.ladder = ext.ladder.start[tier] || 0;
+  if (ext.ladder) st.ladder = step != null ? step : (tier && ext.ladder.start[tier]) || 0;
   if (ext.standing) st.standing = Object.fromEntries(STANDING_KEYS.map(k => [k, '']));
   if (ext.init) st[worldId] = ext.init(tier);
   return st;
@@ -32,6 +37,7 @@ export function extFill(st) {
 // a reply that may not change the story (a browse command) keeps none of the add-on's keys
 export function extMask(out) {
   out.ladder_up = false;
+  out.ladder = null;
   out.standing = null;
   if (worldExt().init) out[app.state.life.world.id] = null;
 }
