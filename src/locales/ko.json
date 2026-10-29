@@ -1285,5 +1285,7 @@
   "Shown above the first reply of a life: one sequence that fits its world, at random. With none, a bg_game-master background or the game master is shown.": "삶의 첫 답 위에 나와요. 그 세계에 맞는 묶음 하나를 무작위로 골라요. 맞는 것이 없으면 bg_game-master 배경이나 게임 마스터가 나와요.",
   "Opening": "오프닝",
   "Sequence (blank: opening_1, 2...)": "묶음 (비우면 opening_1, 2...)",
-  "Frame number": "컷 번호"
+  "Frame number": "컷 번호",
+  "Saved result (no model call)": "저장해 둔 결과 (모델 호출 없음)",
+  "Read again": "다시 읽기"
 }

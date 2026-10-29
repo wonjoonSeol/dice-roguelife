@@ -1228,5 +1228,7 @@
   "Shown above the first reply of a life: one sequence that fits its world, at random. With none, a bg_game-master background or the game master is shown.": "人生の最初の返答の上に表示されます。その世界に合う組をひとつランダムに選びます。合うものがなければ bg_game-master の背景かゲームマスターが表示されます。",
   "Opening": "オープニング",
   "Sequence (blank: opening_1, 2...)": "組（空欄なら opening_1, 2...）",
-  "Frame number": "コマ番号"
+  "Frame number": "コマ番号",
+  "Saved result (no model call)": "保存しておいた結果（モデル呼び出しなし）",
+  "Read again": "もう一度読む"
 }

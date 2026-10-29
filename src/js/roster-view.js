@@ -1,5 +1,5 @@
 /* ============ the character list editor: the fate screen and the memory tab ============ */
-import { $, esc, kb, normName, toast } from './util.js';
+import { $, esc, kb, normName, noteIgnored, sha256Hex, toast } from './util.js';
 import { N_, T } from './i18n.js';
 import { LIMITS } from './limits.js';
 import { isHeading, namesOf, parseRoster } from './roster.js';
@@ -11,7 +11,7 @@ import { storyLang } from './settings.js';
 import { logErr } from './diag.js';
 import { extractJson, fillTemplate, prIn } from './prompt.js';
 import { closeSheet, openSheet } from './sheet.js';
-import { noteById } from './notes.js';
+import { noteById, saveNoteCast } from './notes.js';
 import { ensureSample } from './boot.js';
 import { sampleError } from './turn.js';
 
@@ -125,22 +125,45 @@ export function openImport(ctx) {
   btn.onclick = async () => {
     const src = sourceOf(($('[name="impSrc"]:checked') || {}).value, own, ctx);
     if (!src || !src.text.trim()) return toast(T('Nothing to read'));
-    if (!platform.sample && !(await ensureSample())) return toast(T('Claude needs to be connected'));
-    btn.disabled = true;
-    btn.textContent = T('Reading the characters...');
-    let got;
-    try {
-      got = await readCharacters(src.text, ctx, ac.signal);
-    } catch (e) {
-      if (ac.signal.aborted) return;
-      btn.disabled = false;
-      btn.textContent = T('Read characters');
-      sampleError(e);
-      return;
-    }
+    const kept = await keptCast(src.note, langOf(ctx));
     if (ac.signal.aborted || !btn.isConnected) return;
-    reviewImport(ctx, src, got);
+    if (kept) reviewImport(ctx, src, kept, ac);
+    else await readFresh(ctx, src, btn, ac);
   };
+}
+const langOf = ctx => ctx.lang || storyLang();
+const textHash = text => sha256Hex(new Blob([text]));
+// a library note's last result, while its text and the story language are the same: no model call
+async function keptCast(note, lang) {
+  const c = note && note.cast;
+  if (!c || c.lang !== lang || typeof c.roster !== 'string' || c.hash !== (await textHash(note.text).catch(() => '')))
+    return null;
+  return { roster: c.roster, rest: String(c.rest || ''), kept: true };
+}
+// the model call (btn shows it is waiting), then the review; a library note keeps the result for next time
+async function readFresh(ctx, src, btn, ac) {
+  if (!platform.sample && !(await ensureSample())) return toast(T('Claude needs to be connected'));
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = T('Reading the characters...');
+  let got;
+  try {
+    got = await readCharacters(src.text, ctx, ac.signal);
+  } catch (e) {
+    if (ac.signal.aborted) return;
+    btn.disabled = false;
+    btn.textContent = label;
+    sampleError(e);
+    return;
+  }
+  if (ac.signal.aborted || !btn.isConnected) return;
+  if (src.note) {
+    const { note } = src;
+    textHash(note.text)
+      .then(hash => saveNoteCast(note.id, { hash, lang: langOf(ctx), roster: got.roster, rest: got.rest }))
+      .catch(e => noteIgnored('roster import: keep the result on the note', e));
+  }
+  reviewImport(ctx, src, got, ac);
 }
 // the text to read and, when the leftover can go back, where. A library note is never changed, as other games use it:
 // this game stops using it and keeps its leftover in this screen's own box
@@ -150,10 +173,11 @@ function sourceOf(pick, own, ctx) {
   const note = pick && pick.startsWith('note:') && noteById(pick.slice(5));
   if (!note) return null;
   const into = ctx.own;
-  if (!into) return { text: note.text };
+  if (!into) return { text: note.text, note };
   const after = rest => [into.text().trim(), rest].filter(Boolean).join('\n\n');
   return {
     text: note.text,
+    note,
     into,
     after,
     put: rest => {
@@ -163,10 +187,11 @@ function sourceOf(pick, own, ctx) {
   };
 }
 // the one model call, on the quick tier like the summaries (it answers with the list and the leftover text)
-async function readCharacters(text, { lang = storyLang(), me }, signal) {
+async function readCharacters(text, ctx, signal) {
+  const lang = langOf(ctx);
   const prompt = fillTemplate(prIn(lang, 'rosterImport'), {
     labels: (prIn(lang, 'rosterImportLabels') || {})[lang] || '',
-    me: me || '{user}',
+    me: ctx.me || '{user}',
     text,
   });
   let r = null;
@@ -201,10 +226,10 @@ export function joinRoster(cur, add) {
   const at = h < 0 ? lines.length : h;
   return [lines.slice(0, at).join('\n').trim(), cur, lines.slice(at).join('\n').trim()].filter(Boolean).join('\n\n');
 }
-function reviewImport(ctx, src, got) {
+function reviewImport(ctx, src, got, ac) {
   const cut = !!src.put;
   openSheet(
-    `<h3 class="sheet-title">${T('Characters found')}</h3>
+    `<h3 class="sheet-title">${T('Characters found')}</h3>${got.kept ? `<div class="row imp-kept"><span class="muted field-note">${T('Saved result (no model call)')}</span><button type="button" class="btn ghost chip-sm" id="impAgain">${T('Read again')}</button></div>` : ''}
    <div class="field"><label for="impRoster">${T('Character list')}</label><textarea id="impRoster" rows="8" class="roster-text">${esc(got.roster)}</textarea><div class="roster-preview" id="impPreview"></div><div class="imp-fit" id="impFit"></div></div>
    <div class="field"><label for="impRest">${T('The rest, not about characters')}</label><textarea id="impRest" rows="5" class="roster-text" placeholder="${esc(T('Nothing else'))}">${esc(got.rest)}</textarea></div>
    ${
@@ -259,7 +284,11 @@ function reviewImport(ctx, src, got) {
   ta.oninput = check;
   if (src.into) $('#impRest').oninput = $('#impCut').onchange = check;
   check();
-  $('#impCancel').onclick = closeSheet;
+  $('#impCancel').onclick = () => {
+    ac.abort();
+    closeSheet();
+  };
+  if (got.kept) $('#impAgain').onclick = () => readFresh(ctx, src, $('#impAgain'), ac);
   add.onclick = async () => {
     check();
     const busy = ctx.busy && ctx.busy();

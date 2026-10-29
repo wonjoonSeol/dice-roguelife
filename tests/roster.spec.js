@@ -739,6 +739,37 @@ test('roster', async ({ game }) => {
     }),
     noteId,
   );
+  // the same note again: the result kept on it, with no call; once its text is edited, a call again
+  await pg.waitForFunction(id => !!DR.noteById(id).cast, noteId);
+  const importAgain = async () => {
+    await pg.evaluate('window.__lastPrompt = ""');
+    await pg.click('#worldNoteCast');
+    await pg.click(`[name="impSrc"][value="note:${noteId}"]`);
+    await pg.click('#impRead');
+    await pg.waitForSelector('#impAdd');
+    const r = await pg.evaluate(() => ({
+      called: window.__lastPrompt !== '',
+      kept: !!document.querySelector('#impAgain'),
+      roster: document.querySelector('#impRoster').value,
+    }));
+    await pg.click('#impCancel');
+    return r;
+  };
+  const second = await importAgain();
+  await pg.evaluate(async id => {
+    const n = DR.noteById(id);
+    await DR.saveNote({ id, name: n.name, text: n.text + '\n-설화: 객잔 주인' });
+  }, noteId);
+  const edited = await importAgain();
+  check(
+    errs,
+    'a second import of the same note uses its kept result with no call; an edited note is read again',
+    !second.called &&
+      second.kept &&
+      second.roster === '# 낭인\n이름: 백무명 / 직책: 떠돌이' &&
+      edited.called &&
+      !edited.kept,
+  );
   await pg.click('[data-w="murim"]');
   await pg.click('#rollBtn');
   await pg.waitForSelector('#acceptBtn');
