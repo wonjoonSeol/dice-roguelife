@@ -242,6 +242,10 @@ const magic = s => (MAGIC.add(s), s),
   mundane = s => (MUNDANE.add(s), s);
 // an origin, or a talent by its name, that this world's roll may give
 export const inPool = (world, name) => (world && world.mundane ? !MAGIC.has(name) : !MUNDANE.has(name));
+// origins that are a creature themselves, by the race they give the life
+const CREATURE = new Map();
+const creature = (race, s) => (CREATURE.set(s, race), s);
+export const creatureRace = name => CREATURE.get(name);
 export const ORIGINS = {
   EX: [
     magic(N_('Demon King')),
@@ -255,10 +259,10 @@ export const ORIGINS = {
     magic(N_("Heir to the nation's top guild")),
     magic(N_('Young master of the Demonic Cult')),
     N_('Only child of the Northern Grand Duke'),
-    magic(N_('Ancient dragon')),
+    magic(creature(N_('Dragon'), N_('Ancient dragon'))),
     N_("Clone of a megacorp's board chair"),
     N_("The emperor's legitimate heir"),
-    magic(N_('Last egg of a sovereign species')),
+    magic(creature(N_('Sovereign species'), N_('Last egg of a sovereign species'))),
     N_('Third-generation chaebol heir'),
     magic(N_("The great sage's last disciple")),
   ],
@@ -269,7 +273,7 @@ export const ORIGINS = {
     magic(N_('S-rank hunter')),
     magic(N_('Illegitimate child of a demon duke')),
     magic(N_('Apprentice of an archmage')),
-    magic(N_('High demon')),
+    magic(creature(N_('Demon'), N_('High demon'))),
     mundane(N_('Top idol of the generation')),
     mundane(N_('Youngest director at a major conglomerate')),
   ],
@@ -292,11 +296,15 @@ export const ORIGINS = {
   D: [N_('Orphan'), N_('Slum pickpocket'), N_('Wandering medicine peddler'), N_('Child of a bankrupt merchant')],
   E: [N_('Slave'), N_('Mine convict'), N_('Child sold to pay a debt'), N_('Terminally ill'), magic(N_('Cursed child'))],
   F: [
-    magic(N_('Otherworld slime')),
-    magic(N_('Goblin whelp')),
-    magic(N_('Scarecrow')),
-    N_('Village dog'),
-    mundane(N_('Stray cat')),
+    magic(creature(N_('Slime'), N_('Otherworld slime'))),
+    magic(creature(N_('Goblin'), N_('Goblin whelp'))),
+    magic(creature(N_('Scarecrow'), N_('Scarecrow'))),
+    creature(N_('Dog'), N_('Village dog')),
+    mundane(creature(N_('Cat'), N_('Stray cat'))),
+    N_('Beggar child'),
+    N_('Orphan with nothing'),
+    N_('Debt-bound servant'),
+    N_('Nameless vagrant'),
   ],
 };
 export const TALENTS = {

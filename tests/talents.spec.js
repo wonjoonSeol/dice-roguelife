@@ -72,7 +72,7 @@ test('talents owner', async ({ game }) => {
 });
 
 test('talents non owner', async ({ game }) => {
-  // non-owner: every talent row, including added ones, is capped at C
+  // non-owner: every talent row, including added ones, is capped at C, and Random (the fair odds) stays open
   const { pg, errs } = await game(mock(false), { size: [420, 1300] });
   await pg.waitForTimeout(700);
   await pg.waitForTimeout(300);
@@ -84,8 +84,39 @@ test('talents non owner', async ({ game }) => {
   console.log('non-owner rows locked:', rows);
   check(
     errs,
-    'every row, the added one too, sits at C with the grades above it locked',
-    rows.length === 2 && rows.every(([v, locked]) => v === 'C' && locked > 0 && locked === rows[0][1]),
+    'every row, the added one too, sits at Random with the grades above C locked',
+    rows.length === 2 && rows.every(([v, locked]) => v === 'random' && locked > 0 && locked === rows[0][1]),
+  );
+  // the default Random rolls the usual odds; a picked grade stays
+  const g = await pg.evaluate(() => {
+    const ot = document.querySelector('#fOT'),
+      tt = document.querySelector('#talents .tt');
+    const roll = () => {
+      const o = new Set(),
+        t = new Set();
+      for (let i = 0; i < 300; i++) {
+        const l = DR.rollLife(
+          'x',
+          'male',
+          'murim',
+          { race: '', originTier: ot.value, talentTier: tt.value, age: '' },
+          null,
+        );
+        o.add(l.originTier);
+        t.add(l.talentTier);
+      }
+      return [o.size, t.size, [...o, ...t].join()];
+    };
+    const open = roll();
+    ot.value = 'D';
+    tt.value = 'C';
+    return { open, picked: roll() };
+  });
+  console.log('grades:', JSON.stringify(g));
+  check(
+    errs,
+    'the default Random gives many grades, a picked one is pinned',
+    g.open[0] > 1 && g.open[1] > 1 && same(g.picked, [1, 1, 'D,C']),
   );
   expect(errs).toEqual([]);
 });

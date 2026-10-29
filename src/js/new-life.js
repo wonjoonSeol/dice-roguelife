@@ -5,6 +5,7 @@ import {
   BASE,
   cmdName,
   CMDS,
+  creatureRace,
   currencyOf,
   inPool,
   moneyFor,
@@ -47,22 +48,27 @@ const TALENT_MAX = 5;
 // a regression keeps its save's notes; a new game starts with the last save's
 const startNotes = inherit => (inherit ? app.state.noteIds : lastNoteIds());
 let tierLocked = false;
-// free setup for players without owner rights stops at C
+// free setup for players without owner rights stops at C; Random stays open, its odds are the fair ones
 function lockTierSel(sel) {
   if (!sel) return;
   [...sel.options].forEach(o => {
     o.setAttribute('value', o.value);
-    if (o.value !== NO_TALENT && tierRank(o.value) < tierRank('C')) {
+    const r = tierRank(o.value);
+    if (r >= 0 && r < tierRank('C')) {
       o.disabled = true;
       o.textContent = o.value + T(' (locked)');
     }
   });
-  sel.value = 'C';
+  if (sel.selectedOptions[0]?.disabled) sel.value = RANDOM_TIER;
 }
 // the first row's grade may be "no talent": the life starts with none at all (life.talent null)
 const NO_TALENT = 'none';
+// a grade left to the dice (rollLife takes any value outside TIERS as rolled)
+const RANDOM_TIER = 'random';
+const tierOptions = () =>
+  `<option value="${RANDOM_TIER}" selected>${T('Random')}</option>${TIERS.map(t => `<option>${t}</option>`).join('')}`;
 const talentRow = first =>
-  `<div class="trow"><div class="row talent-row"><select class="tt" aria-label="${T('Talent grade')}">${first ? `<option value="${NO_TALENT}">${T('No talent')}</option>` : ''}${TIERS.map(t => `<option ${t === 'C' ? 'selected' : ''}>${t}</option>`).join('')}</select><input class="tn grow" maxlength="30" placeholder="${first ? T('e.g. Obsessed with the sword') : T('Talent name')}">${first ? '' : `<button type="button" class="tx" aria-label="${T('Remove this talent')}">×</button>`}</div><input class="td talent-desc" maxlength="80" placeholder="${T('Effect in one line')}"></div>`;
+  `<div class="trow"><div class="row talent-row"><select class="tt" aria-label="${T('Talent grade')}">${first ? `<option value="${NO_TALENT}">${T('No talent')}</option>` : ''}${tierOptions()}</select><input class="tn grow" maxlength="30" placeholder="${first ? T('e.g. Obsessed with the sword (blank for random)') : T('Talent name')}">${first ? '' : `<button type="button" class="tx" aria-label="${T('Remove this talent')}">×</button>`}</div><input class="td talent-desc" maxlength="80" placeholder="${T('Effect in one line')}"></div>`;
 let formInherit; // for redrawNewLifeForm
 export function startNewLifeForm(inherit) {
   formInherit = inherit;
@@ -190,7 +196,7 @@ function newLifeHtml(inherit) {
     <div class="field"><label>${T('How to start')}</label><div class="seg" id="mseg"><button type="button" data-m="gacha" aria-pressed="true">${T('Luck (dice)')}</button><button type="button" data-m="free" aria-pressed="false">${T('Custom')}</button></div></div>
     <div id="freeBox" class="hidden free-box">
       <div class="field"><label for="fRace">${T('Race')}</label><input id="fRace" maxlength="20" placeholder="${T('Leave blank for random')}"></div>
-      <div class="row"><div class="field talent-grade-field"><label for="fOT">${T('Standing grade')}</label><select id="fOT">${TIERS.map(t => `<option ${t === 'C' ? 'selected' : ''}>${t}</option>`).join('')}</select></div><div class="field grow"><label for="fOrigin">${T('Standing')}</label><input id="fOrigin" maxlength="30" placeholder="${T('e.g. Lowest disciple of the Mount Hua Sect')}"></div></div>
+      <div class="row"><div class="field talent-grade-field"><label for="fOT">${T('Standing grade')}</label><select id="fOT">${tierOptions()}</select></div><div class="field grow"><label for="fOrigin">${T('Standing')}</label><input id="fOrigin" maxlength="30" placeholder="${T('e.g. Lowest disciple of the Mount Hua Sect (blank for random)')}"></div></div>
       <div class="field"><label>${T('Talents (grade, name, effect in one line)')}</label><div id="talents">${talentRow(true)}</div><button type="button" class="btn ghost add-talent" id="addTalent">${T('+ Add a talent')}</button></div>
       <div class="field"><label for="fAge">${T('Starting age')}</label><input id="fAge" type="number" min="0" max="90" placeholder="${T('Leave blank for random')}"></div>
       <div class="field"><label for="worldNote">${T('Setting and characters (optional)')}</label><textarea id="worldNote" rows="3" maxlength="${LIMITS.userNotes}" placeholder="${T('e.g. There is no magic in this world and the guilds rule the cities. My childhood friend Seoyun lives next door. Blunt on the outside, but always looking out for me.')}">${esc(app.settings.worldNote || '')}</textarea><div class="row note-tools"><button type="button" class="btn ghost" id="worldNoteSave" disabled>${T('Save as note')}</button></div><p class="muted field-note">${T('This goes into your notes, so it shapes the story from the first scene. You can edit it later in the Memory tab.')}</p></div>
@@ -290,7 +296,7 @@ function readFreeSetup(sel) {
     name: r.querySelector('.tn').value.trim(),
     desc: r.querySelector('.td').value.trim(),
   }));
-  const first = talents[0] || { tier: 'C', name: '', desc: '' };
+  const first = talents[0] || { tier: RANDOM_TIER, name: '', desc: '' };
   return {
     race: $('#fRace').value.trim(),
     originTier: $('#fOT').value,
@@ -482,34 +488,42 @@ export let rollLife = function rollLife(name, gender, worldChoice, free, aff) {
   const dr = Array.isArray(world.diff) ? world.diff : [3, 3];
   const diff = dr[0] + Math.floor(rnd() * (dr[1] - dr[0] + 1));
   let race = rnd() < 0.01 ? tIn(L, '[No data (ERROR)]') : wpick(rw);
+  const ownRace = (free && free.race ? free.race.slice(0, 20) : '').toLowerCase();
+  // a typed race keeps out the creatures of any other race
+  const fits = x => {
+    const r = creatureRace(x);
+    return !r || !ownRace || [r, tr(r)].some(n => ownRace.includes(n.toLowerCase()));
+  };
+  const pool = t => ORIGINS[t].filter(x => inPool(table, x) && fits(x));
+  // last resort: a grade with nothing that fits takes the nearest grade above's
+  const origins = t =>
+      TIERS.slice(0, tierRank(t) + 1)
+        .reverse()
+        .map(pool)
+        .find(l => l.length),
+    talents = t => TALENTS[t].filter(x => inPool(table, x[0]));
+  const kw = aff ? [...aff.keywords, ...aff.races] : [];
   let ot = rollTier(),
     tt = rollTier();
-  const kw = aff ? [...aff.keywords, ...aff.races] : [];
-  const origins = t => ORIGINS[t].filter(x => inPool(table, x)),
-    talents = t => TALENTS[t].filter(x => inPool(table, x[0]));
-  let origin = tr(affPick(origins(ot), tr, kw));
-  let [tn, td] = affPick(talents(tt), x => tr(x[0]) + ' ' + tr(x[1]), kw).map(tr);
-  let age = pick([0, 0, 7, 12, 16, 17, 19, 24, 31]);
   if (free) {
-    if (free.race) race = free.race.slice(0, 20);
-    ot = TIERS.includes(free.originTier) ? free.originTier : ot;
-    origin = free.origin || tr(pick(origins(ot)));
+    if (TIERS.includes(free.originTier)) ot = free.originTier;
     tt = free.talentTier === NO_TALENT ? null : TIERS.includes(free.talentTier) ? free.talentTier : tt;
-    if (!tt) [tn, td] = ['', ''];
-    else if (free.talent) {
-      tn = free.talent;
-      td = free.talentDesc || '';
-    } else {
-      [tn, td] = pick(talents(tt)).map(tr);
-    }
-    if (free.age !== '') age = Math.max(0, Math.min(90, parseInt(free.age) || 0));
   }
+  const rolled = free && free.origin ? null : affPick(origins(ot), tr, kw);
+  const origin = rolled ? tr(rolled) : free.origin;
+  if (ownRace) race = free.race.slice(0, 20);
+  else if (creatureRace(rolled)) race = tr(creatureRace(rolled));
+  let [tn, td] = ['', ''];
+  if (tt && free && free.talent) [tn, td] = [free.talent, free.talentDesc || ''];
+  else if (tt) [tn, td] = affPick(talents(tt), x => tr(x[0]) + ' ' + tr(x[1]), kw).map(tr);
+  let age = pick([0, 0, 7, 12, 16, 17, 19, 24, 31]);
+  if (free && free.age !== '') age = Math.max(0, Math.min(90, parseInt(free.age) || 0));
   const extra =
     free && Array.isArray(free.extraTalents)
       ? free.extraTalents
           .map(t => ({
             name: String(t.name).slice(0, 30),
-            grade: TIERS.includes(t.tier) ? t.tier : 'C',
+            grade: TIERS.includes(t.tier) ? t.tier : rollTier(),
             desc: String(t.desc || '').slice(0, 80),
           }))
           .filter(t => t.name)
