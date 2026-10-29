@@ -1222,5 +1222,11 @@
   "{n} {n|person|people} imported. They join this world's character list once your fate is rolled.": "{n}人を取り込みました。運命を決めると、その世界の人物リストに入ります。",
   "Use the character list and the rest in this game instead of the note (the note stays as it is)": "このゲームではノートの代わりに人物リストと残りの文章を使う（ノートはそのまま）",
   "The note is unticked for this game, and the rest above is added to {box}.": "このゲームではノートのチェックが外れ、上の残りの文章は{box}に追加されます。",
-  "The rest doesn't fit in {box}: it holds up to {max} characters, and with it there would be {n}. Untick the box to keep using the note.": "残りの文章が{box}に収まりません。{max}字までですが、足すと{n}字になります。ノートをそのまま使うにはチェックを外してください。"
+  "The rest doesn't fit in {box}: it holds up to {max} characters, and with it there would be {n}. Untick the box to keep using the note.": "残りの文章が{box}に収まりません。{max}字までですが、足すと{n}字になります。ノートをそのまま使うにはチェックを外してください。",
+  "Opening frames, shown in number order full width above the first reply of a life. <code>opening_1.png</code>, <code>opening_2.png</code> are one sequence; <code>opening_murim_1.png</code> starts a named one. One that fits the world is picked at random": "オープニングのコマ。人生の最初の返答の上に、番号順に画面幅いっぱいで表示されます。<code>opening_1.png</code>、<code>opening_2.png</code> がひとつの組で、<code>opening_murim_1.png</code> のように名前を付けると別の組になります。世界に合う組をひとつランダムに選びます",
+  "Openings ({n})": "オープニング（{n}）",
+  "Shown above the first reply of a life: one sequence that fits its world, at random. With none, a bg_game-master background or the game master is shown.": "人生の最初の返答の上に表示されます。その世界に合う組をひとつランダムに選びます。合うものがなければ bg_game-master の背景かゲームマスターが表示されます。",
+  "Opening": "オープニング",
+  "Sequence (blank: opening_1, 2...)": "組（空欄なら opening_1, 2...）",
+  "Frame number": "コマ番号"
 }

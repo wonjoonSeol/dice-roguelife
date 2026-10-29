@@ -1279,5 +1279,11 @@
   "{n} {n|person|people} imported. They join this world's character list once your fate is rolled.": "{n}명을 가져왔어요. 운명을 굴리면 그 세계의 인물 목록에 들어가요.",
   "Use the character list and the rest in this game instead of the note (the note stays as it is)": "이 게임에서는 노트 대신 인물 목록과 나머지 글을 쓰기 (노트는 그대로)",
   "The note is unticked for this game, and the rest above is added to {box}.": "이 게임에서 노트 체크가 꺼지고, 위의 나머지 글은 {box}에 더해져요.",
-  "The rest doesn't fit in {box}: it holds up to {max} characters, and with it there would be {n}. Untick the box to keep using the note.": "나머지 글이 {box}에 다 들어가지 않아요. {max}자까지인데, 더하면 {n}자예요. 노트를 그대로 쓰려면 체크를 끄세요."
+  "The rest doesn't fit in {box}: it holds up to {max} characters, and with it there would be {n}. Untick the box to keep using the note.": "나머지 글이 {box}에 다 들어가지 않아요. {max}자까지인데, 더하면 {n}자예요. 노트를 그대로 쓰려면 체크를 끄세요.",
+  "Opening frames, shown in number order full width above the first reply of a life. <code>opening_1.png</code>, <code>opening_2.png</code> are one sequence; <code>opening_murim_1.png</code> starts a named one. One that fits the world is picked at random": "오프닝 컷. 삶의 첫 답 위에 번호 순서대로 화면 너비 가득 나와요. <code>opening_1.png</code>, <code>opening_2.png</code>가 한 묶음이고, <code>opening_무협_1.png</code>처럼 이름을 붙이면 따로 묶여요. 세계에 맞는 묶음 하나를 무작위로 골라요",
+  "Openings ({n})": "오프닝 ({n})",
+  "Shown above the first reply of a life: one sequence that fits its world, at random. With none, a bg_game-master background or the game master is shown.": "삶의 첫 답 위에 나와요. 그 세계에 맞는 묶음 하나를 무작위로 골라요. 맞는 것이 없으면 bg_game-master 배경이나 게임 마스터가 나와요.",
+  "Opening": "오프닝",
+  "Sequence (blank: opening_1, 2...)": "묶음 (비우면 opening_1, 2...)",
+  "Frame number": "컷 번호"
 }

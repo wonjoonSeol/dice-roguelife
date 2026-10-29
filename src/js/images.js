@@ -86,7 +86,51 @@ export function turnImg(ti, id) {
   return imgById(id);
 }
 export const picIds = ti =>
-  [ti.scene, ti.char, ...listOf(ti.chars).map(c => c.id), ...listOf(ti.places).map(p => p.id)].filter(Boolean);
+  [
+    ti.scene,
+    ti.char,
+    ...listOf(ti.chars).map(c => c.id),
+    ...listOf(ti.places).map(p => p.id),
+    ...listOf(ti.opening),
+    ti.banner,
+  ].filter(Boolean);
+const byOrder = (a, b) =>
+  (a.order || 0) - (b.order || 0) || String(a.file || a.name).localeCompare(String(b.file || b.name));
+export const openingName = x => `opening_${x.set ? x.set + '_' : ''}${x.order || 1}`;
+// opening sequences (opening_{n}, opening_{set}_{n}): the sequence name ('' for the unnamed one) -> frames in order
+export function openingSets() {
+  const m = {};
+  for (const x of app.images) if (x.kind === 'opening') (m[x.set || ''] = m[x.set || ''] || []).push(x);
+  for (const k in m) m[k].sort(byOrder);
+  return m;
+}
+// a sequence fits every world any of its frames names (none: every world); a retired frame retires the sequence
+export const openingWorlds = frames => [...new Set(frames.flatMap(worldsOf))];
+export const openingOff = frames => frames.some(x => x.off);
+// The first turn of a life: a sequence that fits the world, else a bg_game-master background, else the admin set's
+// picture. Stored on the turn's img as opening (frame ids) or banner (one id).
+export function openingFor(w) {
+  const seqs = Object.values(openingSets()).filter(f => !openingOff(f) && fitsWorld({ worlds: openingWorlds(f) }, w));
+  if (seqs.length) return { opening: pick(seqs).map(x => x.id) };
+  const gm = app.images.filter(
+    x => x.kind === 'scene' && !x.off && bgKey(x).startsWith('game-master') && fitsWorld(x, w),
+  );
+  if (gm.length) return { banner: pick(gm).id };
+  const adm = charSetsAll().admin || [];
+  const emo = e => adm.find(x => (x.emotion || 'neutral') === e);
+  const a = emo('neutral') || emo('smile') || adm[0];
+  return a ? { banner: a.id } : null;
+}
+// '' when none of its pictures is in the library any more
+export function openingHtml(ti) {
+  const frames = listOf(ti && ti.opening)
+    .map(id => turnImg(ti, id))
+    .filter(Boolean);
+  const one = !frames.length && ti && ti.banner && turnImg(ti, ti.banner);
+  const list = frames.length ? frames : one ? [one] : [];
+  if (!list.length) return '';
+  return `<div class="opening${one ? ' banner' : ''}">${list.map(x => `<img class="op-frame" alt="" loading="lazy" decoding="async" src="${imgUrl(x.id)}">`).join('')}</div>`;
+}
 export function setCover(k, imgs) {
   imgs = imgs || charSetsAll()[k] || [];
   const c = (app.setMeta[k] || {}).cover;

@@ -392,6 +392,21 @@ main {
   background: var(--panel2) center/cover no-repeat;
   border-bottom: 1px solid var(--line);
 }
+/* a life's first reply: its opening frames stacked full width with no gaps, like a webtoon, or one banner */
+.opening {
+  background: var(--panel2);
+  border-bottom: 1px solid var(--line);
+}
+.opening .op-frame {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.opening.banner .op-frame {
+  max-height: min(70vh, 560px);
+  object-fit: cover;
+  object-position: center 25%;
+}
 .scene .char {
   position: absolute;
   right: 6%;
@@ -3118,6 +3133,7 @@ html.discreet nav.tabs,
 html.discreet #strip,
 html.discreet .castrow,
 html.discreet .scene,
+html.discreet .opening,
 html.discreet .deltas,
 html.discreet .clock,
 html.discreet .tools,
@@ -3865,6 +3881,25 @@ label.row.opt > input {
 }
 .set-row {
   margin-top: 6px;
+}
+.op-lead {
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+.op-frames {
+  gap: 4px;
+  margin-top: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.op-thumb {
+  height: 96px;
+  max-width: 160px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--panel2);
+  flex: none;
+  cursor: zoom-in;
 }
 .set-input {
   flex: 1;
