@@ -312,6 +312,8 @@ function fitsGender(k, g) {
   return !g || !kg || kg === g;
 }
 // the people other than `except` who wear set k
+// who else holds face k; a faceless figure is shared by any number of people, so it is nobody's
+export const holderOf = (npc, k) => !isGeneric(k) && holders(k, npc)[0];
 const holders = (k, except) => Object.keys(app.state.cast).filter(n => n !== except && app.state.cast[n] === k);
 
 // how a person is described, in the words set cards use. withName: the name counts as looks too ("정장 사내"), and role
