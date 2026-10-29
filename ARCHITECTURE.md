@@ -72,7 +72,7 @@
 | `situations.js` | 상황 사전(`config/situations`, `SIT_DEFAULTS`, `cleanDict`, `saveSituations`), 위 항목(`sitAncestors`, `sitRoot`), 그림의 상황(`frameSits`, `setFrameSits`), 라벨과 힌트(아래 "상황 그림") |
 | `images.js` | 이미지 찾기: `imgById`(id 색인), 턴의 그림(`turnImg`: 내용 키, 그다음 id), 캐릭터 세트(`charSets`), 세계 맞춤(`fitsWorld`, `setWorlds`), 세트의 상황(`setSituations`), 표정 고르기(`pickEmotion`), 장면 HTML |
 | `places.js` | 배경 검색: 내레이터가 영어 단어로 묘사한 장소 → 배경 이미지(`findPlace`) |
-| `casting.js` | 캐스팅: 인물(`{ name, gender, role, weight, look }`, 답에서는 `speakerOf`, `presentOf`)에게 초상화 세트 배정(외모, 역할, 소속 태그 점수. 같은 종류의 다른 값 둘 이상과 한 세트에 함께 붙는 값은 진영입니다(`faction:정파`는 화산파, 무당파와 함께 붙음). 인물의 소속과 맞는 것이 없고 다른 문파나 인물의 문파가 속하지 않은 진영을 단 세트는 다른 후보가 있는 한 후보에서 빠지고 점수도 -30, `idConflict`), AI 선택, 그림자. 성별이 있는 인물에게는 `기타` 세트를 자동으로 주지 않습니다(얼굴 고르기 창에서는 고를 수 있음). |
+| `casting.js` | 캐스팅: 인물(`{ name, gender, role, weight, look }`, 답에서는 `speakerOf`, `presentOf`)에게 초상화 세트 배정(외모, 역할, 소속 태그 점수. 같은 종류의 두 값은 어느 세트에든 함께 붙어 있으면 어울립니다(`faction:정파`와 `faction:화산파`). 인물의 소속과 맞는 것이 없고, 인물의 값과 함께 붙은 적 없는 같은 종류의 값을 단 세트는 다른 집단의 얼굴이라 AI 고르기, 단어 점수 고르기, 단역 모두에서 빠지고(진짜 얼굴이 하나도 안 남으면 그대로 둠) 점수도 -30입니다. 라이브러리에 없는 값은 판단하지 않습니다(`idConflict`, `ownGroup`), AI 선택, 그림자. 성별이 있는 인물에게는 `기타` 세트를 자동으로 주지 않습니다(얼굴 고르기 창에서는 고를 수 있음). |
 | `widgets.js` | 위젯 레지스트리 `WIDGETS`: 뉴스, 의뢰 게시판, 커뮤니티, 메신저마다 렌더, 접기 라벨, 후속 버튼, 마크다운 내보내기. 새 위젯은 항목 하나와 `prompts.json`의 스키마로 추가합니다. 게시판과 메신저는 생김새가 여럿(`BOARDS`: DC, 레딧, 5ch, 니코니코 / `CHATS`: 카카오톡, 왓츠앱, 라인)이고 데이터는 같아요. 설정 `boardStyle`, `chatStyle`, 자동이면 이야기 언어로 (`settings.js` `widgetStyle`). |
 | **답과 프롬프트** | |
 | `apply.js` | 답 반영(`applyOut`): 단계별 함수(`APPLY_STEPS`)가 공유 맥락 `ctx`를 받아 스탯, 아이템, 스킬, 기억, 시간, 장면과 초상화를 차례로 바꿉니다 |

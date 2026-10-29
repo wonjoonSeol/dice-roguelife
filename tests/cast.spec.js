@@ -120,8 +120,8 @@ test('cast', async ({ game }) => {
   });
   check(
     errs,
-    '1) a matching identity is worth +13 to a set, another sect of the same kind -30',
-    drop.every(d => d === 43),
+    '1) a matching identity is worth +13 to a set, one the library never shows -4',
+    drop.every(d => d === 17),
   );
   // 2) early cast: the pick resolved during streaming, so the first turn already shows the face
   const last = await pg.evaluate(
@@ -228,8 +228,9 @@ test('cast', async ({ game }) => {
   expect(errs).toEqual([]);
 });
 
-// A person's faction rules out another group's face: a 화산파 elder never gets the 청성파 elder whose looks fit best.
-// The library itself says 정파 is a camp (it goes with 화산파 and 무당파), so a 정파 face and a faction-free one stay.
+// A person's faction rules out another group's face on every casting path. The library itself says 정파 goes with
+// 화산파 (one set carries both), so a 정파 face and a faction-free one stay; with only other groups left, a lead still
+// gets a real face
 test('casting keeps the faction', async ({ game }) => {
   const { pg, errs } = await game(claudeMock(), { size: [420, 900] });
   await pg.waitForSelector('#rollBtn');
@@ -244,31 +245,45 @@ test('casting keeps the faction', async ({ game }) => {
       jeongpa_m: ['faction:정파', 'young man'],
       plain_elder: ['old man', 'white beard'],
     };
-    DR.app.images = Object.entries(sets).map(([k, tags], i) => ({
-      id: 'c' + i,
-      kind: 'char',
-      set: k,
-      name: k + '_neutral',
-      emotion: 'neutral',
-      url: px,
-      tags,
-    }));
-    for (const k of Object.keys(sets)) DR.app.setMeta[k] = { gender: k === 'hwasan_f' ? 'female' : 'male' };
-    DR.imagesChanged();
-    const who = {
-      name: '학송 장로',
-      gender: 'male',
-      weight: 'major',
-      look: ['white beard', 'elder', 'faction:화산파'],
+    const load = list => {
+      DR.app.images = Object.entries(list).map(([k, tags], i) => ({
+        id: 'c' + i,
+        kind: 'char',
+        set: k,
+        name: k + '_neutral',
+        emotion: 'neutral',
+        url: px,
+        tags,
+      }));
+      for (const k of Object.keys(list))
+        DR.app.setMeta[k] =
+          k === 'shadow_male' ? { gender: 'male', tier: 'generic' } : { gender: k === 'hwasan_f' ? 'female' : 'male' };
+      DR.imagesChanged();
+      DR.app.state.cast = {};
     };
-    return DR.castCandidates(who, 12);
+    const who = (name, weight) => ({
+      name,
+      gender: 'male',
+      weight,
+      look: ['white beard', 'old man', 'faction:화산파'],
+    });
+    load(sets);
+    const cands = DR.castCandidates(who('학송 장로', 'major'), 12);
+    const lead = DR.castFor(who('학송 장로', 'major')); // the word-scored path, without the model
+    const extra = DR.castFor(who('화산 노복', 'extra'));
+    load({ hwasan_f: sets.hwasan_f, cheong_elder: sets.cheong_elder, shadow_male: [] });
+    const only = DR.castCandidates(who('학송 장로', 'major'), 12);
+    return { cands, lead, extra, only };
   });
-  console.log('candidates:', got);
+  console.log('faction casting:', JSON.stringify(got));
+  const other = k => k === 'cheong_elder' || k === 'mudang_m';
+  check(errs, 'another sect is out though its looks fit best', !got.cands.some(other));
   check(
     errs,
-    'another sect is out though its looks fit best',
-    !got.includes('cheong_elder') && !got.includes('mudang_m'),
+    'the same camp and a faction-free face stay',
+    got.cands.includes('jeongpa_m') && got.cands.includes('plain_elder'),
   );
-  check(errs, 'the same camp and a faction-free face stay', got.includes('jeongpa_m') && got.includes('plain_elder'));
+  check(errs, 'the word-scored lead and an extra skip another sect too', !other(got.lead) && !other(got.extra));
+  check(errs, 'with only another sect left, a lead is still offered its real face', got.only.includes('cheong_elder'));
   expect(errs).toEqual([]);
 });
