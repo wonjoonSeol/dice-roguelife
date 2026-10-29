@@ -343,6 +343,15 @@ test('same names ask once for the batch; a note over 32 KB is refused', async ({
   await pg.click('[data-lib-new]');
   await pg.fill('#noteName', 'Alpha');
   await pg.fill('#noteText', 'x');
+  // a tap outside the editor leaves it open with what was typed; Cancel still closes it
+  await pg.mouse.click(5, 5);
+  check(
+    errs,
+    'a tap outside keeps the editor and its text',
+    await pg.evaluate(
+      "!document.querySelector('#sheet').classList.contains('hidden') && document.querySelector('#noteText').value==='x'",
+    ),
+  );
   await pg.click('#noteSave');
   await pg.waitForTimeout(200);
   check(

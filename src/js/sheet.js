@@ -8,6 +8,7 @@ export function openSheet(html, opts = {}) {
   $('#sheetInner').innerHTML = html;
   $('#sheet').classList.toggle('center', !!opts.center);
   $('#sheet').classList.toggle('wide', !!opts.wide);
+  $('#sheet').classList.toggle('modal', !!opts.modal); // closed only by its own buttons, so typed text isn't lost
   $('#sheet').classList.remove('hidden');
 }
 export function closeSheet() {
@@ -80,7 +81,8 @@ export let askPrompt = function askPrompt(msg, def = '') {
 export function bindSheet() {
   // a tap outside the panel, or on anything marked data-close, closes the sheet
   $('#sheet').onclick = e => {
-    if (e.target.id === 'sheet' || e.target.closest('[data-close]')) closeSheet();
+    if ((e.target.id === 'sheet' && !$('#sheet').classList.contains('modal')) || e.target.closest('[data-close]'))
+      closeSheet();
   };
   $('#sheet').onkeydown = e => {
     if (e.key === 'Enter' && e.target.matches('[role="button"][data-close]')) closeSheet(); // a <button> clicks itself on Enter

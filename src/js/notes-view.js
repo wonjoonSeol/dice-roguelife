@@ -119,7 +119,7 @@ function openNoteEditor(note) {
    <div class="field"><label for="noteName">${T('Name')}</label><input id="noteName" maxlength="${NOTE_NAME_MAX}" value="${esc(note ? note.name : '')}"></div>
    <div class="field"><label for="noteText">${T('Text')}</label><textarea id="noteText" rows="14" class="note-text">${esc(note ? note.text : '')}</textarea><span class="muted count-note" id="noteBytes"></span></div>
    <div class="row actions"><button class="btn primary" id="noteSave">${T('Save note')}</button><button class="btn ghost" data-close>${T('Cancel')}</button></div>`,
-    { wide: true },
+    { wide: true, modal: true },
   );
   const ta = $('#noteText');
   const count = () => {
