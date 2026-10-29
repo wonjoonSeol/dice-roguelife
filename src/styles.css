@@ -3985,6 +3985,91 @@ label.row.opt > input {
   gap: 6px;
   margin-top: 6px;
 }
+/* situations: the pickers on frames and set cards, and the dictionary */
+.set-sits {
+  margin-top: 8px;
+}
+.set-sits summary,
+.sit-more summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.set-sit-row {
+  gap: 6px;
+  margin-top: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.set-sit-emo {
+  font-size: 11.5px;
+  min-width: 64px;
+}
+.sit-pick {
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+.seg .sit-chip.adult {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.img .sit-add,
+.sit-add {
+  width: auto;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+}
+.sit-dict > summary {
+  cursor: pointer;
+}
+.sit-dict-title {
+  display: inline;
+}
+.sit-lead {
+  font-size: 12px;
+  margin: 6px 0 8px;
+}
+.sit-row {
+  margin-bottom: 6px;
+}
+.sit-row-head {
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.sit-adult {
+  font-size: 11px;
+  color: var(--danger);
+}
+.sit-use,
+.sit-hint {
+  font-size: 12px;
+}
+.sit-hint {
+  margin-top: 2px;
+  word-break: keep-all;
+}
+.sit-acts {
+  gap: 6px;
+  margin-top: 4px;
+}
+.sit-f {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.sit-f .dlg-input {
+  margin-top: 4px;
+}
+.sit-err {
+  font-size: 12px;
+  color: var(--danger);
+  min-height: 1em;
+}
 .sw-bonds {
   margin-top: 8px;
 }

@@ -1,7 +1,8 @@
 /* ============ images: lookups over the image library (by id, character sets, worlds, portraits) ============ */
 import { host } from './host.js';
 import { esc, pick } from './util.js';
-import { EMO_FB, EMOS, WORLD_ALIAS, WORLDS } from './data.js';
+import { EMO_FB, WORLD_ALIAS, WORLDS } from './data.js';
+import { frameSits, isAdultSit, sitAncestors, sitKeyOf, sitRoot, sitVer } from './situations.js';
 import { SCENARIO_WORLD } from './enums.js';
 import { app } from './app.js';
 import { canonName } from './people.js';
@@ -273,44 +274,54 @@ const frameWords = x =>
     .toLowerCase()
     .split(/[\s,_]+/)
     .filter(Boolean);
-const lowTags = x => (x.tags || []).map(t => String(t).toLowerCase().trim());
-// The tags that tell one frame of a set from the others (fighting, hug, tired): on some frames but not all, and not
-// the set's own key, an emotion, a numbered emotion (anger8) or an identity tag. The narrator may name one as the
-// person's situation (prompt.js situationBlock); computed once per set until the image list changes.
-let tagMemo = { ver: -1, bySet: {} };
-export function frameTags(k) {
-  if (tagMemo.ver !== ver) tagMemo = { ver, bySet: {} };
-  if (tagMemo.bySet[k]) return tagMemo.bySet[k];
-  const imgs = charSets()[k] || [];
-  const count = new Map();
-  for (const x of imgs) for (const t of new Set(lowTags(x))) count.set(t, (count.get(t) || 0) + 1);
-  const skip = t => t === k || t.includes(':') || EMOS.includes(t) || /^[a-z]+\d+$/.test(t) || /^\d+$/.test(t);
-  return (tagMemo.bySet[k] = [...count].filter(([t, n]) => n < imgs.length && !skip(t)).map(([t]) => t));
+const adultFrame = x => frameSits(x).some(isAdultSit);
+// The situations a set has pictures for, an adult frame counting only for its adult ones. The narrator may name one
+// for the person (prompt.js situationBlock); computed once per set until the list or the dictionary changes.
+let sitMemo = { ver: '', bySet: {} };
+export function setSituations(k) {
+  const v = ver + ':' + sitVer();
+  if (sitMemo.ver !== v) sitMemo = { ver: v, bySet: {} };
+  if (sitMemo.bySet[k]) return sitMemo.bySet[k];
+  const out = new Set();
+  for (const x of charSets()[k] || []) {
+    const adult = adultFrame(x);
+    for (const s of frameSits(x)) if (!adult || isAdultSit(s)) out.add(s);
+  }
+  return (sitMemo.bySet[k] = [...out]);
 }
+// a named situation counts for a set with a picture anywhere in its family (the same root)
 const situationIn = (k, situation) => {
-  const s = String(situation || '')
-    .toLowerCase()
-    .trim();
-  return s && frameTags(k).includes(s) ? s : '';
+  const s = sitKeyOf(situation);
+  return s && setSituations(k).some(x => sitRoot(x) === sitRoot(s)) ? s : '';
 };
 export const hasSituation = (k, situation) => !!situationIn(k, situation);
-// situation: one of the set's frame tags the narrator named; only its frames are used, chosen by the feeling as usual.
-// With none named, a situation's frames (fighting, hug, nsfw) stay out unless the set has nothing else.
+// the feeling, its fallbacks one after another, then neutral; with none of them, the whole list
+function nearestEmotion(list, emo) {
+  const chain = [];
+  for (let e = emo; e && !chain.includes(e); e = EMO_FB[e]) chain.push(e);
+  for (const e of [...chain, 'neutral']) {
+    const c = list.filter(x => (x.emotion || 'neutral') === e);
+    if (c.length) return c;
+  }
+  return list;
+}
+// Built for sets of one to three pictures (ARCHITECTURE.md, 상황 그림): the named situation's frames, then each parent's,
+// then any in its family; else the plain frames (no situation), else the frames that aren't adult. An adult frame
+// shows only when an adult situation is named.
 export function pickEmotion(k, emo, look, situation) {
-  let imgs = charSets()[k];
+  const imgs = charSets()[k];
   if (!imgs || !imgs.length) return null;
   const s = situationIn(k, situation);
-  if (s) imgs = imgs.filter(x => lowTags(x).includes(s));
-  else {
-    const special = frameTags(k);
-    const plain = imgs.filter(x => !lowTags(x).some(t => special.includes(t)));
-    if (plain.length) imgs = plain;
-  }
-  const by = e => imgs.filter(x => (x.emotion || 'neutral') === e);
-  let c = by(emo);
-  if (!c.length && EMO_FB[emo]) c = by(EMO_FB[emo]);
-  if (!c.length) c = by('neutral');
-  if (!c.length) c = imgs;
+  const ok = x => !adultFrame(x) || (s && isAdultSit(s));
+  const named = s
+    ? [
+        ...[s, ...sitAncestors(s)].map(c => imgs.filter(x => ok(x) && frameSits(x).includes(c))),
+        imgs.filter(x => ok(x) && frameSits(x).some(c => sitRoot(c) === sitRoot(s))),
+      ]
+    : [];
+  const pool = [...named, imgs.filter(x => !frameSits(x).length), imgs.filter(x => !adultFrame(x))].find(l => l.length);
+  if (!pool) return null;
+  let c = nearestEmotion(pool, emo);
   const want = (Array.isArray(look) ? look : []).map(x => String(x).toLowerCase()).filter(Boolean);
   if (want.length) {
     const hit = c.filter(x => frameWords(x).some(t => want.includes(t)));

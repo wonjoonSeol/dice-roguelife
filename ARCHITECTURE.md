@@ -69,7 +69,8 @@
 | `compat.js` | 옛 저장을 지금 형식으로(`compat`) |
 | **이미지와 캐스팅** | |
 | `library.js` | 이미지 색인(`IMGX`, 공유 `imgidx` 문서), 세트 카드, 매니페스트 복원, 옛 구조 이전, 세계 라벨 정리(`migrateWorldLabels`, `addModernLabels`), 파일 해시(`fillHashes`), 저장 파일의 그림 키(`withPicKeys`) |
-| `images.js` | 이미지 찾기: `imgById`(id 색인), 턴의 그림(`turnImg`: 내용 키, 그다음 id), 캐릭터 세트(`charSets`), 세계 맞춤(`fitsWorld`, `setWorlds`), 표정 고르기(`pickEmotion`), 장면 HTML |
+| `situations.js` | 상황 사전(`config/situations`, `SIT_DEFAULTS`, `cleanDict`, `saveSituations`), 위 항목(`sitAncestors`, `sitRoot`), 그림의 상황(`frameSits`, `setFrameSits`), 라벨과 힌트(아래 "상황 그림") |
+| `images.js` | 이미지 찾기: `imgById`(id 색인), 턴의 그림(`turnImg`: 내용 키, 그다음 id), 캐릭터 세트(`charSets`), 세계 맞춤(`fitsWorld`, `setWorlds`), 세트의 상황(`setSituations`), 표정 고르기(`pickEmotion`), 장면 HTML |
 | `places.js` | 배경 검색: 내레이터가 영어 단어로 묘사한 장소 → 배경 이미지(`findPlace`) |
 | `casting.js` | 캐스팅: 인물(`{ name, gender, role, weight, look }`, 답에서는 `speakerOf`, `presentOf`)에게 초상화 세트 배정(외모, 역할, 소속 태그 점수), AI 선택, 그림자. 성별이 있는 인물에게는 `기타` 세트를 자동으로 주지 않습니다(얼굴 고르기 창에서는 고를 수 있음). |
 | `widgets.js` | 위젯 레지스트리 `WIDGETS`: 뉴스, 의뢰 게시판, 커뮤니티, 메신저마다 렌더, 접기 라벨, 후속 버튼, 마크다운 내보내기. 새 위젯은 항목 하나와 `prompts.json`의 스키마로 추가합니다. 게시판과 메신저는 생김새가 여럿(`BOARDS`: DC, 레딧, 5ch, 니코니코 / `CHATS`: 카카오톡, 왓츠앱, 라인)이고 데이터는 같아요. 설정 `boardStyle`, `chatStyle`, 자동이면 이야기 언어로 (`settings.js` `widgetStyle`). |
@@ -99,6 +100,7 @@
 | `roster-view.js` | 인물 명단 편집기(`rosterEditorHtml`, `bindRosterEditor`): 운명 화면과 기억 탭이 같이 씀. 붙여 넣기, 파일 열기, 읽은 사람과 건너뛴 줄 미리 보기, 인물 가져오기(아래 "인물 명단") |
 | `notes-view.js` | 노트 보관함 화면: 기억 탭의 목록(`renderNoteLibrary`: 여러 파일 올리기, 새로 쓰기, 고치기, 이름 바꾸기, 지우기, 이 게임에서 쓸지 체크)과 새 게임 화면의 고르기(`notePickerHtml`, `pickedInForm`). 두 목록 모두 노트 이름이나 고치기를 누르면 편집기가 열리고, 체크는 체크 칸만 합니다 |
 | `images-view.js` | 이미지 탭: 업로드(zip 풀기, 같은 이름으로 바꾸기), 자동 분류, 매니페스트 저장, 중복 정리 |
+| `situations-view.js` | 이미지 탭의 상황 사전 칸과 그림, 세트 카드의 상황 고르기 |
 | `zip.js` | zip 쓰기(이미지 팩 내보내기의 `makeZip`)와 읽기(올린 zip의 `readZip`, 아래 "이미지 라이브러리"). 다른 모듈을 쓰지 않아요 |
 | `debug.js` | 디버그 핸들 `window.DR` (위 "모듈 규칙") |
 | `main.js` | 진입점: 이벤트 연결, 탭 화면 넘기기, 그다음 `boot` |
@@ -136,13 +138,37 @@
 
 ### 상황 그림 (모든 세계)
 
-상황 그림은 애드온이 아니라 태그 시스템의 일입니다. 세트마다 그림을 서로 구별하는 태그(`frameTags`: 일부 그림에만
-있고, 세트 키, 감정, 번호 붙은 감정 `anger8`, 소속 태그가 아닌 것. 예: fighting, hug, tired)를 이미지 목록이 바뀔
-때까지 한 번 계산해 둡니다. 장면에 있는 사람(위의 `peopleInPlay`, 많아야 3명) 중 그런 태그가 있는 얼굴의 태그만
-`[그림 태그]`로 프롬프트에 가고, 내레이터가 그 인물의 지금 모습에 맞는 태그 하나를 답의 `situation`(also_present도
-같은 키)으로 고릅니다. 코드는 그 태그가 붙은 그림 중에서 감정으로 고릅니다(`pickEmotion`). 고르지 않았거나 그 세트에
-없는 태그면 감정만으로 고릅니다. 단어 목록은 코드에 없고, 구별 태그가 없는 세트만 나오는 장면은 0바이트입니다.
-스트리밍 중 고른 얼굴은 상황이 오기 전이라, 그 세트에 그 태그 그림이 있으면 끝에서 다시 고릅니다(`hasSituation`).
+상황 그림은 애드온이 아니라 이미지 라이브러리의 일입니다. 상황(싸움, 포옹, 성인 장면 등)은 태그가 아니라 라이브러리가 함께
+쓰는 **상황 사전**(`situations.js`, 공유 문서 `config/situations`, 세트 카드처럼 그 라이브러리를 쓰는 모든 플레이어가 봄)의
+항목입니다. 항목은 키(영어 소문자, 띄어쓰기 가능, 저장되는 값)와 `label`(한국어, 화면), `label_ja`, `hint`(한국어 이야기의
+내레이터가 언제 고르는지), `hint_en`(영어, 일본어 이야기), `adult`, `parent`(더 넓은 항목)입니다. 문서가 없으면 시작 사전
+`SIT_DEFAULTS`(싸움, 부상, 식사, 잠, 목욕, 포옹, 입맞춤, 예복, 성인 항목 `undress`와 그 아래 `nsfw`)이고, 더 자세한 성인
+항목은 팩의 `tags.json`이 가져옵니다. 사전은 처음 고칠 때 통째로 저장됩니다. `adult`는 위 항목에서 물려받고(`isAdultSit`), `parent`는 사전에 있는 다른 항목만, 돌고 도는
+고리는 끊습니다(`cleanDict`). 읽지 못한 채로는 저장하지 않습니다(`saveSituations`의 `unread`).
+
+- **그림**: 그림 행의 `situations`(사전 키 목록)가 태그와 따로 있습니다. 그림의 상황(`frameSits`)은 이 목록에 사전 키와 같은 태그를
+  더한 것이라, 옛 팩의 hug, battle 태그도 그대로 상황입니다. 그림의 상황을 바꾸면(`setFrameSits`) 키와 같은 태그는 목록으로
+  옮겨집니다. 파일 이름에서 감정 뒤의 사전 키(`female1_crying_battle`)도 올릴 때 상황이 됩니다(`parseName`).
+- **고르기**(`pickEmotion`, 그림이 1~3장인 세트가 대부분이라는 전제): 상황이 없는 그림이 평소 그림입니다. 내레이터가 상황을
+  말하면 그 키의 그림, 그다음 위 항목들의 그림을 차례로, 그다음 같은 뿌리(맨 위 항목)의 아무 그림, 그다음 평소 그림, 마지막으로
+  성인이 아닌 상황 그림입니다. 각 단계 안에서는 감정(`EMO_FB` 사슬, 그다음 neutral, 그다음 아무것)과 외모 단어로 고릅니다.
+  성인 상황이 붙은 그림은 성인 키를 말했을 때만 나오고 다른 것 대신 나오지 않아서, 성인 그림만 있는 세트는 다른 장면에서 얼굴이
+  없습니다. 더 구체적인 키를 말했는데 그 그림이 없으면 위 항목(`nsfw`, 그다음 `undress`)입니다.
+- **내레이터**: 장면에 있는 사람(`peopleInPlay`, 많아야 3명) 중 상황 그림이 있는 얼굴만 `[그림 태그]`(`situationBlock`)에
+  한 줄씩 갑니다. 그 세트가 가진 상황(`setSituations`, 이미지 목록이나 사전이 바뀔 때까지 세트마다 한 번 계산)을 뿌리별로,
+  뿌리 뒤 대괄호에 그 세트가 가진 하위 키만 적고, 힌트는 블록에서 처음 나올 때만 붙입니다. 내레이터는 답의 `situation`
+  (also_present도 같은 키)에 키 하나를 넣습니다. 키 대신 라벨을 적어도 찾습니다(`sitKeyOf`). 상황 그림이 없는 세트만 나오는
+  장면은 0바이트입니다. 스트리밍 중 고른 얼굴은 상황이 오기 전이라, 그 세트에 그 상황의 그림이 있으면 끝에서 다시 고릅니다(`hasSituation`).
+- **이미지 탭**(`situations-view.js`): 그림 카드와 세트 카드("상황 그림", 그림마다)에서 사전 항목을 칩과 목록(하위 항목은 들여 씀)으로
+  고르고, 목록 끝의 "새 상황 만들기"가 사전에 먼저 넣습니다. 손으로 상황을 적지 않습니다. "상황 사전" 칸은 항목마다 쓰는 캐릭터와
+  그림 수를 보이고, 고치기(키 바꾸기는 모든 그림과 하위 항목이 따라감), 합치기, 지우기(확인 뒤 그림에서 빠지고 하위 항목은 한 칸
+  위로)를 합니다. 세트 카드의 태그 칩은 생김새 태그만 보입니다.
+- **팩**: `tags.json`의 맨 위 `situations`(키 → `label`, `hint`, `adult`, `parent`)가 사전과 키로 합쳐지고, 이미 있는 키는
+  이쪽 항목을 그대로 둡니다. 그림 항목의 `situations`는 그 그림의 목록을 바꾸고(`merge_tags`면 더함), 사전에 없는 키는 버립니다.
+  내보내기는 사전 전체와 그림마다 `set`, `situations`, 생김새 태그를 씁니다. 사본용 목록도 사전과 그림의 목록을 담습니다.
+- **자동 분류**: `autotag` 프롬프트에 사전(키와 힌트)을 넣어 감정 하나, 사전 키만의 상황, 생김새 태그를 따로 받습니다. 사전에 없는
+  장면은 `propose`로만 받아 알림으로 보이고(사전에 넣는 것은 플레이어), `exclude`(18세 미만일 수 있는 사람의 노출이나 성적인 그림)는
+  그 그림을 물러나게(`off`) 하고 지우도록 이름을 보입니다. 모든 그림이 분류되어 있으면 캐릭터 그림을 다시 분류할지 묻습니다.
 
 ### 인물 명단 (모든 세계)
 
@@ -503,6 +529,7 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
 | `sets/<key>` | 캐릭터 세트 카드(성별, 등급, 역할, 이름, 별칭, 세계, 태그) | 공유 |
 | `config/prompt` | 라이브 프롬프트 | 공유 |
 | `config/whitelist` | 특권 사용자 id | 공유 |
+| `config/situations` | 상황 사전 `{items, updatedAt}`(위 "상황 그림") | 공유 |
 | `config/migrations` | 라이브러리에서 한 번만 하는 정리가 끝났다는 표시(`LIBFLAGS`, 지금은 `modernLabels`) | 공유 |
 
 옛 구조(`P/saves/items/<id>/turns/<i>`, 공유 `images/<id>`, `data/local/...`)는 읽어서 새 구조로 옮기는 코드만 남아
@@ -569,8 +596,8 @@ localStorage만 씁니다: `dr:inputHint`(입력 요령 안내), `dr:choiceHint`
 ### 이미지 라이브러리
 
 - 파일은 아티팩트 에셋 저장소(`platform.assets`)에, 목록은 공유 `imgidx` 페이지에, 세트 정보는 `sets/<key>`에 있습니다.
-- 이미지 행: `id, kind(char | scene | fx), set, emotion, name, file, hash, shash, world, worlds, tags, createdAt`, 바꾼 그림이면
-  `akeys`. `fx`는 연출 이미지(주사위 `dice`, `dice_success`, `dice_fail`)라서 "자동 분류"가 건드리지 않습니다.
+- 이미지 행: `id, kind(char | scene | fx), set, emotion, name, file, hash, shash, world, worlds, tags, createdAt`, 상황이 있으면
+  `situations`, 바꾼 그림이면 `akeys`. `fx`는 연출 이미지(주사위 `dice`, `dice_success`, `dice_fail`)라서 "자동 분류"가 건드리지 않습니다.
 - **오프닝**: 파일 이름이나 종류와 상관없이 태그로 정합니다(`images.js`). `opening` 태그는 이름 없는 묶음, `opening:<이름>`은
   그 이름의 묶음의 컷이고(`openingSeq`), 순서는 `order:<번호>` 태그, 없으면 파일 이름의 자연 순서(panel 2가 panel 10보다
   먼저)입니다. 삶의 첫 답(`runTurn`의 `intro`, 다음 삶과 첫 답 다시 쓰기 포함)을 시작할 때 `openingFor`가 고릅니다: 그 세계에
@@ -598,7 +625,9 @@ localStorage만 씁니다: `dr:inputHint`(입력 요령 안내), `dr:choiceHint`
     파일은 뺍니다. 그 뒤로는 따로 올린 파일과 같은 길입니다.
   - zip 안의 `tags.json`(여럿이면 가장 얕은 것)은 그림을 다 올린 뒤 같은 작업(`exclusiveJob`) 안에서 `importTags`로 가져옵니다.
     그 zip의 이름표(zip 안 경로, 그리고 하나뿐인 이름 → 올린 이름)를 함께 넘겨서 이름이 바뀐 그림도 찾고, zip에서 여럿이 쓴 이름은
-    아무것도 가리키지 않습니다(라이브러리의 엉뚱한 `smile`에 붙지 않게).
+    아무것도 가리키지 않습니다(라이브러리의 엉뚱한 `smile`에 붙지 않게). 라이브러리에 같은 파일 이름이 둘이면 마지막에 올린 것입니다.
+    그림 항목의 `set`(밑줄 없는 세트 키)은 파일 이름과 상관없이 그 그림을 그 세트로 옮기고, 그래서 빈 세트(올릴 때 이름을 몰라 만든
+    세트 등)는 카드와 문서를 지웁니다.
   - 내용(`hash`, `shash`)이 같으면 건너뜁니다. 이름이 같고 내용이 다르면 바꾸기입니다(`matchReplacements`): `file`이 똑같은 행
     먼저, 없으면 확장자와 대소문자만 다른 행이 하나뿐일 때. 그런 행이 여럿이면 건너뛰고 알립니다. 맞는 행에 원본 해시(`hash`)가
     없으면(옛 행, 사본용 목록에서 되살린 행) 내용을 견줄 수 없으니 전처럼 같은 이름을 같은 파일로 보고 건너뜁니다. 보내기 전에

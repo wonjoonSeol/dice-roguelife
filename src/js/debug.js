@@ -23,6 +23,7 @@ import * as shell from './shell.js';
 import * as sound from './sound.js';
 import * as boot from './boot.js';
 import * as library from './library.js';
+import * as situations from './situations.js';
 import * as images from './images.js';
 import * as places from './places.js';
 import * as casting from './casting.js';
@@ -49,6 +50,7 @@ import * as memoryView from './memory-view.js';
 import * as rosterView from './roster-view.js';
 import * as notesView from './notes-view.js';
 import * as imagesView from './images-view.js';
+import * as situationsView from './situations-view.js';
 import * as zip from './zip.js';
 
 // window.DR: the modules of this page, for the tests and for looking into a live game from the browser console.
@@ -82,6 +84,7 @@ const MODULES = [
   sound,
   boot,
   library,
+  situations,
   images,
   places,
   casting,
@@ -106,6 +109,7 @@ const MODULES = [
   rosterView,
   notesView,
   imagesView,
+  situationsView,
   zip,
 ];
 const originals = new Map();

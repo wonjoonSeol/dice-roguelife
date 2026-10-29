@@ -25,7 +25,8 @@ import {
 } from './rules.js';
 import { stripOdds } from './reply-words.js';
 import { activeRel, bondOf, BONDS, canonName, lastStoryReply } from './people.js';
-import { charSets, fitsWorld, frameTags, genderOf } from './images.js';
+import { charSets, fitsWorld, genderOf, setSituations } from './images.js';
+import { sitHint, sitRoot } from './situations.js';
 import { placeVocab } from './places.js';
 import { cardIndex, cardProfile, isOpenRole, namedSetFor, namedSetOf, setIds } from './casting.js';
 import { mentioned, namesOf, rosterFor, rosterNow } from './roster.js';
@@ -496,13 +497,26 @@ function profilesBlock(people, own) {
   }
   return lines.length ? fillTemplate(pr('profiles'), { list: lines.join(' | ') }) : '';
 }
-// the tags that tell their face's frames apart (images.js frameTags), for the narrator to name as "situation"; only
-// people whose set has such frames, in any world
+// The situations their face has pictures for (images.js setSituations), for the narrator to name as "situation": a
+// family's root, then in brackets only the more specific keys this set has; each hint given once. Only people whose
+// set has some, in any world.
 function situationBlock(people) {
-  const lines = [];
+  const lines = [],
+    told = new Set();
+  const say = s => {
+    const h = !told.has(s) && sitHint(s, promptLang());
+    told.add(s);
+    return h ? `${s}(${h})` : s;
+  };
   for (const [n, k] of people) {
-    const tags = k ? frameTags(k) : [];
-    if (tags.length) lines.push(`${n}: ${tags.slice(0, 16).join(', ')}`);
+    const ks = k ? setSituations(k).slice(0, 24) : [];
+    if (!ks.length) continue;
+    const roots = [...new Set(ks.map(sitRoot))];
+    const list = roots.map(r => {
+      const sub = ks.filter(s => s !== r && sitRoot(s) === r);
+      return say(r) + (sub.length ? `[${sub.map(say).join(', ')}]` : '');
+    });
+    lines.push(`${n}: ${list.join(', ')}`);
     if (lines.length >= PEOPLE_MAX) break;
   }
   return lines.length ? fillTemplate(pr('situation'), { list: lines.join(' | ') }) : '';

@@ -939,68 +939,145 @@ db、sample、user、assets、downloads、artifact の機能をオンにして�
       <pre id="promptText" lang="ko">Organize and tag the images in this folder for the game "Dice Roguelife" (주사위가 정한 인생).
 
 Goal: group images of the same character into "sets", name every file with the game's
-convention, and write a tags.json the app can import (이미지 tab -> import).
+convention, and write a tags.json the app can import (이미지 tab -&gt; import).
 
 Rules
 1. Do NOT modify or delete the originals. Copy everything into ./organized/.
 2. First look at every image and write a plan to ./organized/PLAN.md
-   (old filename -> new filename, plus tags). Show me a summary and wait for my OK
+   (old filename -&gt; new filename, emotion, situations, tags). Show me a summary and wait for my OK
    before copying or renaming anything.
 3. If ./existing_filenames.txt exists (optional), it lists files already in my game library.
-   New names must never collide with it; continue set numbers after the highest one there.
+   New set names and filenames must never collide with it: a set name already in my library
+   would merge the new pictures into that person. Continuing the numbers is the easy way.
 4. Also write ./organized/MAPPING.csv with two columns: original_filename,new_filename.
 
 Characters (portraits or sprites of a person or creature)
 - Group images of the same character (same face, hair, outfit design) into one set.
-- Set names: female1, female2, male1, male2, ... (creature1 for non-humans).
-  Letters, digits and hyphens only.
-- Filename: {set}_{emotion}.{ext}, e.g. female1_smile.png
-- Emotion must be one of: neutral, smile, joy, anger, sadness, surprise, smirk,
-  shy, fear, serious, crying, determined. Pick the closest one.
-- Two images with the same emotion in a set: add a number after an underscore,
-  female1_smile_2.png (never female1_smile2.png; the app would not recognize the emotion).
-- Alternate outfit: add it after the emotion, female1_smile_armor.png
+- Set names: any short unique name of letters, digits and hyphens, no underscores (an underscore
+  separates the parts of a filename). The usual pattern is female1, male2, creature1; numbering
+  does not matter, only that each set's name is its own.
+- The game matches pictures by tags.json, not by filename. tags.json finds each picture by its
+  exact new filename, so every name must be unique, and each image entry carries its own "set"
+  and "emotion". Name files {set}_{emotion}{n}.{ext} anyway (female1_smile.png, female1_shy16.png):
+  the upload groups them right even before tags.json is imported.
+- Emotion must be exactly one of: neutral, smile, joy, anger, sadness, surprise, smirk,
+  shy, fear, serious, crying, determined. Pick the closest one. Every character image has one.
+- Two images with the same emotion in a set: add a number right after the emotion,
+  female1_smile2.png (female1_smile_2.png also works). Every filename must be unique.
+- A situation or outfit word may follow the emotion (female1_crying_battle.png), but only as a
+  label for people: the game takes situations and looks from tags.json.
 - If a name is written in the image, read it exactly. Put the in-game Korean name in
   "name" and the original spelling in "aliases". If unreadable, do not guess; flag it.
 
+Situations (상황 사전) for character images
+- A situation says the picture shows a particular kind of scene. The game shows a situation
+  picture only when the story is in that situation; otherwise it uses the character's plain
+  pictures. So MOST pictures get NO situation. Add one only when the picture clearly shows it.
+- Use ONLY these keys (the dictionary). Never invent a new key on your own:
+  - battle: fighting, or using martial arts or magic. Only with an opponent or real combat implied.
+  - injured: wounded, bleeding, bandaged.
+  - eating: eating or drinking, including a drinking party.
+  - sleep: sleeping or lying in bed, including sleepwear.
+  - bath: bathing, or in or by water.
+  - hug: hugging or being hugged.
+  - kiss: kissing.
+  - formal: formal dress for a banquet, ceremony or court.
+  - Adult keys. Every nude or sexual picture gets exactly one of them, the most specific that fits:
+    - undress: nude or in underwear, without a sexual act.
+    - nsfw: a sexual act. If the dictionary has more specific keys under nsfw, use the one that
+      clearly fits; otherwise nsfw itself.
+  - Adult keys only when every person in the picture is clearly an adult. If anyone in a nude or
+    sexual picture could be under 18, do not copy or tag it; list it in PLAN.md as excluded.
+- A picture may have more than one situation (battle and injured; a nude bath picture is bath and
+  undress), but usually has none. A picture with an adult key never shows outside an adult scene.
+- If many characters in this pack share a scene type that is not in the list (for example a
+  tickling picture for every character), do NOT tag it. List it in PLAN.md as a proposed new
+  dictionary entry with a key, a Korean label and a one-line Korean hint, and wait for my OK.
+- Situations never go in "tags"; tags are for looks.
+
 Backgrounds (scenes without a main character)
 - Filename: bg_{place}_{time}.{ext}, e.g. bg_tavern_night.png, bg_castle-gate_day.png
 - place: lowercase English, hyphens between words. time: day, sunset, night or indoor.
 - Two backgrounds with the same place and time: add a number, bg_alley_day2.png
 - A specific landmark (e.g. a school auditorium) goes in tags, not in a new field.
+- Backgrounds get no situations.
 
 Effects (dice or effect art that is neither a character nor a scene)
 - Name them dice.png, dice_success.png, dice_fail.png, or fx_{what}.png. No tags needed.
 
 Skip files that are already named as system assets: shadow_*, admin_*, dice*, fx*.
 
-Worlds (for "worlds", 0 to 3 that clearly fit; empty array if it fits anywhere):
-hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster, modern
+Worlds (for "worlds", on character sets and backgrounds)
+- The game shows a picture only in a game whose world is on the picture's list, or when the list
+  is empty. So list EVERY world the look fits, not only the story the pack came from. No limit.
+- Ids: hunter (today's Earth with gates and hunters), apoc (after civilization fell), academy (a
+  school for the awakened and mages), tower (tower climbing), vrmmo (inside a VR game), fantasy
+  (high fantasy), rofan (romance fantasy: nobles, ballrooms), murim, palace (East Asian court and
+  harem), cyber (cyberpunk), monster (monster realm), modern (everyday life today, no magic).
+- Start from the look's family, then drop the worlds that clearly do not fit:
+  - Today's clothes or places (street clothes, suit, school uniform, office, cafe, city street):
+    modern, hunter, academy, apoc. Drop apoc for clean, festive or office scenes.
+  - Western fantasy (armor, cloak, robe, castle, tavern, forest): fantasy, tower, vrmmo. Add rofan
+    for gowns, nobles, manors and ballrooms, and academy for a mage school's uniform.
+  - East Asian historical (hanfu, jian, inn, pavilion, court dress): murim, palace.
+  - Neon, implants, mecha: cyber, plus hunter or apoc when it also suits them.
+  - Monsters and beasts: monster, plus fantasy, tower and vrmmo when they fit.
+- An empty list only for a picture with nothing tied to a time or place (a bare close-up, the sky).
 
-Tags
-- Descriptive tags: lowercase English, 3 to 6 (hair, outfit, props, mood; for backgrounds:
-  place, time of day, weather, mood).
-- Identity tags (optional): key:value, key in English, value is a proper noun kept in its
+Tags (looks only)
+- Descriptive tags, lowercase English. Never repeat the emotion or a situation key here.
+  - A set ("sets"): 3 to 7 that are true of every frame (hair, eyes, build, usual outfit).
+    The game copies them onto every frame of the set.
+  - A frame ("images"): 0 to 3 for what differs from the set (another outfit, a prop). A frame
+    keeps at most 10 plain tags, the set's first, so more than 7 + 3 are cut.
+  - A background: 3 to 6 (place, time of day, weather, mood).
+- Identity tags: key:value, key in English, value is a proper noun kept in its
   original language, e.g. faction:사천당가
+- Faction tags are for murim (무림) packs only. When the pack is a murim story (worlds contain murim) and
+  its files, folder names, README or text describe a character's faction (문파, 세가, 세력, 교단), add
+  faction:&lt;name&gt; to that SET's "tags" in tags.json, so every frame of the set carries it. Use the exact
+  name as written (화산파, 사천당가, 천마신교). Never guess a faction from looks alone; if unclear, leave it
+  out and list the set in PLAN.md. For every other pack (modern, fantasy, school, company, guild...)
+  add no faction tag unless it is strictly necessary: the picture cannot belong to anyone else (a
+  uniform or crest only that group wears, and the pack names it). The game scores a set with an
+  identity tag lower for every new character whose identity differs, so a needless faction keeps
+  the face out of most stories.
+- Never put file-name tokens (neutral113, smile2) in tags.
 - Only proper nouns stay in their own language; everything else is English.
 
 tags.json (keyed by the NEW filenames)
 {
+  "situations": {
+    "battle":  {"label": "싸움",   "hint": "싸우거나 무공, 마법을 쓰는 중일 때"},
+    "injured": {"label": "부상",   "hint": "다쳤거나 피를 흘릴 때"},
+    "eating":  {"label": "식사",   "hint": "먹거나 마실 때, 술자리 포함"},
+    "sleep":   {"label": "잠",     "hint": "자거나 누워 있을 때, 잠옷 포함"},
+    "bath":    {"label": "목욕",   "hint": "목욕하거나 물가에 있을 때"},
+    "hug":     {"label": "포옹",   "hint": "안거나 안길 때"},
+    "kiss":    {"label": "입맞춤", "hint": "입을 맞출 때"},
+    "formal":  {"label": "예복",   "hint": "연회, 의식, 격식 있는 자리"},
+    "undress": {"label": "알몸",   "hint": "알몸이나 속옷 차림", "adult": true},
+    "nsfw":    {"label": "성인",   "hint": "성인 장면", "adult": true, "parent": "undress"}
+  },
   "sets": {
-    "female1": {"gender": "female", "worlds": ["fantasy"], "role": "knight",
+    "female1": {"gender": "female", "worlds": ["fantasy", "tower", "vrmmo"], "role": "knight",
                 "vibe": "stern, loyal", "look": "silver hair, blue armor",
-                "tier": "major", "tags": ["silver hair", "knight"]}
+                "tags": ["silver hair", "knight"]}
   },
   "images": {
-    "female1_smile.png": {"emotion": "smile", "tags": ["smile", "armor"], "worlds": ["fantasy"]}
+    "female1_smile.png":         {"set": "female1", "emotion": "smile",  "situations": [],         "tags": ["armor", "sword"]},
+    "female1_crying_battle.png": {"set": "female1", "emotion": "crying", "situations": ["battle"], "tags": ["armor", "torn cloak"]}
   },
   "backgrounds": {
     "bg_tavern_night.png": {"place": "tavern", "time": "night", "mood": ["lively", "warm"],
-                            "tags": ["wooden tables", "lanterns"], "worlds": ["fantasy"]}
+                            "tags": ["wooden tables", "lanterns"], "worlds": ["fantasy", "tower", "vrmmo"]}
   }
 }
+- Copy the "situations" block exactly as above, plus any new entries I approved.
 - gender: male, female, or other (for non-humans).
-- tier: extra, minor or major (how prominent the face is).
+- tier: leave it out. The game sets it from the number of frames (1 picture: extra, 2 to 3: minor,
+  4 or more: major). Write "generic" only for a faceless figure (a silhouette, a masked
+  guard) that any passer-by can share.
 - Keep role, vibe and look short; the app joins them into one line of at most 120 characters.
 - "name" and "aliases" only for sets with a readable name in the image.
 
@@ -1008,73 +1085,150 @@ Also
 - If one image contains several characters or a grid of expressions, flag it in PLAN.md
   instead of guessing.
 - Flag duplicates or near-duplicates.
-- At the end, print a short summary: number of sets, images per set, backgrounds per world,
-  and everything flagged.</pre>
+- At the end, print a short summary: number of sets, images per set, how many images got each
+  situation (most should have none), backgrounds per world, and everything flagged.</pre>
       <pre id="promptTextEn" lang="en">Organize and tag the images in this folder for the game "Dice Roguelife".
 
 Goal: group images of the same character into "sets", name every file with the game's
-convention, and write a tags.json the app can import (Images tab -> Import tags.json).
+convention, and write a tags.json the app can import (Images tab -&gt; Import tags.json).
 
 Rules
 1. Do NOT modify or delete the originals. Copy everything into ./organized/.
 2. First look at every image and write a plan to ./organized/PLAN.md
-   (old filename -> new filename, plus tags). Show me a summary and wait for my OK
+   (old filename -&gt; new filename, emotion, situations, tags). Show me a summary and wait for my OK
    before copying or renaming anything.
 3. If ./existing_filenames.txt exists (optional), it lists files already in my game library.
-   New names must never collide with it; continue set numbers after the highest one there.
+   New set names and filenames must never collide with it: a set name already in my library
+   would merge the new pictures into that person. Continuing the numbers is the easy way.
 4. Also write ./organized/MAPPING.csv with two columns: original_filename,new_filename.
 
 Characters (portraits or sprites of a person or creature)
 - Group images of the same character (same face, hair, outfit design) into one set.
-- Set names: female1, female2, male1, male2, ... (creature1 for non-humans).
-  Letters, digits and hyphens only.
-- Filename: {set}_{emotion}.{ext}, e.g. female1_smile.png
-- Emotion must be one of: neutral, smile, joy, anger, sadness, surprise, smirk,
-  shy, fear, serious, crying, determined. Pick the closest one.
-- Two images with the same emotion in a set: add a number after an underscore,
-  female1_smile_2.png (never female1_smile2.png; the app would not recognize the emotion).
-- Alternate outfit: add it after the emotion, female1_smile_armor.png
+- Set names: any short unique name of letters, digits and hyphens, no underscores (an underscore
+  separates the parts of a filename). The usual pattern is female1, male2, creature1; numbering
+  does not matter, only that each set's name is its own.
+- The game matches pictures by tags.json, not by filename. tags.json finds each picture by its
+  exact new filename, so every name must be unique, and each image entry carries its own "set"
+  and "emotion". Name files {set}_{emotion}{n}.{ext} anyway (female1_smile.png, female1_shy16.png):
+  the upload groups them right even before tags.json is imported.
+- Emotion must be exactly one of: neutral, smile, joy, anger, sadness, surprise, smirk,
+  shy, fear, serious, crying, determined. Pick the closest one. Every character image has one.
+- Two images with the same emotion in a set: add a number right after the emotion,
+  female1_smile2.png (female1_smile_2.png also works). Every filename must be unique.
+- A situation or outfit word may follow the emotion (female1_crying_battle.png), but only as a
+  label for people: the game takes situations and looks from tags.json.
 - If a name is written in the image, read it exactly. Put the name the game should use in
   "name" and any other spellings in "aliases". If unreadable, do not guess; flag it.
+
+Situations (the situation dictionary) for character images
+- A situation says the picture shows a particular kind of scene. The game shows a situation
+  picture only when the story is in that situation; otherwise it uses the character's plain
+  pictures. So MOST pictures get NO situation. Add one only when the picture clearly shows it.
+- Use ONLY these keys (the dictionary). Never invent a new key on your own:
+  - battle: fighting, or using martial arts or magic. Only with an opponent or real combat implied.
+  - injured: wounded, bleeding, bandaged.
+  - eating: eating or drinking, including a drinking party.
+  - sleep: sleeping or lying in bed, including sleepwear.
+  - bath: bathing, or in or by water.
+  - hug: hugging or being hugged.
+  - kiss: kissing.
+  - formal: formal dress for a banquet, ceremony or court.
+  - Adult keys. Every nude or sexual picture gets exactly one of them, the most specific that fits:
+    - undress: nude or in underwear, without a sexual act.
+    - nsfw: a sexual act. If the dictionary has more specific keys under nsfw, use the one that
+      clearly fits; otherwise nsfw itself.
+  - Adult keys only when every person in the picture is clearly an adult. If anyone in a nude or
+    sexual picture could be under 18, do not copy or tag it; list it in PLAN.md as excluded.
+- A picture may have more than one situation (battle and injured; a nude bath picture is bath and
+  undress), but usually has none. A picture with an adult key never shows outside an adult scene.
+- If many characters in this pack share a scene type that is not in the list (for example a
+  tickling picture for every character), do NOT tag it. List it in PLAN.md as a proposed new
+  dictionary entry with a key, a label and a one-line hint, and wait for my OK.
+- Situations never go in "tags"; tags are for looks.
 
 Backgrounds (scenes without a main character)
 - Filename: bg_{place}_{time}.{ext}, e.g. bg_tavern_night.png, bg_castle-gate_day.png
 - place: lowercase English, hyphens between words. time: day, sunset, night or indoor.
 - Two backgrounds with the same place and time: add a number, bg_alley_day2.png
 - A specific landmark (e.g. a school auditorium) goes in tags, not in a new field.
+- Backgrounds get no situations.
 
 Effects (dice or effect art that is neither a character nor a scene)
 - Name them dice.png, dice_success.png, dice_fail.png, or fx_{what}.png. No tags needed.
 
 Skip files that are already named as system assets: shadow_*, admin_*, dice*, fx*.
 
-Worlds (for "worlds", 0 to 3 that clearly fit; empty array if it fits anywhere):
-hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster, modern
+Worlds (for "worlds", on character sets and backgrounds)
+- The game shows a picture only in a game whose world is on the picture's list, or when the list
+  is empty. So list EVERY world the look fits, not only the story the pack came from. No limit.
+- Ids: hunter (today's Earth with gates and hunters), apoc (after civilization fell), academy (a
+  school for the awakened and mages), tower (tower climbing), vrmmo (inside a VR game), fantasy
+  (high fantasy), rofan (romance fantasy: nobles, ballrooms), murim, palace (East Asian court and
+  harem), cyber (cyberpunk), monster (monster realm), modern (everyday life today, no magic).
+- Start from the look's family, then drop the worlds that clearly do not fit:
+  - Today's clothes or places (street clothes, suit, school uniform, office, cafe, city street):
+    modern, hunter, academy, apoc. Drop apoc for clean, festive or office scenes.
+  - Western fantasy (armor, cloak, robe, castle, tavern, forest): fantasy, tower, vrmmo. Add rofan
+    for gowns, nobles, manors and ballrooms, and academy for a mage school's uniform.
+  - East Asian historical (hanfu, jian, inn, pavilion, court dress): murim, palace.
+  - Neon, implants, mecha: cyber, plus hunter or apoc when it also suits them.
+  - Monsters and beasts: monster, plus fantasy, tower and vrmmo when they fit.
+- An empty list only for a picture with nothing tied to a time or place (a bare close-up, the sky).
 
-Tags
-- Descriptive tags: lowercase English, 3 to 6 (hair, outfit, props, mood; for backgrounds:
-  place, time of day, weather, mood).
-- Identity tags (optional): key:value, key in English, value is a proper noun kept in its
+Tags (looks only)
+- Descriptive tags, lowercase English. Never repeat the emotion or a situation key here.
+  - A set ("sets"): 3 to 7 that are true of every frame (hair, eyes, build, usual outfit).
+    The game copies them onto every frame of the set.
+  - A frame ("images"): 0 to 3 for what differs from the set (another outfit, a prop). A frame
+    keeps at most 10 plain tags, the set's first, so more than 7 + 3 are cut.
+  - A background: 3 to 6 (place, time of day, weather, mood).
+- Identity tags: key:value, key in English, value is a proper noun kept in its
   original language, e.g. faction:Tang Clan
+- Faction tags are for murim packs only. When the pack is a murim story (worlds contain murim) and
+  its files, folder names, README or text describe a character's faction (sect, clan, alliance, cult), add
+  faction:&lt;name&gt; to that SET's "tags" in tags.json, so every frame of the set carries it. Use the exact
+  name as written (Mount Hua Sect, Tang Clan, Heavenly Demon Cult). Never guess a faction from looks alone; if unclear, leave it
+  out and list the set in PLAN.md. For every other pack (modern, fantasy, school, company, guild...)
+  add no faction tag unless it is strictly necessary: the picture cannot belong to anyone else (a
+  uniform or crest only that group wears, and the pack names it). The game scores a set with an
+  identity tag lower for every new character whose identity differs, so a needless faction keeps
+  the face out of most stories.
+- Never put file-name tokens (neutral113, smile2) in tags.
 - Only proper nouns stay in their own language; everything else is English.
 
 tags.json (keyed by the NEW filenames)
 {
+  "situations": {
+    "battle":  {"label": "싸움",   "hint": "싸우거나 무공, 마법을 쓰는 중일 때"},
+    "injured": {"label": "부상",   "hint": "다쳤거나 피를 흘릴 때"},
+    "eating":  {"label": "식사",   "hint": "먹거나 마실 때, 술자리 포함"},
+    "sleep":   {"label": "잠",     "hint": "자거나 누워 있을 때, 잠옷 포함"},
+    "bath":    {"label": "목욕",   "hint": "목욕하거나 물가에 있을 때"},
+    "hug":     {"label": "포옹",   "hint": "안거나 안길 때"},
+    "kiss":    {"label": "입맞춤", "hint": "입을 맞출 때"},
+    "formal":  {"label": "예복",   "hint": "연회, 의식, 격식 있는 자리"},
+    "undress": {"label": "알몸",   "hint": "알몸이나 속옷 차림", "adult": true},
+    "nsfw":    {"label": "성인",   "hint": "성인 장면", "adult": true, "parent": "undress"}
+  },
   "sets": {
-    "female1": {"gender": "female", "worlds": ["fantasy"], "role": "knight",
+    "female1": {"gender": "female", "worlds": ["fantasy", "tower", "vrmmo"], "role": "knight",
                 "vibe": "stern, loyal", "look": "silver hair, blue armor",
-                "tier": "major", "tags": ["silver hair", "knight"]}
+                "tags": ["silver hair", "knight"]}
   },
   "images": {
-    "female1_smile.png": {"emotion": "smile", "tags": ["smile", "armor"], "worlds": ["fantasy"]}
+    "female1_smile.png":         {"set": "female1", "emotion": "smile",  "situations": [],         "tags": ["armor", "sword"]},
+    "female1_crying_battle.png": {"set": "female1", "emotion": "crying", "situations": ["battle"], "tags": ["armor", "torn cloak"]}
   },
   "backgrounds": {
     "bg_tavern_night.png": {"place": "tavern", "time": "night", "mood": ["lively", "warm"],
-                            "tags": ["wooden tables", "lanterns"], "worlds": ["fantasy"]}
+                            "tags": ["wooden tables", "lanterns"], "worlds": ["fantasy", "tower", "vrmmo"]}
   }
 }
+- Copy the "situations" block exactly as above, plus any new entries I approved.
 - gender: male, female, or other (for non-humans).
-- tier: extra, minor or major (how prominent the face is).
+- tier: leave it out. The game sets it from the number of frames (1 picture: extra, 2 to 3: minor,
+  4 or more: major). Write "generic" only for a faceless figure (a silhouette, a masked
+  guard) that any passer-by can share.
 - Keep role, vibe and look short; the app joins them into one line of at most 120 characters.
 - "name" and "aliases" only for sets with a readable name in the image.
 
@@ -1082,79 +1236,155 @@ Also
 - If one image contains several characters or a grid of expressions, flag it in PLAN.md
   instead of guessing.
 - Flag duplicates or near-duplicates.
-- At the end, print a short summary: number of sets, images per set, backgrounds per world,
-  and everything flagged.</pre><pre id="promptTextJa" lang="ja">ゲーム「Dice Roguelife」用に、このフォルダーの画像を整理してタグを付けてください。
+- At the end, print a short summary: number of sets, images per set, how many images got each
+  situation (most should have none), backgrounds per world, and everything flagged.</pre><pre id="promptTextJa" lang="ja">ゲーム「Dice Roguelife」用に、このフォルダーの画像を整理してタグを付けてください。
 
 目的：同じキャラクターの画像を「セット」にまとめ、すべてのファイルにゲームの命名規則どおりの名前を付け、
-アプリが取り込める tags.json を書くこと（画像タブ → tags.json を読み込み）。
+アプリが取り込める tags.json を書くこと（画像タブ → tags.json を読み込む）。
 
 ルール
 1. 元のファイルは変更も削除もしないでください。すべて ./organized/ にコピーします。
 2. まずすべての画像を見て、計画を ./organized/PLAN.md に書いてください
-   （元のファイル名 -> 新しいファイル名、タグ）。要約を見せて、私がOKするまでは
+   （元のファイル名 -&gt; 新しいファイル名、emotion、situations、tags）。要約を見せて、私がOKするまでは
    コピーも名前の変更もしないでください。
 3. ./existing_filenames.txt があれば（任意）、ゲームのライブラリにすでにあるファイルの一覧です。
-   新しい名前がそれと重ならないようにし、セット番号はそこにある最大の番号の続きから振ってください。
+   新しいセット名とファイル名はそれと重ならないようにしてください。ライブラリにすでにあるセット名を使うと、
+   新しい画像がその人物に混ざります。番号を続きから振るのが簡単です。
 4. ./organized/MAPPING.csv も書いてください。列は original_filename,new_filename の2つです。
 
-キャラクター（人や生き物の立ち絵・立ち絵）
+キャラクター（人や生き物の立ち絵）
 - 同じキャラクター（同じ顔、髪、衣装のデザイン）の画像を1つのセットにまとめます。
-- セット名：female1、female2、male1、male2、…（人間以外は creature1）。
-  英字、数字、ハイフンだけを使います。
-- ファイル名：{set}_{emotion}.{ext}　例：female1_smile.png
-- emotion は次のどれか：neutral、smile、joy、anger、sadness、surprise、smirk、
-  shy、fear、serious、crying、determined。いちばん近いものを選んでください。
-- セット内に同じ表情が2枚あるときは、アンダースコアのあとに番号を付けます：
-  female1_smile_2.png（female1_smile2.png は不可。アプリが表情を認識できません）。
-- 別の衣装：表情のあとに付けます。female1_smile_armor.png
+- セット名：英字、数字、ハイフンだけの短く重ならない名前で、アンダースコアは使いません（アンダースコアは
+  ファイル名の区切りです）。ふつうは female1、male2、creature1 の形です。番号の振り方は問いません。
+  各セットの名前がそのセットだけのものであればかまいません。
+- ゲームは画像をファイル名ではなく tags.json で照合します。tags.json は新しいファイル名で各画像を探すので、
+  名前はすべて重ならないようにし、各画像の項目に "set" と "emotion" を入れます。それでもファイル名は
+  {set}_{emotion}{n}.{ext}（female1_smile.png、female1_shy16.png）にしてください。tags.json を読み込む前の
+  アップロードでも正しくまとまります。
+- emotion は次のどれか1つ：neutral、smile、joy、anger、sadness、surprise、smirk、
+  shy、fear、serious、crying、determined。いちばん近いものを選んでください。キャラクター画像には必ず1つ付けます。
+- セット内に同じ表情が2枚あるときは、表情のすぐあとに番号を付けます：
+  female1_smile2.png（female1_smile_2.png でもかまいません）。ファイル名はすべて重ならないようにします。
+- 表情のあとに状況や衣装の言葉を付けてもかまいません（female1_crying_battle.png）。ただし人が見るための
+  ラベルにすぎず、ゲームは状況と見た目を tags.json から読みます。
 - 画像に名前が書かれていれば、正確に読み取ってください。ゲームで使う名前を "name" に、
   ほかの表記を "aliases" に入れます。読めなければ推測せず、フラグを立ててください。
+
+キャラクター画像の状況（状況辞書）
+- 状況は、その画像が特定の種類の場面を描いていることを示します。ゲームは物語がその状況のときだけ状況の
+  画像を出し、それ以外のときはそのキャラクターの通常の画像を使います。なので、ほとんどの画像には状況を
+  付けません。画像がその場面をはっきり描いているときだけ付けてください。
+- 使うのは次のキー（辞書）だけです。自分で新しいキーを作らないでください：
+  - battle：戦っている、または武功や魔法を使っている。相手がいるか、実際の戦いが分かるときだけ。
+  - injured：負傷、出血、包帯。
+  - eating：食べたり飲んだりしている。酒席も含む。
+  - sleep：眠っている、ベッドに横になっている。寝間着も含む。
+  - bath：入浴中、または水の中や水辺にいる。
+  - hug：抱きしめている、抱きしめられている。
+  - kiss：キスしている。
+  - formal：宴、儀式、宮廷のための礼装。
+  - 成人向けのキー。裸や性的な画像には、合うもののうちいちばん具体的なものを必ず1つ付けます：
+    - undress：裸または下着姿で、性行為はない。
+    - nsfw：性行為。辞書に nsfw の下のもっと具体的なキーがあれば、はっきり合うものを使い、
+      なければ nsfw そのものを使います。
+  - 成人向けのキーは、画像の全員がはっきり成人のときだけ付けます。裸や性的な画像に18歳未満かもしれない人が
+    いれば、コピーもタグ付けもせず、PLAN.md に除外したものとして書いてください。
+- 1枚に状況が複数あってもかまいません（battle と injured、裸の入浴の画像なら bath と undress）。
+  ただし、ふつうは状況なしです。成人向けのキーが付いた画像は、成人向けの場面以外では出ません。
+- このパックの多くのキャラクターに、一覧にない同じ種類の場面がある場合（たとえば全員にくすぐりの画像がある）、
+  タグを付けないでください。キー、韓国語のラベル、韓国語のヒント1行を添えて新しい辞書項目の提案として
+  PLAN.md に書き、私のOKを待ってください。
+- 状況は "tags" に入れません。tags は見た目のためのものです。
 
 背景（主役のいない場面）
 - ファイル名：bg_{place}_{time}.{ext}　例：bg_tavern_night.png、bg_castle-gate_day.png
 - place：小文字の英語、単語の間はハイフン。time：day、sunset、night、indoor のどれか。
 - 場所と時間が同じ背景が2枚あるときは番号を付けます：bg_alley_day2.png
 - 特定の名所（例：学校の講堂）は新しい項目にせず、tags に入れます。
+- 背景には状況を付けません。
 
 演出（キャラクターでも場面でもないダイスや演出の画像）
 - dice.png、dice_success.png、dice_fail.png、または fx_{what}.png と名付けます。タグは不要です。
 
 すでにシステム素材の名前になっているファイルはスキップ：shadow_*、admin_*、dice*、fx*。
 
-世界（"worlds" 用、明らかに合うものを0〜3個。どこにでも合うなら空の配列）：
-hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster, modern
+世界（"worlds"、キャラクターのセットと背景に付けます）
+- ゲームは、画像の一覧にその世界があるゲームでだけ、または一覧が空のときに画像を出します。なので、
+  パックの元の物語だけでなく、見た目が合う世界をすべて挙げてください。数の上限はありません。
+- id：hunter（ゲートとハンターのいる現代の地球）、apoc（文明が崩れたあと）、academy（覚醒者と魔法使いの
+  学校）、tower（塔の攻略）、vrmmo（VRゲームの中）、fantasy（正統ファンタジー）、rofan（ロマンスファンタジー：
+  貴族、舞踏会）、murim（武林）、palace（東洋の宮廷と後宮）、cyber（サイバーパンク）、monster（魔物の世界）、
+  modern（魔法のない今の日常）。
+- 見た目の系統から始め、はっきり合わない世界だけを外します：
+  - 今の服や場所（普段着、スーツ、制服、オフィス、カフェ、街中）：modern、hunter、academy、apoc。
+    清潔な場面、華やかな場面、オフィスの場面なら apoc を外します。
+  - 西洋ファンタジー（鎧、マント、ローブ、城、酒場、森）：fantasy、tower、vrmmo。ドレス、貴族、屋敷、
+    舞踏会なら rofan を、魔法学校の制服なら academy を加えます。
+  - 東洋の時代物（漢服、剣、客桟、楼閣、宮廷の装束）：murim、palace。
+  - ネオン、インプラント、メカ：cyber。合うなら hunter や apoc も。
+  - 魔物と獣：monster。合うなら fantasy、tower、vrmmo も。
+- 空の一覧は、時代や場所と関係のない画像（顔だけのアップ、空）にだけ使います。
 
-タグ
-- 説明タグ：小文字の英語で3〜6個（髪、衣装、小物、雰囲気。背景なら場所、時間帯、天気、雰囲気）。
-- 所属タグ（任意）：key:value。key は英語、value は固有名詞で、元の言語のまま（日本語でもかまいません）
-  例：faction:新選組
+タグ（見た目だけ）
+- 説明タグ：小文字の英語。表情や状況のキーをここに繰り返さないでください。
+  - セット（"sets"）：すべての画像に当てはまるものを3〜7個（髪、目、体格、いつもの衣装）。
+    ゲームがセットのすべての画像にコピーします。
+  - 画像（"images"）：セットと違うところを0〜3個（別の衣装、小物）。画像の通常タグは最大10個で、
+    セットのものが先なので、7 + 3 を超えた分は切られます。
+  - 背景：3〜6個（場所、時間帯、天気、雰囲気）。
+- 所属タグ：key:value。key は英語、value は固有名詞で、元の言語のまま。例：faction:新選組
+- 所属タグは武林（murim）のパックだけに付けます。パックが武林の物語で（worlds に murim がある）、ファイル、
+  フォルダー名、README、テキストにキャラクターの所属（門派、世家、勢力、教団）が書かれていれば、tags.json の
+  そのセットの "tags" に faction:&lt;name&gt; を加え、セットのすべての画像に付くようにします。名前は書かれたとおりに
+  使います（華山派、四川唐門、天魔神教）。見た目だけで所属を推測しないでください。はっきりしなければ外し、
+  そのセットを PLAN.md に書いてください。ほかのパック（現代、ファンタジー、学校、会社、ギルドなど）には、
+  どうしても必要なとき以外は所属タグを付けません。必要なときとは、その画像がほかの誰のものでもありえない
+  とき（その集団だけが着る制服や紋章があり、パックがその名前を挙げているとき）です。ゲームは所属タグの
+  あるセットを、所属の違う新しいキャラクターごとに低く評価するので、不要な所属があるとその顔はほとんどの
+  物語に出なくなります。
+- ファイル名の断片（neutral113、smile2）を tags に入れないでください。
 - 元の言語のままにするのは固有名詞だけで、それ以外はすべて英語です。
 
 tags.json（キーは新しいファイル名）
 {
+  "situations": {
+    "battle":  {"label": "싸움",   "hint": "싸우거나 무공, 마법을 쓰는 중일 때"},
+    "injured": {"label": "부상",   "hint": "다쳤거나 피를 흘릴 때"},
+    "eating":  {"label": "식사",   "hint": "먹거나 마실 때, 술자리 포함"},
+    "sleep":   {"label": "잠",     "hint": "자거나 누워 있을 때, 잠옷 포함"},
+    "bath":    {"label": "목욕",   "hint": "목욕하거나 물가에 있을 때"},
+    "hug":     {"label": "포옹",   "hint": "안거나 안길 때"},
+    "kiss":    {"label": "입맞춤", "hint": "입을 맞출 때"},
+    "formal":  {"label": "예복",   "hint": "연회, 의식, 격식 있는 자리"},
+    "undress": {"label": "알몸",   "hint": "알몸이나 속옷 차림", "adult": true},
+    "nsfw":    {"label": "성인",   "hint": "성인 장면", "adult": true, "parent": "undress"}
+  },
   "sets": {
-    "female1": {"gender": "female", "worlds": ["fantasy"], "role": "knight",
+    "female1": {"gender": "female", "worlds": ["fantasy", "tower", "vrmmo"], "role": "knight",
                 "vibe": "stern, loyal", "look": "silver hair, blue armor",
-                "tier": "major", "tags": ["silver hair", "knight"]}
+                "tags": ["silver hair", "knight"]}
   },
   "images": {
-    "female1_smile.png": {"emotion": "smile", "tags": ["smile", "armor"], "worlds": ["fantasy"]}
+    "female1_smile.png":         {"set": "female1", "emotion": "smile",  "situations": [],         "tags": ["armor", "sword"]},
+    "female1_crying_battle.png": {"set": "female1", "emotion": "crying", "situations": ["battle"], "tags": ["armor", "torn cloak"]}
   },
   "backgrounds": {
     "bg_tavern_night.png": {"place": "tavern", "time": "night", "mood": ["lively", "warm"],
-                            "tags": ["wooden tables", "lanterns"], "worlds": ["fantasy"]}
+                            "tags": ["wooden tables", "lanterns"], "worlds": ["fantasy", "tower", "vrmmo"]}
   }
 }
+- "situations" ブロックは上のとおりにそのままコピーし、私が承認した新しい項目があれば加えます。
 - gender：male、female、または other（人間以外）。
-- tier：extra、minor、major（その顔がどれだけ目立つか）。
+- tier：付けないでください。ゲームが画像の枚数から決めます（1枚：extra、2〜3枚：minor、
+  4枚以上：major）。"generic" は、どの通行人にも使い回せる顔のない人物（シルエット、仮面の衛兵）にだけ書きます。
 - role、vibe、look は短く。アプリがこれらを最大120文字の1行にまとめます。
 - "name" と "aliases" は、画像に読める名前があるセットにだけ付けます。
 
 ほかに
 - 1枚に複数のキャラクターや表情の一覧が入っている画像は、推測せず PLAN.md でフラグを立ててください。
 - 重複やほぼ同じ画像にもフラグを立ててください。
-- 最後に短い要約を出してください：セットの数、セットごとの画像数、世界ごとの背景数、
-  フラグを立てたものすべて。</pre>
+- 最後に短い要約を出してください：セットの数、セットごとの画像数、状況ごとの画像数（ほとんどは状況なしのはず）、
+  世界ごとの背景数、フラグを立てたものすべて。</pre>
     </div>
   </details>
 

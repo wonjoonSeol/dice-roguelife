@@ -20,6 +20,7 @@ import {
   worldsOf,
 } from './images.js';
 import { T } from './i18n.js';
+import { cleanDict, loadSituations, saveSituations, situationsStored } from './situations.js';
 
 export let imgError = '';
 export const SETDOC = k => platform.shared.doc(`sets/${k}`);
@@ -342,10 +343,12 @@ export async function migrateLegacy() {
   }
 }
 export async function loadSets() {
-  const [sets, flags] = await Promise.allSettled([
+  const [sets, flags, sits] = await Promise.allSettled([
     platform.shared.collection('sets').limit(1000).get(),
     sget('config/migrations'),
+    loadSituations(),
   ]);
+  if (sits.status === 'rejected') logErr('situations', sits.reason);
   app.setMeta = {};
   if (sets.status === 'fulfilled')
     sets.value.docs.forEach(d => {
@@ -484,6 +487,11 @@ export async function restoreFromManifest(m, onProgress = () => {}) {
       noteIgnored('restore from manifest: one image', e);
     }
   }
+  // the copy's own dictionary, unless this library already has one
+  if (m.situations && !(await situationsStored().catch(() => true)))
+    await loadSituations()
+      .then(() => saveSituations(cleanDict(m.situations)))
+      .catch(e => noteIgnored('restore from manifest: situations', e));
   for (const [k, v] of Object.entries(m.sets || {})) {
     const cover = v.cover && app.images.find(x => x.shash === v.cover);
     app.setMeta[k] = cover ? Object.assign({}, v, { cover: cover.id }) : v;

@@ -39,6 +39,19 @@ import { persist } from './persistence.js';
 import { fillTemplate, pr } from './prompt.js';
 import { N_, T, uiLang } from './i18n.js';
 import { GENDER, GENDER_LABEL } from './enums.js';
+import {
+  cleanSit,
+  frameSits,
+  lookTags,
+  saveSituations,
+  setFrameSits,
+  SIT_KEY_RE,
+  sitDict,
+  sitKey,
+  sitKeyOf,
+  sitLabel,
+} from './situations.js';
+import { bindSituations, setSitsHtml, sitDictHtml, sitPickerHtml } from './situations-view.js';
 
 let imgFilter = 'all';
 export async function renderImages() {
@@ -68,8 +81,10 @@ export async function renderImages() {
     '\n' +
     setsSectionHtml(sets) +
     '\n' +
+    sitDictHtml() +
     openingsSectionHtml() +
     allImagesSectionHtml();
+  bindSituations(box, { redraw: renderImages, job: exclusiveJob });
   bindImagesToolbar(box);
   box.querySelectorAll('[data-set]').forEach(bindSetCard);
   box.querySelectorAll('[data-opening]').forEach(bindOpeningCard);
@@ -84,8 +99,9 @@ function imagesHeaderHtml(usage, orphan, canAuto) {
    <details class="odds guide img-guide"><summary>${T('Help: tags and file names')}</summary>
       <p>${T('<b>There are two kinds of tags</b>, with one rule: proper nouns stay in their own language, everything else is English.')}</p>
       <div class="g"><code>${T('Looks')}</code><span>${T('English. <code>black hair</code>, <code>armor</code>. The narrator describes looks in English and the code compares word by word. Korean is turned into English when saved; English only gets its spelling fixed.')}</span><code>${T('Identity')}</code><span>${T('<code>key:value</code>. The key is English (<code>faction</code>, <code>company</code>, any word), the value is a proper noun in its own language (<code>faction:Tang Clan</code>, <code>company:Nintendo</code>). It is compared as is, never translated. It must be on every frame of a set, so add it on the set card; "Find faction tags" pulls them from descriptions.')}</span><code>opening<br>opening:{name}<br>order:{n}</code><span>${T('Opening frames, stacked full width above the first reply of a life. <code>opening</code> puts a picture in the unnamed sequence, <code>opening:murim</code> in a named one, and <code>order:2</code> sets its place (otherwise file names in order, panel 2 before panel 10). Any kind of picture can be one, and it is then used nowhere else. One sequence that fits the world is picked at random')}</span><code>game-master</code><span>${T("Shown as one banner above the first reply when no opening fits the world (with none, the game master's picture). It stays a normal picture everywhere else")}</span></div>
+      <p>${T('<b>Situations are not tags.</b> A picture marked with one (battle, hug, nsfw) shows only when the story is in that situation, and the plain pictures show the rest of the time, so most pictures get none. Pick them per picture from the situation dictionary; tags only describe looks.')}</p>
       <p>${T("<b>File name rules</b> (you'll be asked when a name doesn't fit)")}</p>
-      <div class="g"><code>{set}_{emotion}</code><span>${T('Character. <code>female1_smile.png</code>. A set is one person with several expressions.')}</span><code>shadow_{gender}</code><span>${T('Silhouette for extras. <code>shadow_male_neutral.png</code>, <code>shadow_female_2.png</code>. Grouped into a set per gender')}</span><code>bg_{place}_{time}</code><span>${T('Background. <code>bg_tavern_night.png</code>')}</span><code>admin_{emotion}</code><span>${T('Game master')}</span><code>dice</code><span>${T('Dice effect. <code>dice</code>, <code>dice_success</code>, <code>dice_fail</code>. Needs no labels and auto-sort skips it')}</span></div>
+      <div class="g"><code>{set}_{emotion}</code><span>${T('Character. <code>female1_smile.png</code>. A set is one person with several expressions.')}</span><code>{set}_{emotion}_{situation}</code><span>${T('A situation key after the emotion marks the picture with it. <code>female1_crying_battle.png</code>')}</span><code>shadow_{gender}</code><span>${T('Silhouette for extras. <code>shadow_male_neutral.png</code>, <code>shadow_female_2.png</code>. Grouped into a set per gender')}</span><code>bg_{place}_{time}</code><span>${T('Background. <code>bg_tavern_night.png</code>')}</span><code>admin_{emotion}</code><span>${T('Game master')}</span><code>dice</code><span>${T('Dice effect. <code>dice</code>, <code>dice_success</code>, <code>dice_fail</code>. Needs no labels and auto-sort skips it')}</span></div>
       <p>${T('Uploading the same file again skips it.')}</p>
       <p>${T('A file with the same name as a picture in the library but different content replaces it (you are asked first). Its set, tags and cover stay, and past turns show the new picture.')}</p>
       <p>${T("A zip goes in as is: its pictures from every folder (a name found in two folders gets the folder's name in front), and its tags.json if it has one, so there is no need to unzip it or import the tags separately.")}</p>
@@ -108,7 +124,17 @@ function setListHtml(sets) {
   let all = Object.entries(sets).filter(([k, imgs]) => {
     if (!q) return true;
     const m = app.setMeta[k] || {};
-    return [k, m.charName, m.role, ...(m.aliases || []), ...worldsOf(m), ...imgs.flatMap(x => x.tags || [])]
+    const sits = [...new Set(imgs.flatMap(frameSits))];
+    return [
+      k,
+      m.charName,
+      m.role,
+      ...(m.aliases || []),
+      ...worldsOf(m),
+      ...imgs.flatMap(x => x.tags || []),
+      ...sits,
+      ...sits.map(s => sitLabel(s)),
+    ]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
@@ -164,14 +190,14 @@ function setCardHtml(k, imgs) {
          '',
        )}</select><input data-sf="charName" value="${esc(m.charName || '')}" maxlength="20" placeholder="${T('Fixed name (if the picture has a name on it)')}" class="set-input"><button class="btn ghost" data-srename title="${T("Renaming a set renames every frame and the open save's casting")}">${T('Rename')}</button><input data-sf="aliases" value="${esc((m.aliases || []).join(', '))}" placeholder="${T('Other names (comma separated)')}" class="set-input set-input-narrow"></div><div class="set-row">${worldChips(worldsOf(m), 'data-sw')}</div>
      <div class="seg set-tags">${(() => {
-       const all = [...new Set(imgs.flatMap(x => x.tags || []))];
+       const all = [...new Set(imgs.flatMap(x => lookTags(x.tags)))];
        return [...all.filter(isIdTag), ...all.filter(t => !isIdTag(t))]
          .map(
            t =>
              `<button type="button" data-stag="${esc(t)}" aria-pressed="true" title="${isIdTag(t) ? T('Identity tag: compared as is, never translated') : T('Looks tag: English, compared word by word')}" class="chip-sm set-tag${isIdTag(t) ? ' id' : ''}">${esc(t)} ✕</button>`,
          )
          .join('');
-     })()}<input data-stagadd placeholder="${T('Add a tag (an affiliation like faction:Tang Clan)')}" class="set-tag-input"></div>${profileHtml(m)}</div>`;
+     })()}<input data-stagadd placeholder="${T('Add a tag (an affiliation like faction:Tang Clan)')}" class="set-tag-input"></div>${setSitsHtml(k, imgs)}${profileHtml(m)}</div>`;
 }
 // only on sets a world with profiles may use (world-ext.js); with no fixed name the set becomes an open role there
 function profileHtml(m) {
@@ -501,7 +527,7 @@ function imgGrid() {
     .filter(
       x =>
         !q ||
-        [x.name, x.file, x.set, x.emotion, ...(x.tags || []), ...worldsOf(x)]
+        [x.name, x.file, x.set, x.emotion, ...(x.tags || []), ...worldsOf(x), ...frameSits(x)]
           .filter(Boolean)
           .join(' ')
           .toLowerCase()
@@ -523,7 +549,7 @@ function imgGrid() {
     <select data-f="kind" ${sel}><option value="char" ${x.kind === 'char' ? 'selected' : ''}>${T('Character')}</option><option value="scene" ${x.kind === 'scene' ? 'selected' : ''}>${T('Background')}</option><option value="fx" ${x.kind === 'fx' ? 'selected' : ''}>${T('Effect (dice)')}</option></select>
     ${
       x.kind === 'char'
-        ? `<input data-f="set" value="${esc(x.set || x.name || '')}" placeholder="${T('Set (female1)')}"><select data-f="emotion" ${sel}>${EMOS.map(e => `<option ${(x.emotion || 'neutral') === e ? 'selected' : ''}>${e}</option>`).join('')}</select>`
+        ? `<input data-f="set" value="${esc(x.set || x.name || '')}" placeholder="${T('Set (female1)')}"><select data-f="emotion" ${sel}>${EMOS.map(e => `<option ${(x.emotion || 'neutral') === e ? 'selected' : ''}>${e}</option>`).join('')}</select>${sitPickerHtml(x)}`
         : x.kind === 'fx'
           ? `<input data-f="name" value="${esc(x.name || '')}" placeholder="dice, dice_success, dice_fail">`
           : `<input data-f="name" value="${esc(x.name || '')}" placeholder="${T('Background name (tavern_night)')}">${worldChips(worldsOf(x), 'data-w')}`
@@ -675,15 +701,21 @@ function parseName(fname, portrait) {
     };
   }
   const e1 = parts.length >= 2 ? splitEmoNum(parts[1]) : null;
-  if (e1)
+  if (e1) {
+    // a dictionary key after the emotion is a situation (female1_crying_battle), not a look
+    const isSit = p => !!sitDict()[p];
+    const sits = parts.slice(2).filter(isSit),
+      looks = parts.slice(2).filter(p => !isSit(p));
     return {
       kind: 'char',
       set: parts[0],
       emotion: e1.emo,
-      variant: [...(e1.num ? [e1.num] : []), ...parts.slice(2)].join('_'),
+      variant: [...(e1.num ? [e1.num] : []), ...looks].join('_'),
       name: base,
-      tags: parts,
+      tags: [...parts.slice(0, 2), ...looks],
+      ...(sits.length ? { situations: sits } : {}),
     };
+  }
   if (portrait) {
     const k0 = parts[0] || base;
     return KEY_RE.test(k0)
@@ -1549,8 +1581,9 @@ export async function importTags(file, names = null) {
     Object.values(g || {}).some(m => m && wl(m).includes('modern')),
   );
   const wlSet = m => (oldPack ? withModern(wl(m)) : wl(m));
+  // newest first: of two pictures with one file name, the file means the one uploaded last
   const byKey = new Map();
-  for (const i of app.images) {
+  for (const i of [...app.images].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))) {
     for (const k of [i.file, i.name, 'bg_' + i.name, (i.file || '').replace(/\.[^.]+$/, '')])
       if (k && !byKey.has(k)) byKey.set(k, i);
   }
@@ -1565,11 +1598,19 @@ export async function importTags(file, names = null) {
           .split(',')
           .map(t => t.trim())
           .filter(Boolean);
+  // an image's "set" puts it in that set whatever its file name; read now, applied with its tags
+  const moveTo = new Map();
+  for (const [fn, m] of Object.entries(j.images || {})) {
+    const x = findImg(fn),
+      to = m && typeof m.set === 'string' ? m.set.trim() : '';
+    if (x && !isOpening(x) && KEY_RE.test(to) && !to.includes('_')) moveTo.set(x.id, to);
+  }
+  const into = new Set(moveTo.values());
   // only sets that have pictures here are used; a set in the file with no pictures uploaded is ignored (it would only
   // leave an empty set card behind and use up a database document)
   const sets = charSetsAll(),
     allSets = Object.entries(j.sets || {}),
-    setEntries = allSets.filter(([k]) => sets[k]),
+    setEntries = allSets.filter(([k]) => sets[k] || into.has(k)),
     setTagsIn = {};
   const replaceTags = j.merge_tags !== true; // the file's tags win; "merge_tags": true keeps the old ones too
   const imgKeys = [...Object.keys(j.images || {}), ...Object.keys(j.openings || {})];
@@ -1597,6 +1638,25 @@ export async function importTags(file, names = null) {
     ))
   )
     return;
+  // the file's dictionary joins this one by key; a key already here keeps its own label and hint
+  let nsit = 0;
+  {
+    // parents are checked once the two are joined (saveSituations), so one may name an entry already here
+    const next = { ...sitDict() };
+    for (const [raw, e] of Object.entries(j.situations && typeof j.situations === 'object' ? j.situations : {})) {
+      const k = sitKey(raw);
+      if (SIT_KEY_RE.test(k) && !next[k]) {
+        next[k] = cleanSit(e);
+        nsit++;
+      }
+    }
+    if (nsit)
+      await saveSituations(next).catch(e => {
+        nsit = 0;
+        logErr('tags', e);
+        toast(T('Save failed: {err}', { err: e.code || e.message }), 5000);
+      });
+  }
   for (let i = 0; i < setEntries.length; i += 8) {
     say(T('Saving sets {i}/{n}', { i: Math.min(i + 8, setEntries.length), n: setEntries.length }));
     await Promise.all(
@@ -1627,7 +1687,7 @@ export async function importTags(file, names = null) {
         const prof = cleanProfile(m.profile);
         if (prof) meta.profile = prof;
         const cover = m.cover && findImg(String(m.cover));
-        if (cover && (cover.set || cover.name) === k) meta.cover = cover.id;
+        if (cover && (moveTo.get(cover.id) || cover.set || cover.name) === k) meta.cover = cover.id;
         app.setMeta[k] = Object.assign({}, app.setMeta[k] || {}, meta);
         try {
           await SETDOC(k).set(app.setMeta[k]);
@@ -1656,6 +1716,7 @@ export async function importTags(file, names = null) {
     touched.add(x.id);
     nb++;
   }
+  const left = new Set(); // sets a picture moved out of
   for (const [fn, m] of Object.entries(j.images || {})) {
     const x = findImg(fn);
     if (!x) continue;
@@ -1666,6 +1727,18 @@ export async function importTags(file, names = null) {
       if (ws.length) setWorlds(x, ws);
     }
     if (m.emotion && EMOS.includes(m.emotion)) x.emotion = m.emotion;
+    const to = moveTo.get(x.id);
+    if (to && (x.kind !== 'char' || (x.set || x.name) !== to)) {
+      if (x.kind === 'char') left.add(x.set || x.name);
+      x.kind = 'char';
+      x.set = to;
+      x.name = `${to}_${x.emotion || 'neutral'}${x.variant ? '_' + x.variant : ''}`;
+    }
+    // a list here replaces the frame's (merge_tags: joins it); keys not in the dictionary drop
+    if (m && typeof m === 'object' && 'situations' in m) {
+      const ss = toTags(m.situations).map(sitKeyOf).filter(Boolean);
+      setFrameSits(x, replaceTags ? ss : [...frameSits(x), ...ss]);
+    }
     touched.add(x.id);
     ni++;
   }
@@ -1683,8 +1756,9 @@ export async function importTags(file, names = null) {
   }
   // a set's own tags go on every frame of that set; in replace mode a frame the file does not list keeps only them
   let nst = 0;
+  const now = charSetsAll();
   for (const [k, st] of Object.entries(setTagsIn)) {
-    for (const x of sets[k] || []) {
+    for (const x of now[k] || []) {
       if (x.kind !== 'char') continue; // the file's backgrounds may have just made it one
       const own = replaceTags && !touched.has(x.id) ? [] : x.tags || [];
       x.tags = capTags([...st, ...own]);
@@ -1692,11 +1766,22 @@ export async function importTags(file, names = null) {
       nst++;
     }
   }
+  let saved = true;
   try {
     await IMGX.flush([...touched], (n, t) => say(T('Saving the image list {i}/{n}', { i: n, n: t })));
   } catch (e) {
+    saved = false;
     toast(T('Save failed: {err}', { err: e.code || e.message }), 5000);
   }
+  // a set the file emptied (one the upload made up for an unknown name) leaves no card behind
+  if (saved)
+    for (const k of left)
+      if (!now[k] && app.setMeta[k]) {
+        delete app.setMeta[k];
+        await SETDOC(k)
+          .delete()
+          .catch(e => noteIgnored('import tags: empty set card', e));
+      }
   say('');
   const miss = Object.keys(j.backgrounds || {}).length + imgKeys.length - nb - ni;
   toast(
@@ -1705,7 +1790,9 @@ export async function importTags(file, names = null) {
       bgs: nb,
       imgs: ni,
       frames: nst ? T(', {n} {n|frame|frames} got set tags', { n: nst }) : '',
-    }) + (miss > 0 ? T(', {n} {n|file|files} not found', { n: miss }) : ''),
+    }) +
+      (nsit ? T(', {n} {n|situation|situations} added to the dictionary', { n: nsit }) : '') +
+      (miss > 0 ? T(', {n} {n|file|files} not found', { n: miss }) : ''),
     5000,
   );
   renderImages();
@@ -1778,6 +1865,7 @@ async function saveManifest() {
     emotion: x.emotion,
     name: x.name,
     tags: x.tags || [],
+    situations: x.situations,
     worlds: x.worlds || [],
     world: x.world || 'any',
     variant: x.variant || '',
@@ -1791,7 +1879,7 @@ async function saveManifest() {
       m.cover ? Object.assign({}, m, { cover: (imgById(m.cover) || {}).shash }) : m,
     ]),
   );
-  const data = { kind: 'dice-roguelife-manifest', v: 1, createdAt: nowIso(), items, sets };
+  const data = { kind: 'dice-roguelife-manifest', v: 1, createdAt: nowIso(), items, sets, situations: sitDict() };
   try {
     const old = await findManifestAsset();
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
@@ -1950,27 +2038,58 @@ async function dedupeImages() {
   renderImages();
 }
 // asks a quick model what each untagged picture is; effects (fx, e.g. the dice reveal) and opening frames keep their kind
+// With every picture sorted, it can sort the character pictures again: emotion, situations and looks are replaced.
 async function autoTagAll() {
-  const todo = app.images.filter(x => !x.autoTagged && x.kind !== 'fx' && !isOpening(x));
-  if (!todo.length) {
-    toast(T('No images to auto-sort'));
-    return;
+  let todo = app.images.filter(x => !x.autoTagged && x.kind !== 'fx' && !isOpening(x));
+  const again = !todo.length;
+  if (again) {
+    todo = app.images.filter(x => x.kind === 'char' && !isOpening(x));
+    if (
+      !todo.length ||
+      !(await askConfirm(
+        T(
+          'Every picture is sorted. Sort the {n} character {n|picture|pictures} again? Their emotion, situations and look tags are replaced.',
+          { n: todo.length },
+        ),
+      ))
+    ) {
+      if (!todo.length) toast(T('No images to auto-sort'));
+      return;
+    }
   }
+  const sits = Object.entries(sitDict())
+    .map(([k, e]) => `${k}: ${e.hint || e.hint_en || k}`)
+    .join('; ');
+  const proposed = new Map(),
+    excluded = [];
   let n = 0;
   for (const x of todo) {
     setStat(T('Sorting {i}/{n}', { i: ++n, n: todo.length }));
     try {
       const blob = await (await fetch(imgUrl(x.id))).blob();
-      const r = await platform.sample.json(fillTemplate(pr('autotag'), { emos: EMOS.join('|') }), {
+      const r = await platform.sample.json(fillTemplate(pr('autotag'), { emos: EMOS.join('|'), sits }), {
         images: blob,
         modelTier: 'quick',
         cache: false,
       });
       if (r) {
-        x.kind = r.kind === 'scene' ? 'scene' : 'char';
+        x.kind = again || r.kind !== 'scene' ? 'char' : 'scene';
+        let looks = Array.isArray(r.tags) ? r.tags.map(t => String(t).trim()).filter(Boolean) : [];
+        if (x.kind === 'char') looks = lookTags(looks); // a situation key here would quietly become one
+        if (again) x.tags = (x.tags || []).filter(isIdTag);
         if (x.kind === 'char') {
           x.emotion = EMOS.includes(r.emotion) ? r.emotion : x.emotion || 'neutral';
           x.set = x.set || x.name;
+          const ss = (Array.isArray(r.situations) ? r.situations : []).map(sitKeyOf).filter(Boolean);
+          setFrameSits(x, again ? ss : [...frameSits(x), ...ss]);
+          // someone who may be a minor in a nude or sexual picture: never shown, and named for the owner to delete
+          if (r.exclude === true) {
+            setFrameSits(x, []);
+            x.off = true;
+            excluded.push(x.file || x.name || x.id);
+          }
+          const p = sitKey(r.propose);
+          if (p && !sitKeyOf(p)) proposed.set(p, (proposed.get(p) || 0) + 1);
         } else {
           if (r.place)
             x.name =
@@ -1981,8 +2100,7 @@ async function autoTagAll() {
           const ws = (Array.isArray(r.worlds) ? r.worlds : []).filter(v => WORLDS.some(w => w.id === v));
           setWorlds(x, ws);
         }
-        if (Array.isArray(r.tags) && r.tags.length)
-          x.tags = [...new Set([...(x.tags || []), ...r.tags.map(t => String(t).trim()).filter(Boolean)])].slice(0, 10);
+        if (looks.length) x.tags = capTags([...(x.tags || []), ...looks]);
         x.autoTagged = true;
         await IMGDOC(x.id).set(x);
       }
@@ -1998,5 +2116,21 @@ async function autoTagAll() {
     }
   }
   setStat('');
+  if (excluded.length)
+    openSheet(
+      `<h3>${T('{n} {n|picture|pictures} excluded', { n: excluded.length })}</h3><p class="muted upl-lead">${T('A nude or sexual picture where someone may be under 18. It is retired and never shown; delete it from the image list.')}</p><div class="upl-list">${excluded.map(f => `<div class="upl-item">${esc(f)}</div>`).join('')}</div><div class="row actions"><button class="btn primary" data-close>${T('OK')}</button></div>`,
+    );
+  // new kinds of scene are only proposed: the player adds the ones they want
+  if (proposed.size)
+    toast(
+      T('Proposed situations: {list}. Add the ones you want in the situation dictionary', {
+        list: [...proposed]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 6)
+          .map(([k, c]) => `${k} (${c})`)
+          .join(', '),
+      }),
+      9000,
+    );
   renderImages();
 }

@@ -1,5 +1,5 @@
 // the murim add-on (world-ext.js): old saves moved out of state.murim, bonds the code moves, open roles and profiles,
-// none of it in another world's prompt; and picture tags the narrator names as a situation, in every world
+// none of it in another world's prompt; and the situations the narrator names for a person's pictures, in every world
 import { test, expect } from './support/test.js';
 import { check, claudeMock, same, startLife } from './support/harness.js';
 
@@ -11,15 +11,18 @@ const MOCK = claudeMock(String.raw`async(p,o)=>{ if(p.startsWith('Pick the portr
   return Object.assign({admin:'',narration:'장면.',system:[],choices:['a','b'],stat_changes:{},clock:{days_passed:0},memory:{},dead:false},window.__next||{});}`);
 const IMAGES = [
   { id: 'm1', kind: 'char', set: 'male1', emotion: 'neutral', name: 'male1_neutral1', tags: ['male1', 'neutral1'] },
-  { id: 'm2', kind: 'char', set: 'male1', emotion: 'joy', name: 'male1_joy2', tags: ['male1', 'joy2'] },
+  // a look tag on some frames only (ponytail) is no situation
+  { id: 'm2', kind: 'char', set: 'male1', emotion: 'joy', name: 'male1_joy2', tags: ['male1', 'joy2', 'ponytail'] },
   {
     id: 'm3',
     kind: 'char',
     set: 'male1',
     emotion: 'determined',
     name: 'male1_determined11',
-    tags: ['male1', 'determined11', 'fighting'],
+    tags: ['male1', 'determined11'],
+    situations: ['battle'],
   },
+  // an older pack's tag that is a dictionary key counts as the situation
   { id: 'm4', kind: 'char', set: 'male1', emotion: 'smile', name: 'male1_smile15', tags: ['male1', 'smile15', 'hug'] },
   { id: 'f1', kind: 'char', set: 'female1', emotion: 'neutral', name: 'female1_neutral1', tags: ['female1'] },
   { id: 'f2', kind: 'char', set: 'female2', emotion: 'neutral', name: 'female2_neutral1', tags: ['female2'] },
@@ -31,6 +34,7 @@ const IMAGES = [
     name: 'female2_smile15',
     tags: ['female2', 'smile15', 'hug'],
   },
+  { id: 'f4', kind: 'char', set: 'female3', emotion: 'neutral', name: 'female3_neutral', situations: ['nsfw'] },
 ];
 const SETS = {
   male1: { gender: 'male', role: 'swordsman', worlds: ['murim'] },
@@ -42,6 +46,8 @@ const SETS = {
   },
   // a named set sharing the name a reply gives the open role: the claim must win, and its profile with it
   female2: { gender: 'female', role: 'noble lady', charName: '설화', profile: { position: '남궁세가 소저' } },
+  // only an adult picture, and in no world these lives use
+  female3: { gender: 'female', worlds: ['cyber'] },
 };
 async function turn(pg, text, next) {
   await pg.evaluate(n => (window.__next = n), next);
@@ -187,7 +193,7 @@ async function murimChecks(pg, errs) {
     mp.includes('#female1(') && mp.includes('speaker_cast'),
   );
 
-  // situation pictures: the narrator names one of the person's frame tags, and only those frames are used
+  // situation pictures: the narrator names one of the person's situations, and only those frames are used
   await pg.evaluate("DR.app.state.cast['백리운'] = 'male1'");
   // streamed: the face is picked before the situation arrives, and the whole reply picks it again
   await pg.evaluate(
@@ -198,7 +204,7 @@ async function murimChecks(pg, errs) {
     speaker: '백리운',
     speaker_gender: 'male',
     emotion: 'determined',
-    situation: 'Fighting',
+    situation: 'Battle',
   });
   const i1 = await last(pg);
   await pg.evaluate(() => (window.__stream = null));
@@ -209,11 +215,30 @@ async function murimChecks(pg, errs) {
   const i3 = await last(pg);
   await turn(pg, '미소 짓는다', { speaker: '백리운', speaker_gender: 'male', emotion: 'smile' });
   const i4 = await last(pg);
-  check(errs, 'situation Fighting (streamed, any case) picks the fighting frame', i1.char === 'm3');
-  check(errs, "the person's frame tags reach the prompt", tp.includes('[그림 태그] 백리운: fighting, hug'));
-  check(errs, 'situation hug picks the hug frame over the joy emotion', i2.char === 'm4');
-  check(errs, 'a situation the set has no frame for is ignored (joy frame)', i3.char === 'm2');
-  check(errs, 'with no situation named, a smile never shows the hug frame', i4.char !== 'm4');
+  // a made-up key under nsfw, as a pack's dictionary would bring
+  const adult = await pg.evaluate(`(() => {
+    DR.app.situations = Object.assign({}, DR.app.situations, { 'pose-a': { adult: true, parent: 'nsfw' } });
+    DR.imagesChanged();
+    return [DR.pickEmotion('female3', 'smile', []), DR.pickEmotion('female3', 'smile', [], 'pose-a')].map(x => x && x.id);
+  })()`);
+  check(errs, 'situation Battle (streamed, any case) picks the battle frame', i1.char === 'm3');
+  check(
+    errs,
+    "the person's situations reach the prompt, each with its hint",
+    tp.includes('[그림 태그] 백리운: battle(싸우거나 무공, 마법을 쓰는 중일 때), hug(안거나 안길 때)'),
+  );
+  check(errs, 'situation hug (a tag in an older pack) picks the hug frame over the joy emotion', i2.char === 'm4');
+  check(
+    errs,
+    'a situation the set has no frame for: the plain joy frame, its ponytail tag no situation',
+    i3.char === 'm2',
+  );
+  check(errs, 'with no situation named, a smile shows a plain frame (joy), never a situation frame', i4.char === 'm2');
+  check(
+    errs,
+    'a set with only an adult frame shows no face unless named; a key under nsfw falls back to it',
+    adult[0] === null && adult[1] === 'f4',
+  );
 
   // a passer-by never gets an open role's face by chance
   await turn(pg, '주문한다', {

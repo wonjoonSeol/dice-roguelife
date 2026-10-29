@@ -7,6 +7,7 @@ import { IMAGE_TYPES, imgUrl, worldsOf } from './images.js';
 import { logErr } from './diag.js';
 import { T } from './i18n.js';
 import { makeZip } from './zip.js';
+import { frameSits, lookTags, sitDict } from './situations.js';
 
 // a type's first extension (jpg, not jpeg)
 const EXT = Object.fromEntries(
@@ -39,9 +40,23 @@ function nameAll(imgs, extOf) {
   });
 }
 
+// the situation dictionary as tags.json writes it: label, hint and adult first
+const dictJson = () =>
+  Object.fromEntries(
+    Object.entries(sitDict()).map(([k, e]) => [
+      k,
+      Object.assign(
+        { label: e.label || '', hint: e.hint || '' },
+        e.adult ? { adult: true } : {},
+        e.parent ? { parent: e.parent } : {},
+        e.label_ja ? { label_ja: e.label_ja } : {},
+        e.hint_en ? { hint_en: e.hint_en } : {},
+      ),
+    ]),
+  );
 // the tags.json the import button reads, keyed by the pack's file names
 export function buildTagsJson(imgs, names) {
-  const out = { sets: {}, images: {}, backgrounds: {} };
+  const out = { situations: dictJson(), sets: {}, images: {}, backgrounds: {} };
   imgs.forEach((x, i) => {
     const fn = names[i];
     const ws = worldsOf(x);
@@ -62,7 +77,7 @@ export function buildTagsJson(imgs, names) {
         if (cover >= 0) s.cover = names[cover]; // by file name: ids are this install's
         out.sets[k] = s;
       }
-      const e = { emotion: x.emotion || 'neutral', tags: x.tags || [] };
+      const e = { set: k, emotion: x.emotion || 'neutral', situations: frameSits(x), tags: lookTags(x.tags) };
       if (ws.length) e.worlds = ws;
       out.images[fn] = e;
     } else if (x.kind === 'scene') {

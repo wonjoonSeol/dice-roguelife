@@ -14,6 +14,7 @@ export const app = {
   turns: [], // the loaded turn rows of the open save
   images: [], // the image library index
   setMeta: {}, // character set cards by key
+  situations: null, // the situation dictionary by key (situations.js), null until read
   notes: null, // the player's note library (notes.js), null until it is read
   settings: { tier: 'default' }, // this player's settings
   pendingRoll: null, // a rolled fate waiting on the new life form
