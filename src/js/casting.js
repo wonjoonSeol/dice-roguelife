@@ -87,8 +87,16 @@ export const capTags = list => {
   return [...u.filter(isIdTag), ...u.filter(t => !isIdTag(t)).slice(0, 10)];
 };
 // a name on any frame is true of the set
+let idsMemo = { sets: null, by: new Map() }; // read-only per library: casting asks for the same sets many times
 export function setIds(k) {
-  return [...new Set((charSetsAll()[k] || []).flatMap(x => (x.tags || []).filter(isIdTag)))].map(idOf).filter(Boolean);
+  const sets = charSetsAll();
+  if (idsMemo.sets !== sets) idsMemo = { sets, by: new Map() };
+  if (!idsMemo.by.has(k))
+    idsMemo.by.set(
+      k,
+      [...new Set((sets[k] || []).flatMap(x => (x.tags || []).filter(isIdTag)))].map(idOf).filter(Boolean),
+    );
+  return idsMemo.by.get(k);
 }
 function splitLook(look) {
   const items = (Array.isArray(look) ? look : String(look || '').split(/[,/·]+/))
@@ -101,7 +109,53 @@ const idMatch = (a, b) => {
     y = idNorm(b.val);
   return !!(x && y && x.length >= 2 && y.length >= 2 && (x === y || x.includes(y) || y.includes(x)));
 };
-// scored from the person's side: how many of their identities this set answers (+12 each, +1 when the kind agrees). A set naming only other identities is a small minus; nothing on either side is 0
+// pairs of one kind's values that some set carries together (faction:정파 with faction:화산파), per library
+let together = { sets: null, pairs: new Set(), vals: new Map() };
+function pairsOf() {
+  const sets = charSetsAll();
+  if (together.sets === sets) return together;
+  const pairs = new Set(),
+    vals = new Map(); // by kind: every value the library uses
+  for (const k of Object.keys(sets)) {
+    const ids = setIds(k).map(i => ({ key: i.key, val: idNorm(i.val) }));
+    for (const a of ids) {
+      if (!vals.has(a.key)) vals.set(a.key, new Set());
+      vals.get(a.key).add(a.val);
+      for (const b of ids) if (a.key === b.key) pairs.add(a.key + ':' + a.val + '|' + b.val);
+    }
+  }
+  return (together = { sets, pairs, vals });
+}
+// the library's values a person's value stands for: itself, or one written inside it or around it ("화산파 장로")
+const known = (P, a) => {
+  const v = idNorm(a.val);
+  return [...(P.vals.get(a.key) || [])].filter(
+    x => x === v || (x.length >= 2 && v.length >= 2 && (x.includes(v) || v.includes(x))),
+  );
+};
+// a set value of the person's kind that never shares a set with what the person is: another group. A value the
+// library never saw judges nothing
+function apart(ids, s) {
+  const P = pairsOf();
+  return ids.some(a => {
+    const xs = known(P, a);
+    return (
+      xs.length > 0 && s.some(b => b.key === a.key && !xs.some(x => P.pairs.has(a.key + ':' + x + '|' + idNorm(b.val))))
+    );
+  });
+}
+export function idConflict(k, ids) {
+  if (!ids || !ids.length) return false;
+  const s = setIds(k);
+  return s.length > 0 && apart(ids, s);
+}
+// the faces that keep the person's group, unless no real face does
+const ownGroup = (pool, ids) => {
+  const f = pool.filter(k => !idConflict(k, ids));
+  return f.some(k => !isGeneric(k)) ? f : pool;
+};
+// scored from the person's side: how many of their identities this set answers (+12 each, +1 when the kind agrees). A
+// set of another group sinks; one naming only other identities is a small minus; nothing on either side is 0
 function idScore(k, ids) {
   if (!ids || !ids.length) return 0;
   const s = setIds(k);
@@ -114,7 +168,7 @@ function idScore(k, ids) {
       if (m.key === a.key) n += 1;
     }
   }
-  return n || -4;
+  return apart(ids, s) ? n - 30 : n || -4;
 }
 // every real face that died in this life, whoever wore it; silhouettes are a kind, not a person, and never retire
 export const retiredSets = () =>
@@ -396,7 +450,7 @@ function wearable(who) {
 // the K nearest faces this person may wear, for the model to choose from
 export function castCandidates(who, K = 12) {
   const { hits, ids, score } = ranking(who);
-  const all = Object.keys(charSets()).filter(wearable(who));
+  const all = ownGroup(Object.keys(charSets()).filter(wearable(who)), ids);
   const signal = all.some(k => hits(k) > 0 || idScore(k, ids) > 0);
   // nothing overlaps anywhere: the words told us nothing, so hand the model a wider shelf
   return all
@@ -598,8 +652,8 @@ function castExtra(who) {
   );
   if (share.length) {
     const lh = k => overlap(d.look, hayWords(k));
-    const faces = share.filter(k => !isGeneric(k) && (lh(k) >= 2 || idScore(k, d.ids) > 0)),
-      gens = share.filter(isGeneric);
+    const faces = share.filter(k => !isGeneric(k) && !idConflict(k, d.ids) && (lh(k) >= 2 || idScore(k, d.ids) > 0)),
+      gens = share.filter(k => isGeneric(k) && !idConflict(k, d.ids));
     // a passer-by stays faceless unless a face clearly matches how they were described, or answers to the same faction
     const pool = faces.length ? faces : gens.length ? gens : share;
     const sc = k => lh(k) * 4 + overlap(d.role, hayWords(k)) * 2 + idScore(k, d.ids);
@@ -626,13 +680,16 @@ function castLead(who) {
     k => !isGeneric(k) && !used.has(k) && !reserved(k) && fitsWorld(metaOf(k), w),
   );
   if (g) pool = pool.filter(k => fitsGender(k, g)).sort((a, b) => (genderOf(b) === g) - (genderOf(a) === g));
-  if (!pool.length && want === 'minor') pool = sharedForMinor(g, w);
+  const d = describe(who, true); // what they look like counts most: 정장, 갑옷, 교복
+  // the person's own group first, from the free faces, then from those a minor may share; another group's only if neither has one
+  const own = list => list.filter(k => !idConflict(k, d.ids));
+  const shared = !pool.length || !own(pool).length ? (want === 'minor' ? sharedForMinor(g, w) : []) : [];
+  pool = own(pool).length ? own(pool) : own(shared).length ? own(shared) : pool.length ? pool : shared;
   if (!pool.length) {
     // nothing else left: anyone may wear a silhouette (it is never retired)
     const k = bestGeneric(who);
     return k ? assign(who.name, k, { look: [], role: [] }) : null;
   }
-  const d = describe(who, true); // what they look like counts most: 정장, 갑옷, 교복
   const lookHits = k => overlap(d.look, hayWords(k));
   const score = k => {
     const h = hayWords(k);
