@@ -6,8 +6,30 @@ import { app } from './app.js';
 import { saveSettings } from './settings.js';
 import { logErr } from './diag.js';
 import { answerDialog, askConfirm, askPrompt, askReview, openDialog, openSheet } from './sheet.js';
-import { fillHashes, findManifestAsset, IMGDOC, imgError, IMGX, restoreFromManifest, SETDOC } from './library.js';
-import { charSetsAll, genderOf, imgById, imgUrl, setCover, setWorlds, worldChips, worldsOf } from './images.js';
+import {
+  cleanProfile,
+  fillHashes,
+  findManifestAsset,
+  IMGDOC,
+  imgError,
+  IMGX,
+  PROFILE,
+  PROFILE_FIELDS,
+  restoreFromManifest,
+  SETDOC,
+} from './library.js';
+import {
+  charSetsAll,
+  fitsWorld,
+  genderOf,
+  imgById,
+  imgUrl,
+  setCover,
+  setWorlds,
+  worldChips,
+  worldsOf,
+} from './images.js';
+import { WORLD_EXT } from './world-ext.js';
 import { capTags, isGeneric, isIdTag, setIds, setTier, TIERS_CAST, toEnglishTags } from './casting.js';
 import { exportPack } from './images-export.js';
 import { setStat, statText } from './stat.js';
@@ -140,7 +162,14 @@ function setCardHtml(k, imgs) {
              `<button type="button" data-stag="${esc(t)}" aria-pressed="true" title="${isIdTag(t) ? T('Identity tag: compared as is, never translated') : T('Looks tag: English, compared word by word')}" class="chip-sm set-tag${isIdTag(t) ? ' id' : ''}">${esc(t)} ✕</button>`,
          )
          .join('');
-     })()}<input data-stagadd placeholder="${T('Add a tag (an affiliation like faction:Tang Clan)')}" class="set-tag-input"></div></div>`;
+     })()}<input data-stagadd placeholder="${T('Add a tag (an affiliation like faction:Tang Clan)')}" class="set-tag-input"></div>${profileHtml(m)}</div>`;
+}
+// only on sets a world with profiles may use (world-ext.js); with no fixed name the set becomes an open role there
+function profileHtml(m) {
+  const ws = Object.keys(WORLD_EXT).filter(w => WORLD_EXT[w].profiles && fitsWorld(m, w));
+  if (!ws.length) return '';
+  const p = m.profile || {};
+  return `<details class="set-prof"${m.profile ? ' open' : ''}><summary>${T('Profile')} <span class="muted">${T('Sent to the narrator in {worlds} when this person is in the scene', { worlds: ws.map(w => T(WORLDS.find(x => x.id === w).name)).join(', ') })}</span></summary><div class="set-prof-grid">${PROFILE_FIELDS.map(f => `<input data-sp="${f}" value="${esc(p[f] || '')}" maxlength="${PROFILE[f].max}" placeholder="${T(PROFILE[f].label)}" class="set-input">`).join('')}</div></details>`;
 }
 
 function allImagesSectionHtml() {
@@ -285,6 +314,15 @@ async function saveSetMeta(k, change) {
 }
 function bindSetCard(card) {
   const k = card.dataset.set;
+  card.querySelectorAll('[data-sp]').forEach(
+    el =>
+      (el.onchange = () =>
+        saveSetMeta(k, m => {
+          const p = cleanProfile({ ...(m.profile || {}), [el.dataset.sp]: el.value });
+          if (p) m.profile = p;
+          else delete m.profile;
+        })),
+  );
   card.querySelectorAll('[data-sf]').forEach(
     el =>
       (el.onchange = () =>
@@ -1261,6 +1299,8 @@ export async function importTags(file) {
           .filter(Boolean)
           .slice(0, 6);
         if (al.length) meta.aliases = al;
+        const prof = cleanProfile(m.profile);
+        if (prof) meta.profile = prof;
         const cover = m.cover && findImg(String(m.cover));
         if (cover && (cover.set || cover.name) === k) meta.cover = cover.id;
         app.setMeta[k] = Object.assign({}, app.setMeta[k] || {}, meta);

@@ -1,8 +1,8 @@
 /* ============ prompt ============ */
 import PR_DEFAULT from '../../prompts.json' with { type: 'json' };
 import { stripMarks } from './util.js';
-import { askOf, cmdIs, moneyText, powerGrade, REALMS } from './data.js';
-import { ART_SLOT_LABEL, ART_SLOTS, GENDER_LABEL, SKILL_SRC, STANCE_LABEL } from './enums.js';
+import { askOf, cmdIs, moneyText, powerGrade } from './data.js';
+import { GENDER_LABEL, SKILL_SRC, STANCE_LABEL } from './enums.js';
 import { LIMITS } from './limits.js';
 import { withWeekday } from './calendar.js';
 import { platform, thaw } from './db.js';
@@ -12,11 +12,12 @@ import { N_, T, tIn } from './i18n.js';
 import { logErr } from './diag.js';
 import { growthLevel, itemBonus, lifeDiff, rollGrade, rule, statusVisible, titlesOn } from './rules.js';
 import { stripOdds } from './reply-words.js';
-import { activeRel, canonName } from './people.js';
-import { charSets, fitsWorld } from './images.js';
+import { activeRel, bondOf, BONDS, canonName, lastStoryReply } from './people.js';
+import { charSets, fitsWorld, frameTags } from './images.js';
 import { placeVocab } from './places.js';
-import { setIds } from './casting.js';
+import { isOpenRole, namedSetFor, setIds } from './casting.js';
 import { widgetOf } from './widgets.js';
+import { nextStep, standingRows, worldExt } from './world-ext.js';
 
 export let prompts = PR_DEFAULT; // narrator prompt text; config/prompt in the db overrides field by field
 // a prompts.json map keyed by story language ("lang", "tip", "ledgerLang", "summaryLang")
@@ -139,7 +140,7 @@ const PROMPT_ORDER = [
   'ledger',
   'gear',
   'inv',
-  'murim',
+  'ext',
   'clock',
   'skill',
   'note',
@@ -150,6 +151,8 @@ const PROMPT_ORDER = [
   'sum',
   'user',
   'named',
+  'profiles',
+  'situation',
   'bg',
   'widgets',
   'recent',
@@ -238,27 +241,26 @@ function statBlock() {
     pl(', money {money}, fame {fame}', { money: moneyText(s.gold, l, promptLang()), fame: s.fame })
   );
 }
-function murimBlock() {
-  const M = app.state.murim;
-  if (!M) return '';
-  const realm = i => pl(REALMS[i]);
-  const arts = ART_SLOTS.filter(k => M.arts[k])
-    .map(k => pl(ART_SLOT_LABEL[k]) + ':' + M.arts[k])
-    .join(' / ');
-  return `${fillTemplate(pr('murim'), { realms: REALMS.map(r => pl(r)).join(' > ') })}\n${pl(
-    '[Murim status] realm {realm}{next}, inner energy {neigong} years, faction {faction}{rank}, epithet {alias}{constitution}, arts {arts}',
-    {
-      realm: realm(M.realm),
-      next: M.realm < REALMS.length - 1 ? pl(' (next {realm})', { realm: realm(M.realm + 1) }) : '',
-      neigong: M.neigong,
-      faction: M.faction || pl('None'),
-      rank: M.rank ? '/' + M.rank : '',
-      alias: M.alias || pl('None'),
-      constitution: M.constitution ? pl(', constitution {c}', { c: M.constitution }) : '',
-      arts: arts || pl('None'),
-    },
-  )}`;
+// the world add-on's block (world-ext.js): its ladder and the player's standing, its own part, and the rules of the
+// extras it turns on. A world without an add-on sends none of it.
+function extBlock() {
+  const X = worldExt(),
+    L = X.ladder,
+    next = nextStep();
+  const where = [
+    L && `${pl(L.label)} ${pl(L.steps[app.state.ladder])}${next ? pl(' (next {realm})', { realm: pl(next) }) : ''}`,
+    ...standingRows(pl).map(([k, v]) => `${k} ${v}`),
+  ].filter(Boolean);
+  return [
+    L && fillTemplate(pr('ladder'), { label: pl(L.label), steps: L.steps.map(r => pl(r)).join(' > ') }),
+    where.length && pl('[Standing] {list}', { list: where.join(', ') }),
+    X.prompt && X.prompt({ pl, pr }),
+    X.bonds && fillTemplate(pr('bonds'), { steps: BONDS.map(b => `${b.e} ${pl(b.label).toLowerCase()}`).join(' < ') }),
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
+const bondMark = n => (worldExt().bonds && bondOf(n) ? bondOf(n).e : '');
 function relationsBlock() {
   return Object.keys(app.state.relations).length
     ? (() => {
@@ -269,7 +271,7 @@ function relationsBlock() {
         return active.length
           ? pl('[Relations] {list}', {
               list: active
-                .map(([n, v]) => `${n}${al[n] ? `(= ${al[n].slice(0, 4).join(', ')})` : ''}: ${v}`)
+                .map(([n, v]) => `${n}${bondMark(n)}${al[n] ? `(= ${al[n].slice(0, 4).join(', ')})` : ''}: ${v}`)
                 .join(' | '),
             })
           : '';
@@ -278,15 +280,15 @@ function relationsBlock() {
 }
 // named characters with portraits, grouped by the set's first identity tag so one line holds a whole sect; groups
 // the story mentions come first and the rest rotate over turns, within about 500 bytes
-function namedBlock(hay) {
-  const l = app.state.life,
-    M = app.state.murim;
+function namedBlock(hay, turn) {
+  const l = app.state.life;
   const used = new Set(Object.values(app.state.cast));
   const w = l.world.id;
-  const ctx = hay + ' ' + (app.state.stateNote || '') + ' ' + ((M && M.faction) || '');
+  const ctx = hay + ' ' + (app.state.stateNote || '') + ' ' + ((app.state.standing || {}).faction || '');
+  // an open role (#key) is a set the narrator may name (casting.js isOpenRole)
   const list = Object.keys(charSets())
     .map(k => [k, app.setMeta[k] || {}])
-    .filter(([k, m]) => m.charName && !used.has(k) && fitsWorld(m, w));
+    .filter(([k, m]) => (m.charName || isOpenRole(k)) && !used.has(k) && fitsWorld(m, w));
   if (!list.length) return '';
   // grouped by the set's first identity tag, so one line holds a whole sect; groups the story mentions come first, the rest rotate over turns
   const groups = new Map();
@@ -302,12 +304,18 @@ function namedBlock(hay) {
         for (const i of ids) t = t.split(i.val).join('');
         return t.replace(/\(.*?\)|（.*?）/g, '').trim();
       });
-    const short = (segs.find(t => t.length >= 3) || segs[0] || '').slice(0, 12).trim(); // the first phrase that still says something once the identity is removed
+    const p = m.profile || {};
+    const short = (
+      [p.position, p.power].filter(Boolean).join(' ').slice(0, 16) ||
+      (segs.find(t => t.length >= 3) || segs[0] || '').slice(0, 12)
+    ) // the first phrase that still says something once the identity is removed
+      .trim();
     g.members.push({
-      name: m.charName,
+      name: m.charName || '#' + k,
+      open: !m.charName,
       g: m.gender === 'female' ? pl('F') : m.gender === 'male' ? pl('M') : '?',
       short,
-      hit: ctx.includes(m.charName) ? 1 : 0,
+      hit: m.charName && ctx.includes(m.charName) ? 1 : 0,
     });
   }
   const N = groups.size,
@@ -318,7 +326,8 @@ function namedBlock(hay) {
     .map(([g]) => g);
   const bytes = x => new TextEncoder().encode(x).length;
   const parts = [];
-  let size = 0;
+  let size = 0,
+    open = false;
   for (const g of gs) {
     const n = g.members.length,
       r2 = app.state.next % n;
@@ -332,6 +341,7 @@ function namedBlock(hay) {
       if (size + bytes(t) + bytes(g.name) + 6 > 500) break;
       names.push(t);
       size += bytes(t) + 2;
+      open = open || x.open;
     } // at most six per group, so several groups fit; the rest rotate in
     if (names.length) {
       parts.push(`${g.name}: ${names.join(', ')}`);
@@ -339,7 +349,59 @@ function namedBlock(hay) {
     }
     if (size >= 480) break;
   }
-  return parts.length ? fillTemplate(pr('named'), { list: parts.join(' | ') }) : '';
+  turn.openRoles = open; // the streamed preview leaves newcomers' faces to the whole reply (turn.js pickPreview)
+  if (!parts.length) return '';
+  const named = fillTemplate(pr('named'), { list: parts.join(' | ') });
+  return open ? named + '\n' + pr('namedOpen') : named;
+}
+// who matters this turn, most first: on stage in the last story reply, named in the recent text or this input (also by
+// a named set's other names), then the latest relations. Each with the set they wear or would wear.
+function peopleInPlay(hay) {
+  const o = (lastStoryReply() || {}).out || {};
+  const cast = app.state.cast;
+  const named = [];
+  for (const k of Object.keys(charSets())) {
+    const m = app.setMeta[k] || {};
+    if (m.charName && [m.charName, ...(m.aliases || [])].some(n => hay.includes(n))) named.push(m.charName);
+  }
+  const names = [
+    o.speaker,
+    ...(o.also_present || []).map(p => p && p.name),
+    ...Object.keys(cast).filter(n => hay.includes(n)),
+    ...named,
+    ...activeRel()
+      .map(([n]) => n)
+      .reverse(),
+  ];
+  return [...new Set(names.filter(Boolean).map(canonName))].map(n => [n, cast[n] || namedSetFor(n)]);
+}
+// at most this many people's profiles or picture tags per prompt, so a library of any size costs the same
+const PEOPLE_MAX = 3;
+// the set-card profiles of the people who matter this turn
+function profilesBlock(people) {
+  if (!worldExt().profiles) return '';
+  const lines = [];
+  for (const [n, k] of people) {
+    const p = k && (app.setMeta[k] || {}).profile;
+    if (!p) continue;
+    const head = [p.position, p.power].filter(Boolean).join(', ');
+    const body = [p.looks, p.traits, p.speech && pl('speech: {s}', { s: p.speech }), p.signature, p.ties];
+    if (p.secret) body.push(pl('secret: {s}', { s: p.secret }));
+    lines.push(`${n}${head ? `(${head})` : ''}: ${body.filter(Boolean).join('; ')}`);
+    if (lines.length >= PEOPLE_MAX) break;
+  }
+  return lines.length ? fillTemplate(pr('profiles'), { list: lines.join(' | ') }) : '';
+}
+// the tags that tell their face's frames apart (images.js frameTags), for the narrator to name as "situation"; only
+// people whose set has such frames, in any world
+function situationBlock(people) {
+  const lines = [];
+  for (const [n, k] of people) {
+    const tags = k ? frameTags(k) : [];
+    if (tags.length) lines.push(`${n}: ${tags.slice(0, 16).join(', ')}`);
+    if (lines.length >= PEOPLE_MAX) break;
+  }
+  return lines.length ? fillTemplate(pr('situation'), { list: lines.join(' | ') }) : '';
 }
 function widgetsBlock(cmd) {
   const W = pr('widgets') || {};
@@ -381,8 +443,10 @@ export function buildPrompt(text, cmd, turn = {}) {
     ck = app.state.clock;
   const recentStr = recentForPrompt();
   const hay = recentStr.slice(-3000) + ' ' + text;
+  const people = peopleInPlay(hay);
+  const loreHay = hay + ' ' + ((app.state.standing || {}).faction || ''); // the player's own sect stays in view
   const lore = Object.entries(app.state.lore)
-    .filter(([k]) => hay.includes(k))
+    .filter(([k]) => loreHay.includes(k))
     .slice(0, 15);
   const vocab = placeVocab();
   const d = lifeDiff(l);
@@ -424,7 +488,7 @@ export function buildPrompt(text, cmd, turn = {}) {
         })
       : '',
     stat: statBlock(),
-    murim: murimBlock(),
+    ext: extBlock(),
     clock: `${pl('[Time]')} D+${ck.day}${ck.date ? ', ' + withWeekday(ck.date) : ''}${ck.time ? ', ' + ck.time : ''}${ck.weather ? ', ' + ck.weather : ''}${ck.place ? ', ' + ck.place : ''}`,
     skill: `${pl('[Skills]')} ${app.state.skills.map(k => `${k.name}(${k.grade}, Lv.${k.lv || 1}${k.cost ? pl(', cost {n}%', { n: k.cost }) : ''}${k.src === SKILL_SRC.INHERITED ? pl(', inherited from a past life') : ''}): ${k.desc}`).join(' | ')}`,
     note: app.state.stateNote ? pl('[Current situation] {note}', { note: app.state.stateNote }) : '',
@@ -471,7 +535,9 @@ export function buildPrompt(text, cmd, turn = {}) {
       ? `${pl('[Story so far]')}\n${app.state.summaries.map(x => '- ' + x.text).join('\n')}`
       : '',
     user: app.state.userNotes ? `${pl('[Player notes: always follow]')}\n${app.state.userNotes}` : '',
-    named: namedBlock(hay),
+    named: namedBlock(hay, turn),
+    profiles: profilesBlock(people),
+    situation: situationBlock(people),
     bg: pl('[Place words] {list}', { list: vocab.length ? vocab.join(', ') : pl('none. scene is null') }),
     recent: recentStr ? `${pl('[Recent]')}\n${recentStr}` : '',
     widgets: widgetsBlock(cmd),

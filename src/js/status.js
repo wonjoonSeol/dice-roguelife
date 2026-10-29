@@ -1,13 +1,15 @@
 /* ============ status ============ */
 import { $, esc, fmt, toast } from './util.js';
 import { locale, N_, T } from './i18n.js';
-import { ART_SLOT_LABEL, ART_SLOTS, SKILL_SRC_LABEL } from './enums.js';
-import { moneyText, powerGrade, REALMS, STAT_LABEL, SUB_STATS, tierRank } from './data.js';
+import { SKILL_SRC_LABEL } from './enums.js';
+import { moneyText, powerGrade, STAT_LABEL, SUB_STATS, tierRank } from './data.js';
 import { app } from './app.js';
 import { itemBonus, statusVisible, TITLES_MAX, titlesOn } from './rules.js';
 import { openSheet } from './sheet.js';
 import { persist } from './persistence.js';
 import { toggleTitle } from './log.js';
+import { activeRel, bondOf } from './people.js';
+import { nextStep, standingRows, worldExt } from './world-ext.js';
 
 // before the awakening the body is felt in steps (pips), not measured
 const HP_WORDS = [N_('Dead'), N_('Critical'), N_('Badly hurt'), N_('Hurt'), N_('Good'), N_('Perfect')];
@@ -24,7 +26,7 @@ export function renderStrip() {
   }
   const s = app.state.stats,
     l = app.state.life,
-    M = app.state.murim;
+    X = worldExt();
   const turnNo = app.state.turnNo != null ? app.state.turnNo : app.turns.filter(t => t.kind === 'ai').length;
   const el = $('#strip');
   el.classList.remove('hidden');
@@ -34,8 +36,8 @@ export function renderStrip() {
     life: app.state.lifeNo,
     turn: turnNo,
   });
-  el.innerHTML = `<div class="who">${esc(l.name)} <span class="tier ${l.originTier}">${l.originTier}</span>${M ? `<span class="realm">${T(REALMS[M.realm])}</span>` : ''}<span class="meta">${meta}</span></div>
-   <div class="nums">${statusVisible() ? `HP <b>${fmt(s.hp)}</b>/${fmt(s.maxHp)} (${hpWord(s)})&nbsp;&nbsp;${app.state.energy ? `${esc(app.state.energy.name)} <b>${fmt(app.state.energy.cur)}</b>/${fmt(app.state.energy.max)}&nbsp;&nbsp;` : ''}` : `${T('Condition')} <b>${hpWord(s)}</b>&nbsp;&nbsp;`}${!statusVisible() ? '' : M ? T('Inner energy <b>{n}</b> yrs', { n: M.neigong }) : `${T(STAT_LABEL.power)} <b>${fmt(s.power)}</b> (${powerGrade(s.power)})`}</div>
+  el.innerHTML = `<div class="who">${esc(l.name)} <span class="tier ${l.originTier}">${l.originTier}</span>${X.ladder ? `<span class="realm">${T(X.ladder.steps[app.state.ladder])}</span>` : ''}<span class="meta">${meta}</span></div>
+   <div class="nums">${statusVisible() ? `HP <b>${fmt(s.hp)}</b>/${fmt(s.maxHp)} (${hpWord(s)})&nbsp;&nbsp;${app.state.energy ? `${esc(app.state.energy.name)} <b>${fmt(app.state.energy.cur)}</b>/${fmt(app.state.energy.max)}&nbsp;&nbsp;` : ''}` : `${T('Condition')} <b>${hpWord(s)}</b>&nbsp;&nbsp;`}${!statusVisible() ? '' : X.ladder ? (X.strip ? X.strip() : '') : `${T(STAT_LABEL.power)} <b>${fmt(s.power)}</b> (${powerGrade(s.power)})`}</div>
    ${statusVisible() ? `<div class="hp"><i style="width:${Math.max(0, Math.min(100, (s.hp / s.maxHp) * 100))}%"></i></div>` : `<div class="hp pips" aria-label="${T('Condition {word}', { word: hpWord(s) })}">${[1, 2, 3, 4, 5].map(i => `<b class="${i <= hpLevel(s) ? 'on' : ''}"></b>`).join('')}</div>`}`;
 }
 export function bindStatusStrip() {
@@ -44,12 +46,30 @@ export function bindStatusStrip() {
     if (e.key === 'Enter') openStatus();
   };
 }
+// the world add-on's part of the status window: next step, standing, its own rows, and the people's bonds
+function extSection(X) {
+  const rows = [
+    ...(X.ladder ? [[T(X.ladder.next), nextStep() ? T(nextStep()) : '-']] : []),
+    ...standingRows(T),
+    ...(X.rows ? X.rows() : []),
+  ];
+  const bonds = X.bonds
+    ? activeRel()
+        .map(([n]) => [n, bondOf(n)])
+        .filter(([, b]) => b)
+        .reverse()
+        .map(([n, b]) => `<span class="sw-chip" title="${esc(T(b.label))}">${b.e} ${esc(n)}</span>`)
+        .join('')
+    : '';
+  if (!rows.length && !bonds) return '';
+  return `<div class="sw-line"></div><div class="sw-sec">${X.title ? `<h4>${T(X.title)}</h4>` : ''}<dl class="sw-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${bonds ? `<div class="sw-chips sw-bonds">${bonds}</div>` : ''}</div>`;
+}
 const STATUS_ORNAMENT =
   '<svg class="orn" viewBox="0 0 56 22" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M1 21 C1 8 8 1 21 1 M1 21 C1 14 4 9 9 6 M1 21 C6 21 10 18 12 14 M14 3 c3 -1 6 1 6 4 M4 17 c1 -3 4 -5 7 -5"/><circle cx="22" cy="6" r="1.2" fill="currentColor"/><circle cx="8" cy="20" r="1.2" fill="currentColor"/></svg>';
 export function openStatus() {
   if (!app.state) return;
   const l = app.state.life,
-    M = app.state.murim;
+    X = worldExt();
   const SV = statusVisible();
   const s = SV
     ? app.state.stats
@@ -91,21 +111,13 @@ export function openStatus() {
     <div class="sw-line"></div>
     <div class="sw-sec"><h4>${T('STATS')}</h4>
       <div class="sw-grid sw-grid-main">
-        ${M ? `<div><small>${T('Realm')}</small><b>${T(REALMS[M.realm])}</b></div><div><small>${T('Inner energy')}</small><b>${T('{n} yrs', { n: M.neigong })}</b></div>` : `<div><small>${T(STAT_LABEL.power)}</small><b>${fmt(s.power)}${itemBonus() ? `<span class="sw-sub"> +${fmt(itemBonus())}</span>` : ''}${SV ? ` <span class="sw-sub">(${powerGrade(app.state.stats.power + itemBonus())})</span>` : ''}</b></div>`}
+        ${X.ladder ? '' : `<div><small>${T(STAT_LABEL.power)}</small><b>${fmt(s.power)}${itemBonus() ? `<span class="sw-sub"> +${fmt(itemBonus())}</span>` : ''}${SV ? ` <span class="sw-sub">(${powerGrade(app.state.stats.power + itemBonus())})</span>` : ''}</b></div>`}${[...(X.ladder ? [[T(X.ladder.label), T(X.ladder.steps[app.state.ladder])]] : []), ...(X.cells ? X.cells() : [])].map(([k, v]) => `<div><small>${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}
         <div><small>${T(STAT_LABEL.gold)}</small><b>${esc(moneyText(s.gold, app.state.life))}</b></div><div><small>${T(STAT_LABEL.fame)}</small><b>${fmt(s.fame)}</b></div>
       </div>
       <div class="sw-subs">${SUB_STATS.map(([k, label]) => `<span><span class="sw-label">${T(label)}</span><b>${s[k] || 0}</b></span>`).join('')}</div>
     </div>
 
-    ${
-      M
-        ? `<div class="sw-line"></div><div class="sw-sec"><h4>${T('MURIM')}</h4><dl class="sw-kv"><dt>${T('Next realm')}</dt><dd>${M.realm < REALMS.length - 1 ? T(REALMS[M.realm + 1]) : '-'}</dd><dt>${T('Epithet')}</dt><dd>${esc(M.alias || T('None'))}</dd><dt>${T('Faction')}</dt><dd>${esc(M.faction || T('None'))}${M.rank ? `, ${esc(M.rank)}` : ''}</dd>${M.constitution ? `<dt>${T('Physique')}</dt><dd>${esc(M.constitution)}</dd>` : ''}${ART_SLOTS.filter(
-            k => M.arts[k],
-          )
-            .map(k => `<dt>${T(ART_SLOT_LABEL[k])}</dt><dd>${esc(M.arts[k])}</dd>`)
-            .join('')}</dl></div>`
-        : ''
-    }
+    ${extSection(X)}
     <div class="sw-line"></div>
     <div class="sw-sec"><h4>${T('SKILLS')}</h4><div class="sw-scroll">${skills}</div></div>
     <div class="sw-line"></div>

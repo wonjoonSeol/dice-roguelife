@@ -52,7 +52,8 @@
 | `i18n.js` | 화면 언어(`uiLang`), 번역(`T`, `Tc`, `tIn`, `N_`), 고정 글자 번역(`translateStatic`) |
 | `enums.js` | 저장하고 비교하는 값(성별, 출신, 성좌 관계, 스킬 출처, 무공 칸)과 그 이름, 옛 저장의 한국어 값(`LEGACY`) |
 | `util.js` | 정직한 주사위(`rnd`는 `crypto.getRandomValues`), 공용 도우미(`$`, `esc`, `clone`, `toast`, `noteIgnored`, `cutLine`, `sha256Hex`), 서술 표시(`MARK_RE`) |
-| `data.js` | 데이터 테이블: 등급과 확률(`rollTier`, `tierRank`), 세계, 종족, 신분, 재능, 명령어(`CMDS`, 특성 표 `COMMAND_TYPES`와 `cmdIs`), 감정, 무림 경지 |
+| `data.js` | 데이터 테이블: 등급과 확률(`rollTier`, `tierRank`), 세계, 종족, 신분, 재능, 명령어(`CMDS`, 특성 표 `COMMAND_TYPES`와 `cmdIs`), 감정 |
+| `world-ext.js`, `murim.js` | 세계 애드온: 일부 세계만 가진 체계(아래 "세계 애드온"). `murim.js`는 무림의 것(경지 `REALMS`, 내공, 무공) |
 | `limits.js` | 남기는 양(`LIMITS`): 답 하나의 글자 수와 항목 수, 저장이 평생 들고 있는 양(`kept`), 한 답이 움직일 수 있는 양(`move`) |
 | `calendar.js` | 게임 안 날짜와 시각: `parseKDate`, `addDaysISO`, `clockMin`, `withWeekday` |
 | `db.js` | 기능 핸들과 저장 모드(`platform`), 특권 사용자(`isPrivileged`), 메모리 DB, 압축(gzip + base64, 내보내기용 Z85), `packTurn`/`inflate`, `userDoc`/`userCol`, `dget`/`dset` |
@@ -62,10 +63,10 @@
 | `diag.js` | 최근 오류 기록(`logErr`, `ERRLOG`)과 페이지 오류 잡기 |
 | **규칙** | |
 | `rules.js` | 저장이 시작 때 고정한 규칙(`snapshotRules`, `rule`), 성장 속도, 상태창 공개, 주사위(`ODDS_RE`, `PIVOTAL_RE`, `rollGrade`, `critOf`), 칭호, 의뢰 같음 판정 |
-| `people.js` | 인물: 별칭 정리(`canonName`, `aliasOut`), 이름 합치기(`renamePerson`), 최근 관계(`activeRel`), 등장 기록(`markSeen`) |
+| `people.js` | 인물: 별칭 정리(`canonName`, `aliasOut`), 이름 합치기(`renamePerson`), 최근 관계(`activeRel`), 등장 기록(`markSeen`), 호감 단계(`BONDS`, `moveBond`) |
 | `compat.js` | 옛 저장을 지금 형식으로(`compat`) |
 | **이미지와 캐스팅** | |
-| `library.js` | 이미지 색인(`IMGX`, 공유 `imgidx` 문서), 세트 카드, 매니페스트 복원, 옛 구조 이전, 파일 해시(`fillHashes`), 저장 파일의 그림 키(`withPicKeys`) |
+| `library.js` | 이미지 색인(`IMGX`, 공유 `imgidx` 문서), 세트 카드, 매니페스트 복원, 옛 구조 이전, 파일 해시(`fillHashes`), 저장 파일의 그림 키(`withPicKeys`), 세트 카드의 인물 설정(`PROFILE_FIELDS`, `cleanProfile`) |
 | `images.js` | 이미지 찾기: `imgById`(id 색인), 턴의 그림(`turnImg`: 내용 키, 그다음 id), 캐릭터 세트(`charSets`), 세계 맞춤(`fitsWorld`, `setWorlds`), 표정 고르기(`pickEmotion`), 장면 HTML |
 | `places.js` | 배경 검색: 내레이터가 영어 단어로 묘사한 장소 → 배경 이미지(`findPlace`) |
 | `casting.js` | 캐스팅: 인물(`{ name, gender, role, weight, look }`, 답에서는 `speakerOf`, `presentOf`)에게 초상화 세트 배정(외모, 역할, 소속 태그 점수), AI 선택, 그림자. 성별이 있는 인물에게는 `기타` 세트를 자동으로 주지 않습니다(얼굴 고르기 창에서는 고를 수 있음). |
@@ -96,6 +97,46 @@
 | `images-view.js` | 이미지 탭: 업로드, 자동 분류, 매니페스트 저장, 중복 정리 |
 | `debug.js` | 디버그 핸들 `window.DR` (위 "모듈 규칙") |
 | `main.js` | 진입점: 이벤트 연결, 탭 화면 넘기기, 그다음 `boot` |
+
+## 세계 애드온
+
+어떤 체계는 일부 세계에만 있습니다. 그런 세계는 `WORLD_EXT`(`world-ext.js`)에 애드온 하나를 두고, 애드온이 없는 세계는
+빈 애드온을 받아 프롬프트에도 화면에도 그 체계가 없습니다(문맥을 쓰지 않음). 지금은 무림(`murim.js`)뿐입니다. 애드온이
+가질 수 있는 것:
+
+- `ladder`: 한 단계씩 오르는 등급(무림의 경지 `REALMS`). `state.ladder`는 단계 번호, 시작 단계는 `ladder.start[등급]`.
+  답의 `ladder_up: true`가 한 단계 올립니다. 있으면 화면에서 힘(`power`)과 등급 대신 나옵니다(`nextStep`).
+- `standing`: 소속, 직책, 별호, 특성(`state.standing`: `faction, position, epithet, trait`)과 그 이름표(무림: 세력, 별호,
+  체질). 답의 `standing`은 바뀐 칸만 바꾸고, 빈 값은 그대로 두고, `"-"`는 지웁니다(파문). 프롬프트와 상태창은 같은
+  `standingRows`로 그립니다.
+- `init`, `apply`, `prompt`, `strip`, `cells`, `rows`, `title`: 애드온 자신의 상태(`state[세계 id]`)를 만들고, 답을
+  반영하고, 프롬프트 블록과 상태창 칸을 만듭니다. 무림은 내공(년)과 무공 네 칸. 열람 명령어의 답에서는 `extMask`가
+  애드온이 읽는 키를 지웁니다.
+- `profiles`: 세트 카드의 인물 설정(`set.profile`, 칸과 길이는 `library.js` `PROFILE`: 직책, 실력, 외모, 성격, 말투,
+  대표 무공, 관계, 비밀)이 내레이터에게 갑니다. 지난 이야기 답에서 장면에 있던 사람, 최근 글과 이번 입력에 이름(다른
+  호칭 포함)이 나온 사람, 최근 관계 순으로(`peopleInPlay`) 많아야 3명이라, 세트가 몇 개든 비용이 같습니다. 고정 이름
+  없이 설정만 있는 세트는 이름 없는 배역(`#키`, `isOpenRole`)으로 등장 가능한 인물에 올라가고, 내레이터가 이름을 지어
+  `speaker_cast`(also_present는 `cast`)로 고르면 그 삶 동안 그 얼굴이 됩니다(`roleFace`, 같은 이름의 세트보다 먼저).
+  이름 없는 배역은 이름 붙은 세트처럼 자동 캐스팅에서 빠집니다(`reserved`). 프롬프트에 배역이 올라간 턴에는
+  스트리밍 중에 새 인물의 얼굴을 고르지 않습니다(`turn.openRoles`, 배역 선택이 서술 뒤에 올 수 있어서).
+- `bonds`: 사람마다 호감 단계(`state.bonds`: 이름 → `{ s, up }`, `BONDS` 8단계, `bondOf`). 처음 만나면 🔒(이미 아는
+  사이는 😄까지), 오르는 것은 한 번에 한 단계, 저장 줄 10개(대략 다섯 번 주고받음, 다른 쿨다운과 같은 `next` 기준)에
+  한 번, 내려가는 것은 답이 말한 만큼. 답의 `memory.relations[].bond`. 2.12 이전 저장의 관계 인물은 단계 없이 시작하고,
+  답이 처음 준 단계를 상한 없이 받습니다.
+
+문파의 무공과 인물은 고정 표 없이, 이야기가 그 문파에 처음 들어갈 때 내레이터가 정해 `lore`에 문파 이름으로 남깁니다
+(`prompts.murim` 4번). 플레이어 소속의 설정은 최근 글에 없어도 프롬프트에 들어갑니다. 2.12 이전 저장의
+`murim.realm`과 소속, 직책, 별호, 체질은 `compat`이 처음 열 때 `ladder`와 `standing`으로 옮깁니다.
+
+### 상황 그림 (모든 세계)
+
+상황 그림은 애드온이 아니라 태그 시스템의 일입니다. 세트마다 그림을 서로 구별하는 태그(`frameTags`: 일부 그림에만
+있고, 세트 키, 감정, 번호 붙은 감정 `anger8`, 소속 태그가 아닌 것. 예: fighting, hug, tired)를 이미지 목록이 바뀔
+때까지 한 번 계산해 둡니다. 장면에 있는 사람(위의 `peopleInPlay`, 많아야 3명) 중 그런 태그가 있는 얼굴의 태그만
+`[그림 태그]`로 프롬프트에 가고, 내레이터가 그 인물의 지금 모습에 맞는 태그 하나를 답의 `situation`(also_present도
+같은 키)으로 고릅니다. 코드는 그 태그가 붙은 그림 중에서 감정으로 고릅니다(`pickEmotion`). 고르지 않았거나 그 세트에
+없는 태그면 감정만으로 고릅니다. 단어 목록은 코드에 없고, 구별 태그가 없는 세트만 나오는 장면은 0바이트입니다.
+스트리밍 중 고른 얼굴은 상황이 오기 전이라, 그 세트에 그 태그 그림이 있으면 끝에서 다시 고릅니다(`hasSituation`).
 
 ## 번역
 
@@ -161,7 +202,7 @@
    - 자유 판정이면 내레이터가 정한 확률(`check.p`, 1~99로 제한)과 미리 굴린 주사위로 성패를 정하고 플레이어 줄에 기록합니다.
    - `earlyCast`로 스트리밍 중 시작한 초상화 선택을 기다립니다.
    - **`applyOut(out, turn)`**이 답을 상태에 반영합니다: 스탯(상한, 성장 쿨다운), 기력, 칭호, 아이템과 장비, 장부, 종족, 스킬(추가,
-     레벨업, 진화, 비용), 기억(설정, 관계, 사망), 이름 바뀜, 시간과 날짜, 무림, 장면과 초상화. 글자 수는
+     레벨업, 진화, 비용), 기억(설정, 관계, 사망), 이름 바뀜, 시간과 날짜, 세계 애드온, 장면과 초상화. 글자 수는
      `LIMITS.text`로 자릅니다.
 7. **저장**: AI 줄을 `pushTurn`으로 추가합니다. 이 줄에는 그 시점 상태 전체(`snap`)가 들어 있어 다시 쓰기와 분기의
    기준점이 됩니다. `pushTurn`은 `turnStore.append`로 페이지에 쓰고 `persist`로 상태와 저장 카드를 씁니다. 저장에
@@ -206,8 +247,8 @@
 `buildPrompt`는 `prompts.rules` 뒤에 블록을 정해진 순서로 붙입니다(빈 블록은 빠짐).
 
 ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, 캐릭터, 프로필 → 출신(빙의, 전이) → 성좌 → 스탯, 장부, 장비,
-소지품 → 무림 → 시각 → 스킬, 메모, 의뢰, 관계 → 설정(최근 글에 나온 항목만) → 전생 → 요약 → 플레이어 메모 → 등장
-가능한 인물 → 배경 어휘 → 위젯 → **최근 기록** → 명령어 → 교정 → 재출력 요청 → 정정 → 도박꾼의 초석 → 생활 운 →
+소지품 → 세계 애드온 → 시각 → 스킬, 메모, 의뢰, 관계 → 설정(최근 글에 나온 항목만) → 전생 → 요약 → 플레이어 메모 → 등장
+가능한 인물 → 인물 설정 → 그림 태그 → 배경 어휘 → 위젯 → **최근 기록** → 명령어 → 교정 → 재출력 요청 → 정정 → 도박꾼의 초석 → 생활 운 →
 주사위 없음 → 판정 원칙 → 판정 결과 → 이번 입력.
 
 - **최근 기록**: `recentWindow`가 요약되지 않은 턴을 최신부터 바이트 예산(`recentBudget`, 설정값, 기본 40000바이트)까지
@@ -264,7 +305,8 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
 - **저장 카드**: `id, name, createdAt, updatedAt, parent, lifeNo, turns, lifeTurns, store, pages, sv`. `store: 2`는 페이지
   구조, `parent`는 분기 원본입니다.
 - **상태**(`state`)의 주요 키: `life, lifeNo, stats, rules, titles, skills, items, equipped, energy, ledger, quests, lore,
-  relations, cast, clock, murim, summaries, summarizedUpto, corrections, next, turnNo, dead` 등.
+  relations, cast, clock, summaries, summarizedUpto, corrections, next, turnNo, dead` 등. 세계 애드온이 있는 세계는
+  `ladder, standing, bonds`와 애드온의 상태(`murim`)도 가집니다.
 - **턴 줄**: `i, at, kind(user | ai | system | ledger), text, req, roll, luck, fate, out, deltas, notes, img, clock, snap`.
   `out`과 `snap`은 저장할 때 gzip + base64로 줄여 `z` 필드 하나에 넣고(`packTurn`), 읽을 때 되돌립니다(`inflate`).
 

@@ -1,5 +1,65 @@
 /* ============ people: names, aliases, relations ============ */
 import { app } from './app.js';
+import { N_, tIn, UI_LANGS } from './i18n.js';
+
+// how a person stands with the player, in a world whose add-on turns bonds on (state.bonds: name -> { s, up })
+export const BONDS = [
+  { e: '😡', label: N_('Hostile') },
+  { e: '🔒', label: N_('Guarded') },
+  { e: '🤔', label: N_('Wary') },
+  { e: '😐', label: N_('Neutral') },
+  { e: '🙂', label: N_('Friendly') },
+  { e: '😄', label: N_('Trusted') },
+  { e: '☺️', label: N_('Devoted') },
+  { e: '🥰', label: N_('In love') },
+];
+const BOND_START = 1; // a stranger is guarded
+const BOND_FIRST_MAX = 5; // someone who already knows the player may start up to trusted, never higher
+const BOND_GAP = 10; // saved rows between two rises (about five exchanges), the clock other cooldowns use
+const bondKey = v =>
+  String(v == null ? '' : v)
+    .replace(/\uFE0F/g, '')
+    .trim()
+    .toLowerCase();
+// the step a reply names: its emoji (with or without a word after it, as the prompt lists them) or its label in any
+// screen language
+export function bondStep(v) {
+  const k = bondKey(v);
+  if (!k) return null;
+  const i = BONDS.findIndex(
+    b => k.startsWith(bondKey(b.e)) || bondKey(b.label) === k || UI_LANGS.some(l => bondKey(tIn(l, b.label)) === k),
+  );
+  return i >= 0 ? i : null;
+}
+// the code's part: a first meeting starts guarded (or where the reply says, up to trusted); after that a rise is one
+// step, never two within BOND_GAP rows, and a fall goes as far as the reply says. Someone already in the relations
+// before bonds existed (a save from before v2.12) gets no step until a reply gives theirs, and may start anywhere.
+// Returns [from, to] when it moved.
+export function moveBond(name, want, known) {
+  const B = (app.state.bonds = app.state.bonds || {});
+  const t = app.state.next || 0;
+  const cur = B[name];
+  if (!cur) {
+    if (known && want == null) return null;
+    B[name] = { s: want == null ? BOND_START : known ? want : Math.min(want, BOND_FIRST_MAX), up: t };
+    return null;
+  }
+  if (want == null || want === cur.s) return null;
+  const from = cur.s;
+  if (want < cur.s) cur.s = want;
+  else if (t - cur.up >= BOND_GAP) {
+    cur.s++;
+    cur.up = t;
+  } else return null;
+  return [from, cur.s];
+}
+// the step this person stands at, or null
+export function bondOf(name) {
+  const b = (app.state.bonds || {})[name];
+  return b ? BONDS[b.s] : null;
+}
+// the last reply of the story itself, not an answer to a judge or skills question
+export const lastStoryReply = () => [...app.turns].reverse().find(t => t.kind === 'ai' && t.out && !t.out.judge);
 
 export function canonName(n) {
   let x = String(n || '').trim();
@@ -34,7 +94,7 @@ export function renamePerson(a, b) {
     for (const k of Object.keys(app.state.aliases)) if (app.state.aliases[k] === a) app.state.aliases[k] = b;
     moved = true;
   } /* one person under two labels: the kept label takes the face, its weight and the notes */
-  for (const k of ['cast', 'castW', 'castWhy', 'seen']) {
+  for (const k of ['cast', 'castW', 'castWhy', 'seen', 'bonds']) {
     const m = app.state[k];
     if (m && Object.prototype.hasOwnProperty.call(m, a)) {
       if (m[b] == null) m[b] = m[a];

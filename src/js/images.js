@@ -1,7 +1,7 @@
 /* ============ images: lookups over the image library (by id, character sets, worlds, portraits) ============ */
 import { host } from './host.js';
 import { esc, pick } from './util.js';
-import { EMO_FB, WORLD_ALIAS, WORLDS } from './data.js';
+import { EMO_FB, EMOS, WORLD_ALIAS, WORLDS } from './data.js';
 import { app } from './app.js';
 import { canonName } from './people.js';
 import { T } from './i18n.js';
@@ -136,9 +136,39 @@ export function worldChips(sel, attr) {
 export function bgKey(x) {
   return String(x.name || '').replace(/^bg[_-]/, '');
 }
-export function pickEmotion(k, emo, look) {
-  const imgs = charSets()[k];
+const frameWords = x =>
+  [...(x.tags || []), x.variant || '']
+    .join(' ')
+    .toLowerCase()
+    .split(/[\s,_]+/)
+    .filter(Boolean);
+const lowTags = x => (x.tags || []).map(t => String(t).toLowerCase().trim());
+// The tags that tell one frame of a set from the others (fighting, hug, tired): on some frames but not all, and not
+// the set's own key, an emotion, a numbered emotion (anger8) or an identity tag. The narrator may name one as the
+// person's situation (prompt.js situationBlock); computed once per set until the image list changes.
+let tagMemo = { ver: -1, bySet: {} };
+export function frameTags(k) {
+  if (tagMemo.ver !== ver) tagMemo = { ver, bySet: {} };
+  if (tagMemo.bySet[k]) return tagMemo.bySet[k];
+  const imgs = charSets()[k] || [];
+  const count = new Map();
+  for (const x of imgs) for (const t of new Set(lowTags(x))) count.set(t, (count.get(t) || 0) + 1);
+  const skip = t => t === k || t.includes(':') || EMOS.includes(t) || /^[a-z]+\d+$/.test(t) || /^\d+$/.test(t);
+  return (tagMemo.bySet[k] = [...count].filter(([t, n]) => n < imgs.length && !skip(t)).map(([t]) => t));
+}
+const situationIn = (k, situation) => {
+  const s = String(situation || '')
+    .toLowerCase()
+    .trim();
+  return s && frameTags(k).includes(s) ? s : '';
+};
+export const hasSituation = (k, situation) => !!situationIn(k, situation);
+// situation: one of the set's frame tags the narrator named; only its frames are used, chosen by the feeling as usual
+export function pickEmotion(k, emo, look, situation) {
+  let imgs = charSets()[k];
   if (!imgs || !imgs.length) return null;
+  const s = situationIn(k, situation);
+  if (s) imgs = imgs.filter(x => lowTags(x).includes(s));
   const by = e => imgs.filter(x => (x.emotion || 'neutral') === e);
   let c = by(emo);
   if (!c.length && EMO_FB[emo]) c = by(EMO_FB[emo]);
@@ -146,13 +176,7 @@ export function pickEmotion(k, emo, look) {
   if (!c.length) c = imgs;
   const want = (Array.isArray(look) ? look : []).map(x => String(x).toLowerCase()).filter(Boolean);
   if (want.length) {
-    const hit = c.filter(x =>
-      [...(x.tags || []), x.variant || '']
-        .join(' ')
-        .toLowerCase()
-        .split(/[\s,_]+/)
-        .some(t => t && want.includes(t)),
-    );
+    const hit = c.filter(x => frameWords(x).some(t => want.includes(t)));
     if (hit.length) c = hit;
   }
   return pick(c);

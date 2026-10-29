@@ -1,17 +1,18 @@
 /* ============ applying a reply ============ */
 import { cutLine, MARK_RE, normName, pick } from './util.js';
-import { currencyOf, moneyText, moneyUnit, normEmo, REALMS, STAT_LABEL, SUB_STATS, tierRank, TIERS } from './data.js';
-import { ART_SLOT_LABEL, ART_SLOTS, artsToEnums, SKILL_SRC } from './enums.js';
+import { currencyOf, moneyText, moneyUnit, normEmo, STAT_LABEL, SUB_STATS, tierRank, TIERS } from './data.js';
+import { SKILL_SRC } from './enums.js';
 import { T, tIn, uiLang } from './i18n.js';
 import { LIMITS } from './limits.js';
 import { addDaysISO, clockMin, fmtKDate, parseKDate } from './calendar.js';
 import { app } from './app.js';
 import { promptLang, storyLang } from './settings.js';
 import { costPct, growthLevel, sameQuest, TITLES_MAX, titlesOn } from './rules.js';
-import { markSeen, renamePerson } from './people.js';
-import { bgKey, imgById, pickEmotion } from './images.js';
+import { BONDS, bondStep, markSeen, moveBond, renamePerson } from './people.js';
+import { bgKey, hasSituation, imgById, pickEmotion } from './images.js';
 import { baseOfKey, findPlace } from './places.js';
 import { aiWillPick, castFor, presentOf, setTier, shadowFor, speakerOf, startAiPick } from './casting.js';
+import { STANDING_KEYS, worldExt } from './world-ext.js';
 
 // applyOut turns one normalized narrator reply into state changes. Each step owns one part of the reply, and all of
 // them write what the player should see into the shared result: deltas (the number chips), notes (system lines) and
@@ -42,7 +43,7 @@ const APPLY_STEPS = [
   applyDeaths,
   applyQuests,
   applyClock,
-  applyMurim,
+  applyWorldExt,
   applyScene,
   applySpeaker,
   applyCast,
@@ -63,6 +64,7 @@ export function applyOut(reply, turn = {}) {
     img: {},
     newSkills: [],
     events: new Set(), // 'realm' | 'title' | 'quest' | 'skill': what the turn's sound cue plays for
+    ext: worldExt(), // the world's add-on (world-ext.js), empty for a world without one
     isJackpot: turn.fate === 'jackpot',
     preview: turn.preview || null, // the banner and face picked while the reply streamed
     growth: growthLevel(),
@@ -460,11 +462,15 @@ function applyLore(ctx) {
 
 function applyRelations(ctx) {
   const m = ctx.reply.memory || {};
+  const bonds = ctx.ext.bonds;
   for (const rel of (m.relations || []).slice(0, LIMITS.perReply.relations)) {
     if (rel && rel.name) {
       const nm = String(rel.name).slice(0, LIMITS.text.name);
+      const known = Object.prototype.hasOwnProperty.call(app.state.relations, nm);
       app.state.relations[nm] = String(rel.note || '').slice(0, LIMITS.text.remark);
       markSeen(nm);
+      const mv = bonds && moveBond(nm, bondStep(rel.bond), known);
+      if (mv) ctx.notes.push(`${nm} ${BONDS[mv[0]].e} → ${BONDS[mv[1]].e}`);
     }
   }
 }
@@ -569,41 +575,27 @@ function applyClock(ctx) {
   }
 }
 
-// one realm step at a time
-function applyMurim(ctx) {
-  const { reply, deltas, notes, events } = ctx;
-  if (!app.state.murim || !reply.murim || typeof reply.murim !== 'object') return;
-  const u = reply.murim,
-    M = app.state.murim;
-  if (u.realm_up === true && M.realm < REALMS.length - 1) {
-    M.realm++;
-    notes.push(T('Realm up: {realm}', { realm: T(REALMS[M.realm]) }));
+// the world's add-on: its ladder (one step at a time), the standing, then its own part
+function applyWorldExt(ctx) {
+  const { reply, notes, events, ext } = ctx;
+  const L = ext.ladder;
+  if (L && reply.ladder_up === true && app.state.ladder < L.steps.length - 1) {
+    app.state.ladder++;
+    notes.push(T(L.up, { realm: T(L.steps[app.state.ladder]) }));
     events.add('realm');
   }
-  const ng = Math.max(-LIMITS.move.neigong, Math.min(LIMITS.move.neigong, Math.round(Number(u.neigong) || 0)));
-  if (ng) {
-    M.neigong = Math.max(0, M.neigong + ng);
-    deltas.neigong = ng;
-  }
-  for (const k of ['faction', 'rank', 'alias', 'constitution'])
-    if (u[k]) {
-      const v = String(u[k]).slice(0, LIMITS.text.name);
-      if (M[k] !== v) {
-        M[k] = v;
-        if (k === 'alias') notes.push(T('Epithet: {name}', { name: v }));
-        if (k === 'faction') notes.push(T('Faction: {name}', { name: v }));
-      }
+  const S = reply.standing;
+  // a field left out or empty stays as it is; "-" clears it (expelled, renounced)
+  if (ext.standing && S && typeof S === 'object')
+    for (const k of STANDING_KEYS) {
+      const v0 = String(S[k] == null ? '' : S[k]).trim();
+      if (!v0) continue;
+      const v = v0 === '-' ? '' : v0.slice(0, LIMITS.text.name);
+      if (app.state.standing[k] === v) continue;
+      app.state.standing[k] = v;
+      if (ext.standing[k]) notes.push(`${T(ext.standing[k])}: ${v || T('None')}`);
     }
-  // the Korean prompt names slots by their Korean words
-  const arts = artsToEnums(u.arts && typeof u.arts === 'object' ? u.arts : {});
-  for (const k of ART_SLOTS)
-    if (arts[k]) {
-      const v = String(arts[k]).slice(0, LIMITS.text.label);
-      if (M.arts[k] !== v) {
-        M.arts[k] = v;
-        notes.push(`${T(ART_SLOT_LABEL[k])}: ${v}`);
-      }
-    }
+  if (ext.apply) ext.apply(ctx);
 }
 
 /* ---- pictures: the code resolves the narrator's words to real images ---- */
@@ -631,6 +623,9 @@ function applyScene(ctx) {
 
 function applySpeaker(ctx) {
   const { reply, img } = ctx;
+  // the face picked while streaming came before the reply named a situation: one this set has a frame for picks again
+  const pv = img.char && !img.hidden && imgById(img.char);
+  if (pv && hasSituation(pv.set || pv.name, reply.situation)) delete img.char;
   if (!reply.speaker || img.char) return;
   const person = speakerOf(reply);
   if (reply.speaker_hidden) {
@@ -647,7 +642,7 @@ function applySpeaker(ctx) {
   }
   const k = castFor(person);
   if (k) {
-    const im = pickEmotion(k, normEmo(reply.emotion), reply.speaker_look);
+    const im = pickEmotion(k, normEmo(reply.emotion), reply.speaker_look, reply.situation);
     if (im) img.char = im.id;
   } else {
     const sh = shadowFor(person);
@@ -683,7 +678,7 @@ function applyCast(ctx) {
       if (sh && !chars.some(c => c.id === sh.im.id)) chars.push({ id: sh.im.id, npc: who, hidden: true });
       continue;
     }
-    const im = pickEmotion(k, normEmo(p.emotion), []);
+    const im = pickEmotion(k, normEmo(p.emotion), [], p.situation);
     if (im && !chars.some(c => c.id === im.id)) chars.push({ id: im.id, npc: who });
   }
   if (chars.length) img.chars = chars;

@@ -27,6 +27,8 @@ import * as casting from './casting.js';
 import * as newLife from './new-life.js';
 import * as persistence from './persistence.js';
 import * as status from './status.js';
+import * as murim from './murim.js';
+import * as worldExt from './world-ext.js';
 import * as log from './log.js';
 import * as facePicker from './face-picker.js';
 import * as widgets from './widgets.js';
@@ -65,6 +67,8 @@ const MODULES = [
   diag,
   rules,
   people,
+  murim,
+  worldExt,
   compat,
   sheet,
   shell,
