@@ -85,12 +85,13 @@ const startStyle = inherit => {
 const startPlay = inherit =>
   !inherit && (lastSaveCard() || {}).mode === MODE.SCENARIO ? MODE.SCENARIO : MODE.ROGUELIKE;
 // A scenario's extras (enums.js ADDON), ticked on the form (sc) and in the Memory tab (mem); the world add-on only for
-// a world that has one (X), named by it
+// a world that has one (X), named by it, and listed first
 export const addonRowsHtml = (pre, on, X) =>
-  ADDONS.filter(k => k !== ADDON.EXT || X)
+  [ADDON.EXT, ...ADDONS.filter(k => k !== ADDON.EXT)]
+    .filter(k => k !== ADDON.EXT || X)
     .map(
       k =>
-        `<label class="row opt"><input type="checkbox" id="${pre}Addon-${k}" data-addon="${k}"${on[k] ? ' checked' : ''}> ${esc(T(k === ADDON.EXT ? X.name : ADDON_LABEL[k]))}</label>`,
+        `<label class="row opt${k === ADDON.EXT ? ' addon-ext' : ''}"><input type="checkbox" id="${pre}Addon-${k}" data-addon="${k}"${on[k] ? ' checked' : ''}> ${esc(T(k === ADDON.EXT ? X.name : ADDON_LABEL[k]))}</label>`,
     )
     .join('');
 // the form's ticks start from the last scenario save's

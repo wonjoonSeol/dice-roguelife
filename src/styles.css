@@ -4511,3 +4511,36 @@ textarea.mem-edit {
   padding: 10px;
   border-radius: 8px;
 }
+
+/* the world add-on leads the extras and glows like circulating inner power while it is on */
+.addon-ext {
+  border-radius: 10px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s;
+}
+.addon-ext:has(input:checked) {
+  border-color: rgba(214, 178, 94, 0.75);
+  animation: qi-glow 2.4s ease-in-out infinite;
+}
+@keyframes qi-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px rgba(214, 178, 94, 0.35),
+      inset 0 0 6px rgba(120, 200, 170, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 18px rgba(214, 178, 94, 0.7),
+      inset 0 0 12px rgba(120, 200, 170, 0.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .addon-ext:has(input:checked) {
+    animation: none;
+    box-shadow: 0 0 12px rgba(214, 178, 94, 0.55);
+  }
+}
