@@ -24,10 +24,20 @@ import {
   worldIn,
 } from './data.js';
 import { langOptions, N_, T, tIn, uiLang } from './i18n.js';
-import { ENTRY_LABEL, GENDER, GENDER_LABEL, GENDERS, SKILL_SRC, STANCE_LABEL } from './enums.js';
+import {
+  ENTRY_LABEL,
+  GENDER,
+  GENDER_LABEL,
+  GENDERS,
+  SKILL_SRC,
+  STANCE_LABEL,
+  STYLE,
+  STYLE_LABEL,
+  STYLES,
+} from './enums.js';
 import { isPrivileged, platform } from './db.js';
 import { NEW_SAVES, turnStore } from './turn-store.js';
-import { app, exclusive } from './app.js';
+import { app, exclusive, lastSaveCard } from './app.js';
 import { saveSettings, setting, storyLang } from './settings.js';
 import { snapshotRules } from './rules.js';
 import { showTab } from './shell.js';
@@ -47,6 +57,18 @@ import { bindNotePicker, notePickerHtml, pickedInForm, saveBoxAsNote } from './n
 const TALENT_MAX = 5;
 // a regression keeps its save's notes; a new game starts with the last save's
 const startNotes = inherit => (inherit ? app.state.noteIds : lastNoteIds());
+// the prose style the same way: the save's, else the last save's
+const startStyle = inherit => {
+  const s = inherit ? app.state.style : (lastSaveCard() || {}).style;
+  return STYLES.includes(s) ? s : STYLE.DEFAULT;
+};
+// chips with data-sty, for the form and the Memory tab
+export const styleChips = (cur, off) =>
+  STYLES.map(
+    s =>
+      `<button type="button" data-sty="${s}" aria-pressed="${s === cur}"${off ? ' disabled' : ''}>${T(STYLE_LABEL[s])}</button>`,
+  ).join('');
+const formStyle = () => ($('#styseg button[aria-pressed="true"]') || { dataset: {} }).dataset.sty;
 let tierLocked = false;
 // free setup for players without owner rights stops at C; Random stays open, its odds are the fair ones
 function lockTierSel(sel) {
@@ -88,6 +110,7 @@ export function startNewLifeForm(inherit) {
   bindChoice(log, '#gseg', 'g', v => (sel.gender = v));
   bindChoice(log, '#wseg', 'w', v => (sel.world = v));
   bindChoice(log, '#spseg', 'sp', v => (sel.sponsor = v));
+  bindChoice(log, '#styseg', 'sty', () => {}); // read when the life begins (formStyle)
   bindChoice(log, '#mseg', 'm', v => {
     sel.mode = v;
     $('#freeBox').classList.toggle('hidden', v !== 'free');
@@ -153,7 +176,7 @@ export function redrawNewLifeForm() {
   }
 }
 // a row of toggle buttons: pressing one marks it and reports its data-<key> value
-function bindChoice(root, seg, key, onPick) {
+export function bindChoice(root, seg, key, onPick) {
   const buttons = root.querySelectorAll(seg + ' button');
   buttons.forEach(
     b =>
@@ -183,6 +206,7 @@ function newLifeHtml(inherit) {
     <div class="field"><label for="prof">${T('Character profile (optional): looks, personality, verbal tics, backstory, anything weird you like')}</label><textarea id="prof" rows="3" maxlength="600" placeholder="${esc(T('e.g. Worked the night shift at a convenience store in a past life and is obsessed with instant noodles. Ends every sentence with "I mean, though." Loses all reason around cats.'))}">${esc(inherit ? app.state.life.profile || '' : app.settings.profile || '')}</textarea><div class="row profile-head"><label class="row profile-toggle"><input type="checkbox" id="profSave" checked> ${T('Save as the default for my next life')}</label><span class="muted count-note" id="profCount"></span></div></div>
     ${notePickerHtml(startNotes(inherit))}
     <div class="field"><label>${T('World')}</label><div class="seg" id="wseg">${worlds.map(w => `<button type="button" data-w="${w}" aria-pressed="${w === 'random'}">${w === 'random' ? T('Random') : T(WORLDS.find(x => x.id === w).name)}</button>`).join('')}</div></div>
+    <div class="field"><label>${T('Prose style')}</label><div class="seg" id="styseg">${styleChips(startStyle(inherit))}</div><p class="muted field-note">${T('How the narrator writes this game. You can change it later in the Memory tab.')}</p></div>
     ${
       inherit
         ? ''
@@ -684,6 +708,7 @@ async function beginLife() {
   app.pendingRoll = null;
   castDraft = ''; // the list it went into is the one kept
   const noteIds = pickedInForm() ?? startNotes(inherit); // no picker: the library is empty or unread
+  const style = formStyle() || startStyle(inherit);
   const b = BASE[life.originTier];
   const skills = [
     ...(life.talent ? [{ ...life.talent, src: SKILL_SRC.TALENT }] : []),
@@ -737,6 +762,7 @@ async function beginLife() {
     userNotes,
     roster: (inherit && app.state.roster) || {}, // every world's list goes on; this life uses its own world's
     noteIds, // the library notes ticked on this screen (notes.js)
+    style,
     dead: false,
     next: inherit ? app.state.next : 0,
   };

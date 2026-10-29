@@ -130,8 +130,8 @@ function adminBlock() {
   if (k === 'custom') return app.settings.adminCustom ? `[ADMIN] ${app.settings.adminCustom}` : '';
   return (AP[k] || AP.star || AP.dealer || {}).text || '';
 }
-// The player's language, length and correction settings sit just before the rules list, after the output format.
-// The list's heading was '규칙:' and is now 'Rules:'; with neither, the settings follow the whole rules text.
+// The player's language, length, correction and prose style settings sit just before the rules list, after the
+// output format. The list's heading was '규칙:' and is now 'Rules:'; with neither, the settings follow the whole rules text.
 function withPlayerSettings(rules, extra) {
   if (!extra) return rules;
   // i18n-ignore: an older live prompt's heading
@@ -652,7 +652,8 @@ export function buildPrompt(text, cmd, turn = {}) {
   const LEN = { short: pr('lenShort'), normal: '', long: pr('lenLong') }[setting('len')] || '';
   const tip = app.settings.langTip ? prLang('tip') : '';
   const extra = prLang('lang') + (tip ? pl('\n[Extra output field] ') + tip : '');
-  const rules = withPlayerSettings(pr('rules') || '', [LEN, extra].filter(Boolean).join('\n'));
+  const style = (pr('styles') || {})[app.state.style] || ''; // after the language block, whose plain prose it replaces
+  const rules = withPlayerSettings(pr('rules') || '', [LEN, extra, style].filter(Boolean).join('\n'));
   const build = skip =>
     rules +
     '\n\n' +

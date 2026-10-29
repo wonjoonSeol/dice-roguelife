@@ -1228,5 +1228,12 @@
   "Shown as one banner above the first reply when no opening fits the world (with none, the game master's picture). It stays a normal picture everywhere else": "合うオープニングがないとき、人生の最初の返答の上に1枚のバナーとして表示されます（これもなければゲームマスターの画像）。ほかでは普通の画像のままです",
   "Pictures tagged opening. The first reply of a life shows one sequence that fits its world, at random; with none, a picture tagged game-master or the game master.": "opening タグの付いた画像です。人生の最初の返答に、その世界に合う組がひとつランダムに表示されます。なければ game-master タグの画像かゲームマスターが表示されます。",
   "Saved result (no model call)": "保存しておいた結果（モデル呼び出しなし）",
-  "Read again": "もう一度読む"
+  "Read again": "もう一度読む",
+  "Default": "標準",
+  "Jin Yong": "金庸風",
+  "Prose style": "文体",
+  "How the narrator writes this game. You can change it later in the Memory tab.": "ナレーターがこのゲームを書く文体です。あとで記憶タブで変えられます。",
+  "How the narrator writes this save, from the next reply on.": "ナレーターがこのセーブを書く文体です。次の返答から変わります。",
+  "Pick it on the new life screen.": "新しい人生の画面で選んでください。",
+  "Prose style changed": "文体を変更しました"
 }

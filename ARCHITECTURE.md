@@ -359,6 +359,11 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
 
 - **최근 기록**: `recentWindow`가 요약되지 않은 턴을 최신부터 바이트 예산(`recentBudget`, 설정값, 기본 40000바이트)까지
   담습니다. 최소 6줄은 항상 담습니다.
+- **플레이어 설정**: 분량(`lenShort`, `lenLong`), 언어(`lang`, 교정 `tip`), 문체(`styles`)는 `prompts.rules`의 출력 형식
+  다음, `Rules:` 목록 바로 앞에 들어갑니다(`withPlayerSettings`). 문체는 저장마다 `state.style`(`enums.js` `STYLE`: 기본
+  `default`, 김용체 `jinyong`)이고, 새 게임 화면의 칩(마지막 저장의 것으로 시작, 저장 카드의 `style`)과 기억 탭에서 고릅니다.
+  기본은 아무것도 더하지 않고, 다른 문체는 `styles[키]`(영어, 일본어 이야기는 `en.styles`)를 언어 블록 뒤에 붙입니다.
+  내레이터 턴에만 가고 요약, 인생 결산, 자동 분류, 가져오기는 받지 않습니다. 옛 저장은 `compat`이 기본으로 둡니다.
 - **크기 보호**: 프롬프트가 `platform.limits.maxPromptBytes`의 90%를 넘으면 설정, 배경 어휘, 전생 블록을 빼고 다시
   만듭니다. 그래도 넘으면 최근 기록을 넘는 만큼 덜 담고(최소 6줄), 요약은 실제로 보낸 창을 씁니다. 체크한 보관함 노트는 줄이지 않습니다(위 "노트 보관함").
 - **라이브 프롬프트**: 시작할 때 `loadPromptConfig`가 데이터베이스 `config/prompt`를 읽어, `rules`가 있으면
@@ -374,7 +379,7 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
   - 1~5턴 전이면 `applyErratum`이 금액, 아이템, 장부, 관계를 정해진 범위 안에서만 고치고, 다음 답 첫머리에 자연스럽게
     수습하라는 정정(`prompts.errata`)을 붙입니다.
 - **분기**(`fork`): `snap`이 있는 아무 줄에서 그 지점까지의 턴을 복사해 새 저장을 만듭니다(`turnStore.copyUpTo`).
-- 다시 쓰기와 분기가 `snap`으로 상태를 되돌릴 때 플레이어가 쓴 것(노트 `userNotes`, 인물 명단 `roster`, 보관함 체크 `noteIds`)은 지금 것을
+- 다시 쓰기와 분기가 `snap`으로 상태를 되돌릴 때 플레이어가 쓰거나 고른 것(노트 `userNotes`, 인물 명단 `roster`, 보관함 체크 `noteIds`, 문체 `style`)은 지금 것을
   둡니다(`fromSnap`). 이야기가 아니라서, 앞 답 뒤에 고친 것이 다시 쓰기로 사라지지 않습니다.
 
 ## 저장 구조
@@ -412,10 +417,10 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
 
 ### 저장 카드와 상태
 
-- **저장 카드**: `id, name, createdAt, updatedAt, parent, lifeNo, turns, lifeTurns, store, pages, sv, noteIds`. `store: 2`는 페이지
+- **저장 카드**: `id, name, createdAt, updatedAt, parent, lifeNo, turns, lifeTurns, store, pages, sv, noteIds, style`. `store: 2`는 페이지
   구조, `parent`는 분기 원본입니다.
 - **상태**(`state`)의 주요 키: `life, lifeNo, stats, rules, titles, skills, items, equipped, energy, ledger, quests, lore,
-  relations, cast, clock, summaries, summarizedUpto, corrections, userNotes, roster, noteIds, next, turnNo, dead` 등. 세계 애드온이 있는 세계는
+  relations, cast, clock, summaries, summarizedUpto, corrections, userNotes, roster, noteIds, style, next, turnNo, dead` 등. 세계 애드온이 있는 세계는
   `ladder, standing, bonds`와 애드온의 상태(`murim`)도 가집니다. 자유 설정에서 첫 재능의 등급을 "재능 없음"으로 고른 삶은
   `life.talent`와 `life.talentTier`가 `null`이고 재능 스킬도 덤 재능도 없습니다. 읽는 곳(운명 카드, 첫 줄, 시작 프롬프트의
   `talentVars`, 전당, 스킬 상한)이 이를 다룹니다.

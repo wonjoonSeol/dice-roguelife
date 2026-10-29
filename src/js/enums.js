@@ -13,6 +13,11 @@ export const ENTRY_LABEL = Object.freeze({
 
 export const MONEY = Object.freeze({ WON: 'won', YEN: 'yen', DOLLARS: 'dollars' }); // a modern life's money
 
+// a save's prose style (state.style): prompts.json styles holds each one's text, none for the default
+export const STYLE = Object.freeze({ DEFAULT: 'default', JINYONG: 'jinyong' });
+export const STYLES = Object.freeze(Object.values(STYLE));
+export const STYLE_LABEL = Object.freeze({ default: N_('Default'), jinyong: N_('Jin Yong') });
+
 export const STANCE = Object.freeze({ INDIFFERENT: 'indifferent', RIVAL: 'rival', HOSTILE: 'hostile', ALLY: 'ally' });
 export const STANCES = Object.freeze(Object.values(STANCE)); // the order data.js STANCE_P weighs them in
 export const STANCE_LABEL = Object.freeze({
