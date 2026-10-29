@@ -25,8 +25,8 @@ export function cardIndex(sets = charSets(), world = app.state && app.state.life
   }
   return ix;
 }
-// the set card that holds one of these names: an exact fixed name or alias for any of them, in their order, first;
-// then, unless exact, a card name inside the first (the person's main name), as the label 남궁설화 holds 설화
+// the set card that holds one of these names: an exact fixed name or alias for any of them, in their order, first.
+// Then, unless exact, a card name inside the first (the person's main name), as the label 남궁설화 holds 설화
 export function namedSetOf(names, { ix = cardIndex(), exact = false } = {}) {
   const ns = names.map(normName).filter(Boolean);
   if (!ns.length) return null;

@@ -33,7 +33,7 @@ window.claude={use:async(n)=>{ if(n==='db')return window.__dbmock; if(n==='user'
   );
 }
 
-// fill the new-game form and start. dice: the per-save luck mode; name: '' on a regression's form, which has none;
+// fill the new-game form and start. dice: the per-save luck mode. name: '' on a regression's form, which has none.
 // onFate: run on the fate screen, before accepting
 export async function startLife(
   pg,

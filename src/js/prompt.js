@@ -281,7 +281,7 @@ function relationsBlock() {
 }
 // the short text after a name in the named block
 const shortOf = p => [p.position, p.power].filter(Boolean).join(' ').slice(0, 16).trim();
-// the roster's people, each with the set card their names point to, and each card's person (the first to claim it);
+// the roster's people, each with the set card their names point to, and each card's person (the first to claim it),
 // once per prompt, for the named block and the profiles
 function rosterCards(ix) {
   const of = rosterNow().map(e => [e, namedSetOf(namesOf(e), { ix, exact: true })]);
