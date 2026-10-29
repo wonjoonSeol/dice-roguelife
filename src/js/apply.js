@@ -4,7 +4,7 @@ import { currencyOf, moneyText, moneyUnit, normEmo, STAT_LABEL, SUB_STATS, tierR
 import { SKILL_SRC } from './enums.js';
 import { T, tIn, uiLang } from './i18n.js';
 import { LIMITS } from './limits.js';
-import { addDaysISO, clockMin, fmtKDate, parseKDate } from './calendar.js';
+import { addDaysISO, clockMin, fmtKDate, ownDateText, parseKDate } from './calendar.js';
 import { app } from './app.js';
 import { promptLang, storyLang } from './settings.js';
 import { costPct, growthLevel, isScenario, sameQuest, TITLES_MAX, titlesOn } from './rules.js';
@@ -561,18 +561,25 @@ function applyClock(ctx) {
   }
   for (const k of ['weather', 'place']) if (c[k]) app.state.clock[k] = String(c[k]).slice(0, LIMITS.text.label);
   if (c.time && !keepTime) app.state.clock.time = String(c.time).slice(0, LIMITS.text.label);
-  if (app.state.clock.anchor)
-    app.state.clock.date = fmtKDate(
-      addDaysISO(app.state.clock.anchor.date, app.state.clock.day - app.state.clock.anchor.day),
+  const ck = app.state.clock;
+  if (ck.anchor)
+    ck.date = fmtKDate(
+      addDaysISO(ck.anchor.date, ck.day - ck.anchor.day),
       storyLang(),
     ); /* a real calendar: the code counts the date */
   else if (c.date) {
     const iso = parseKDate(c.date);
     if (iso) {
-      app.state.clock.anchor = { date: iso, day: app.state.clock.day };
-      app.state.clock.date = fmtKDate(iso, storyLang());
-    } else app.state.clock.date = String(c.date).slice(0, LIMITS.text.label);
-  }
+      ck.anchor = { date: iso, day: ck.day };
+      ck.date = fmtKDate(iso, storyLang());
+      delete ck.dateDay;
+    } else {
+      // a world's own calendar: the date it names, from the day it was named (the days since are shown, calendar.js
+      // clockDate). The shown date said back, with or without its count, is not a new date
+      const named = ownDateText(c.date).slice(0, LIMITS.text.label);
+      if (named !== ck.date || ck.dateDay == null) [ck.date, ck.dateDay] = [named, ck.day];
+    }
+  } else if (d > 0 && ck.date && ck.dateDay == null) ck.dateDay = before; // a save from before the count
 }
 
 // the world's add-on: its ladder (one step at a time), the standing, then its own part

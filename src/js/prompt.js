@@ -4,7 +4,7 @@ import { kb, stripMarks, utf8Bytes } from './util.js';
 import { askOf, cmdIs, moneyText, powerGrade } from './data.js';
 import { ADDON, GENDER_LABEL, SCENARIO_WORLD, SKILL_SRC, STANCE_LABEL, STYLE } from './enums.js';
 import { LIMITS } from './limits.js';
-import { withWeekday } from './calendar.js';
+import { clockDate } from './calendar.js';
 import { platform, sget } from './db.js';
 import { app } from './app.js';
 import { choicesOff, promptLang, setting, storyLang } from './settings.js';
@@ -714,7 +714,7 @@ export function buildPrompt(text, cmd, turn = {}) {
       : '',
     stat: statBlock(),
     ext: extBlock(),
-    clock: `${pl('[Time]')} D+${ck.day}${ck.date ? ', ' + withWeekday(ck.date) : ''}${ck.time ? ', ' + ck.time : ''}${ck.weather ? ', ' + ck.weather : ''}${ck.place ? ', ' + ck.place : ''}`,
+    clock: `${pl('[Time]')} D+${ck.day}${ck.date ? ', ' + clockDate(ck, storyLang()) : ''}${ck.time ? ', ' + ck.time : ''}${ck.weather ? ', ' + ck.weather : ''}${ck.place ? ', ' + ck.place : ''}`,
     skill: skillBlock(false),
     note: app.state.stateNote ? pl('[Current situation] {note}', { note: app.state.stateNote }) : '',
     quest: ifAny(
