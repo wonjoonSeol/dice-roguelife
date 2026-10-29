@@ -1,6 +1,6 @@
 /* ============ compat: old saves brought up to date ============ */
 import { currencyOf, normGender, rollSubStats, WORLD_ALIAS, WORLDS, worldIn } from './data.js';
-import { artsToEnums, fromLegacy, LEGACY } from './enums.js';
+import { artsToEnums, fromLegacy, LEGACY, STYLE } from './enums.js';
 import { dedupeQuests, snapshotRules } from './rules.js';
 import { okLang } from './i18n.js';
 import { extFill } from './world-ext.js';
@@ -8,6 +8,7 @@ import { extFill } from './world-ext.js';
 export function compat(st) {
   st.cast = st.cast || {};
   st.noteIds = st.noteIds || [];
+  st.style = st.style || STYLE.DEFAULT;
   if (st.life && st.life.world && WORLD_ALIAS[st.life.world.id]) {
     const [bg, en] = WORLD_ALIAS[st.life.world.id];
     const nw = WORLDS.find(w => w.id === bg);

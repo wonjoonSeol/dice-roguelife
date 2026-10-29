@@ -1285,5 +1285,12 @@
   "Shown as one banner above the first reply when no opening fits the world (with none, the game master's picture). It stays a normal picture everywhere else": "맞는 오프닝이 없을 때 삶의 첫 답 위에 배너 한 장으로 나와요(이것도 없으면 게임 마스터 그림). 다른 곳에서는 보통 그림 그대로예요",
   "Pictures tagged opening. The first reply of a life shows one sequence that fits its world, at random; with none, a picture tagged game-master or the game master.": "opening 태그가 붙은 그림이에요. 삶의 첫 답에 그 세계에 맞는 묶음 하나가 무작위로 나와요. 없으면 game-master 태그 그림이나 게임 마스터가 나와요.",
   "Saved result (no model call)": "저장해 둔 결과 (모델 호출 없음)",
-  "Read again": "다시 읽기"
+  "Read again": "다시 읽기",
+  "Default": "기본",
+  "Jin Yong": "김용체",
+  "Prose style": "문체",
+  "How the narrator writes this game. You can change it later in the Memory tab.": "내레이터가 이 게임을 쓰는 문체예요. 나중에 기억 탭에서 바꿀 수 있어요.",
+  "How the narrator writes this save, from the next reply on.": "내레이터가 이 저장을 쓰는 문체예요. 다음 답부터 바뀌어요.",
+  "Pick it on the new life screen.": "새 삶 화면에서 골라요.",
+  "Prose style changed": "문체 변경됨"
 }

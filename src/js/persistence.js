@@ -90,6 +90,7 @@ export const cardFields = st => ({
   turns: st.next,
   lifeNo: st.lifeNo,
   noteIds: st.noteIds,
+  style: st.style, // a new game starts with the last save's (new-life.js)
   ...(st.turnNo != null ? { lifeTurns: st.turnNo } : {}),
 });
 let persistQueue = Promise.resolve();
@@ -148,9 +149,9 @@ async function persistNow() {
   if (i >= 0) app.saves[i] = clone(app.currentSave);
   else app.saves.unshift(clone(app.currentSave));
 }
-// What the player wrote is not story: a snapshot brought back (a rewrite, a branch, a saved state that fell behind)
-// keeps the notes and character lists of the state open now (snapshots hold no lists, roster.js snapOf)
-const PLAYER_KEYS = ['userNotes', 'roster', 'noteIds'];
+// What the player wrote or chose is not story: a snapshot brought back (a rewrite, a branch, a saved state that fell
+// behind) keeps the notes, character lists and prose style of the state open now (snapshots hold no lists, roster.js snapOf)
+const PLAYER_KEYS = ['userNotes', 'roster', 'noteIds', 'style'];
 export function fromSnap(snap) {
   const st = compat(clone(snap));
   for (const k of PLAYER_KEYS) if (app.state && app.state[k] !== undefined) st[k] = clone(app.state[k]);

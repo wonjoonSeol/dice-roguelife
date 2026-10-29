@@ -11,6 +11,7 @@ import { charSets } from './images.js';
 import { persist } from './persistence.js';
 import { seenSpan } from './reroll.js';
 import { renderNoteLibrary } from './notes-view.js';
+import { bindChoice, styleChips } from './new-life.js';
 
 export function renderMemory() {
   const box = $('#memBox');
@@ -20,8 +21,10 @@ export function renderMemory() {
     return;
   }
   const none = `<span class="muted">${T('None')}</span>`;
+  const styleOpen = !!app.currentSave && !$('#log .newlife'); // a new life's screen picks it while it is up
   box.innerHTML = `<h3 class="view-title">${T('Memory')}</h3><p class="muted mem-intro">${T('This applies to this save slot only. It never mixes with other saves or other chats.')}</p>
    <div class="field"><label>${T('Character profile (fixed for this life; you can change it on the new game screen of your next life)')}</label><p class="lore mem-profile">${app.state.life.profile ? esc(app.state.life.profile) : none}</p></div>
+   <div class="field"><label>${T('Prose style')}</label><div class="seg" id="memStyle">${styleChips(app.state.style, !styleOpen)}</div><p class="muted field-note">${styleOpen ? T('How the narrator writes this save, from the next reply on.') : T('Pick it on the new life screen.')}</p></div>
    <div class="field"><label for="notes">${T('Notes: sent to Claude every turn')}</label><textarea id="notes" rows="5" maxlength="${LIMITS.userNotes}" placeholder="${T('e.g. Make ADMIN more cynical. Keep fight scenes short. There is no magic in this world. My childhood friend Seoyun lives next door.')}">${esc(app.state.userNotes)}</textarea>
     <div class="row"><button class="btn" id="saveNotes">${T('Save notes')}</button><span class="muted count-note" id="notesCount">${app.state.userNotes.length}/${LIMITS.userNotes}</span></div></div>
    <div class="sec note-lib" id="noteLib"></div>
@@ -81,6 +84,11 @@ export function renderMemory() {
    <div class="sec"><h4>${T('Past lives ({n})', { n: app.state.pastLives.length })}</h4>${app.state.pastLives.map(p => `<div class="lore"><b>${T('life {n}', { n: p.lifeNo })}</b><p>${esc(p.world)}, ${esc(p.origin)}(${esc(p.tier)}), ${T('{score} pts.', { score: esc(p.score) })} ${esc(p.epitaph)}</p></div>`).join('') || `<p class="muted empty">${T('None yet')}</p>`}</div>
    <p class="muted mem-footer">${T('App settings (model, language and more) are under the ⚙ button at the top.')}</p>`;
   renderNoteLibrary();
+  bindChoice(box, '#memStyle', 'sty', async v => {
+    app.state.style = v;
+    await persist();
+    toast(T('Prose style changed'));
+  });
   $('#notes').oninput = e => ($('#notesCount').textContent = e.target.value.length + '/' + LIMITS.userNotes);
   $('#saveNotes').onclick = async () => {
     app.state.userNotes = $('#notes').value.trim().slice(0, LIMITS.userNotes);
