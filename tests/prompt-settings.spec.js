@@ -216,11 +216,16 @@ test('scenario mode', async ({ game }) => {
   // a 동양 무협 scenario with its add-on: its blocks go and a realm step is applied; untick it and neither happens
   await pg.click('[data-tab="saves"]');
   await pg.click('#newGame');
+  await pg.click('#playseg [data-pm="scenario"]'); // a new game opens as the dice roguelike
   await pg.fill('#nm', '진무');
   await pg.check(`#scNote-${id}`);
   await pg.click('[data-scw="murim"]');
   check(errs, 'the murim chip ticks its add-on', await pg.isChecked('#scAddon-ext'));
-  await pg.uncheck('#scAddon-admin'); // the form starts from the last scenario save's extras
+  check(
+    errs,
+    "a new game's extras start off, though the last scenario had ADMIN",
+    !(await pg.isChecked('#scAddon-admin')),
+  );
   await pg.selectOption('#scExtStart', '2');
   await pg.fill('#scFirst', FIRST);
   await pg.check('#scVerbatim');
