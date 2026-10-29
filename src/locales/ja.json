@@ -10,7 +10,6 @@
   "[ SYSTEM: Player Registration ]": "[ SYSTEM: プレイヤー登録 ]",
   "Converting your soul to data. Your world, race, standing and talent are all left to luck. This world will be unfair, cruel, and wickedly fun. When you die, you come back holding the one ability that made your last life special.": "魂をデータに変換します。世界も、種族も、身分も、才能も、すべては運次第。この世界は理不尽で、残酷で、とびきり面白いはずです。死ねば、前世で最も特別だった能力をひとつ抱えて戻ってきます。",
   "You are reborn holding a fragment of your past life. Your world and standing are left to luck once more.": "前世の欠片をひとつ抱いて生まれ変わります。世界と身分は、再び運に委ねられます。",
-  "Choose a name and gender; the dice decide your world, race, standing and talent. There are no take-backs.": "名前と性別を決めれば、世界・種族・身分・才能はダイスが決めます。やり直しはできません。",
   "Name": "名前",
   "Gender": "性別",
   "Character profile (optional): looks, personality, verbal tics, backstory, anything weird you like": "キャラクター設定（任意）：外見、性格、口癖、生い立ち、奇抜な設定なんでも",
@@ -1338,5 +1337,8 @@
   ", {n} unknown situation {n|key|keys} ({keys}): those pictures kept theirs": "、不明な状況キー{n}個（{keys}）：その画像は元の状況のまま",
   "An adult situation can only be merged into another adult one": "成人向けの状況は、ほかの成人向けの状況にだけ統合できます",
   "{label} is an adult situation with no adult one above it, and {n} {n|picture|pictures} use it. Move them to another situation first.": "{label}は上に成人向けの状況がない成人向けの状況で、画像{n}枚が使っています。先にその画像をほかの状況に移してください。",
-  "Delete {label} from the dictionary? Its {n} {n|picture|pictures} move to {to}.": "{label}を辞書から削除しますか？その画像{n}枚は{to}に移ります。"
+  "Delete {label} from the dictionary? Its {n} {n|picture|pictures} move to {to}.": "{label}を辞書から削除しますか？その画像{n}枚は{to}に移ります。",
+  "Choose a name and gender; the dice decide your world, race, standing and talent. You can reroll up to {n} times.": "名前と性別を決めれば、世界・種族・身分・才能はダイスが決めます。気に入らなければ{n}回まで振り直せます。",
+  "Reroll ({n} left)": "振り直す（残り{n}回）",
+  "Born and raised in this world": "この世界で生まれ育った"
 }

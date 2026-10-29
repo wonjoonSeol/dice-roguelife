@@ -74,6 +74,7 @@ import {
 } from './notes-view.js';
 
 const TALENT_MAX = 5;
+const REROLLS = 3; // more rolls the fate screen allows with the same answers, then the fate is final
 // A regression goes on with its save's notes and prose style; a new game starts clean (nothing ticked, the default
 // style, the dice roguelike), whatever the last game used
 const startNotes = inherit => (inherit ? app.state.noteIds : []);
@@ -150,6 +151,7 @@ let formInherit; // for redrawNewLifeForm
 // characters imported from the setting box before the world is known: the fate screen's list takes them
 let castDraft = '';
 export function startNewLifeForm(inherit) {
+  app.pendingRoll = null; // a fate left on an earlier screen (a redraw puts its own back)
   formInherit = inherit;
   castDraft = '';
   tierLocked = false;
@@ -175,6 +177,7 @@ export function startNewLifeForm(inherit) {
   bindChoice(log, '#gseg', 'g', v => (sel.gender = v));
   bindChoice(log, '#wseg', 'w', v => (sel.world = v));
   bindChoice(log, '#spseg', 'sp', v => (sel.sponsor = v));
+  bindChoice(log, '#enseg', 'en', v => (sel.entry = v));
   bindChoice(log, '#styseg', 'sty', v => $('#styWrap').classList.toggle('hidden', v !== STYLE.NOTE)); // read when the life begins (styleFromForm)
   bindChoice(log, '#mseg', 'm', v => {
     sel.mode = v;
@@ -290,7 +293,7 @@ function newLifeHtml(inherit, play) {
     <p class="narr intro-narr rl-only">${T('Converting your soul to data. Your world, race, standing and talent are all left to luck. This world will be unfair, cruel, and wickedly fun. When you die, you come back holding the one ability that made your last life special.')}</p>
     <p class="muted intro-note sc-only">${T('Play a story of your own: pick a scenario note (its world, rules, characters and style), say who you play, and start. Story prompts from other AI story apps work as they are.')}</p>`
     }
-    <p class="muted intro-note rl-only">${inherit ? T('You are reborn holding a fragment of your past life. Your world and standing are left to luck once more.') : T('Choose a name and gender; the dice decide your world, race, standing and talent. There are no take-backs.')}</p>
+    <p class="muted intro-note rl-only">${inherit ? T('You are reborn holding a fragment of your past life. Your world and standing are left to luck once more.') : T('Choose a name and gender; the dice decide your world, race, standing and talent. You can reroll up to {n} times.', { n: REROLLS })}</p>
     ${
       inherit
         ? ''
@@ -325,6 +328,11 @@ function newLifeHtml(inherit, play) {
       <div class="field"><label>${T('Talents (grade, name, effect in one line)')}</label><div id="talents">${talentRow(true)}</div><button type="button" class="btn ghost add-talent" id="addTalent">${T('+ Add a talent')}</button></div>
       <div class="field"><label for="fAge">${T('Starting age')}</label><input id="fAge" type="number" min="0" max="90" placeholder="${T('Leave blank for random')}"></div>
       <div class="field"><label for="worldNote">${T('Setting and characters (optional)')}</label><textarea id="worldNote" rows="3" maxlength="${LIMITS.userNotes}" placeholder="${T('e.g. There is no magic in this world and the guilds rule the cities. My childhood friend Seoyun lives next door. Blunt on the outside, but always looking out for me.')}">${esc(app.settings.worldNote || '')}</textarea><div class="row note-tools"><button type="button" class="btn ghost" id="worldNoteSave" disabled>${T('Save as note')}</button><button type="button" class="btn ghost" id="worldNoteCast" disabled>${T('Import as characters')}</button></div><p class="muted field-note" id="worldNoteCastNote"></p><p class="muted field-note">${T('This goes into your notes, so it shapes the story from the first scene. You can edit it later in the Memory tab.')}</p></div>
+      <div class="field"><label>${T('Arrival')}</label><div class="seg" id="enseg"><button type="button" data-en="random" aria-pressed="true">${T('Random')}</button>${Object.keys(
+        ENTRY_LABEL,
+      )
+        .map(e => `<button type="button" data-en="${e}" aria-pressed="false">${T(ENTRY_LABEL[e])}</button>`)
+        .join('')}</div></div>
       <div class="field"><label>${T('Constellations')}</label><div class="seg" id="spseg"><button type="button" data-sp="random" aria-pressed="true">${T('Random')}</button><button type="button" data-sp="on" aria-pressed="false">${T('Yes')}</button><button type="button" data-sp="off" aria-pressed="false">${T('None')}</button></div></div>
     </div>
     <details class="odds guide rl-only"><summary>${T('How to play')}</summary>
@@ -531,6 +539,7 @@ function readFreeSetup(sel) {
             .slice(0, TALENT_MAX - 1),
     age: $('#fAge').value,
     sponsor: sel.sponsor || 'random',
+    entry: sel.entry || 'random',
   };
 }
 // the roll button: read the form, ask the narrator how the player's own setup leans (gacha only), roll, show the fate
@@ -563,7 +572,11 @@ async function rollFromForm(inherit, sel) {
   const wn = $('#worldNote');
   if (wn && sel.mode === 'free') life.seedNotes = wn.value.trim().slice(0, LIMITS.userNotes); // the save's first user notes, so the opening scene knows them
   rememberFormDefaults(life);
-  app.pendingRoll = { life, inherit, lang: storyLang() }; // the language the fate was rolled in, even if the screen changes before starting
+  // the language the fate was rolled in, even if the screen changes before starting; a reroll counts on from the last
+  // fate, and keeps its character list draft while the world stays the same
+  const prev = app.pendingRoll;
+  app.pendingRoll = { life, inherit, lang: storyLang(), rerolls: prev ? (prev.rerolls || 0) + 1 : 0 };
+  if (prev && prev.roster != null && prev.life.world.id === life.world.id) app.pendingRoll.roster = prev.roster;
   revealFate(life, inherit);
 }
 // the form's answers become the next new game's defaults (each save keeps the copy it started with). A scenario's
@@ -690,7 +703,7 @@ export let rollLife = function rollLife(name, gender, worldChoice, free, aff) {
   const tr = x => tIn(L, x);
   const table = (worldChoice !== 'random' && WORLDS.find(w => w.id === worldChoice)) || pickWorld(gender, aff);
   const world = worldIn(table, L);
-  const entry = rollEntry(table, aff),
+  const entry = free && ENTRY_LABEL[free.entry] ? free.entry : rollEntry(table, aff),
     sponsor = rollSponsor(table, free && free.sponsor, setting('adminPersona'));
   const rl = (
     entry === 'transfer' ? TRANSFER_RACES[table.from ? 'other' : 'earth'] : RACES[table.id] || [N_('Human')]
@@ -779,15 +792,18 @@ function revealFate(life, inherit, again) {
       ? [T('Talent'), life.talent.name, life.talent.desc, life.talentTier]
       : [T('Talent'), T('No talent'), '', null],
   ];
-  if (life.entry && life.entry !== 'native')
+  // a custom setup shows its arrival even as a native, since it may have been picked there
+  if (life.entry && (life.entry !== 'native' || life.free))
     cards.push([
       T('Arrival'),
       T(ENTRY_LABEL[life.entry]),
-      life.entry === 'possess'
-        ? T('In the body of a character from a novel about this world. You know how the story goes')
-        : T('Fell here from {from}. Nothing makes sense, not even the language', {
-            from: life.world.from || T('modern-day Earth'),
-          }),
+      life.entry === 'native'
+        ? T('Born and raised in this world')
+        : life.entry === 'possess'
+          ? T('In the body of a character from a novel about this world. You know how the story goes')
+          : T('Fell here from {from}. Nothing makes sense, not even the language', {
+              from: life.world.from || T('modern-day Earth'),
+            }),
       null,
     ]);
   if (life.sponsor)
@@ -833,8 +849,12 @@ function revealFate(life, inherit, again) {
         i * 350 + 150,
       ),
     );
-  $('#rollBtn').disabled = true;
-  $('#rollBtn').textContent = life.free ? T('Your setup is set') : T('Your fate is sealed');
+  const rb = $('#rollBtn'),
+    left = REROLLS - (app.pendingRoll.rerolls || 0);
+  rb.disabled = left <= 0;
+  rb.classList.replace('primary', 'ghost'); // Begin with this fate is the step now
+  rb.textContent =
+    left > 0 ? T('Reroll ({n} left)', { n: left }) : life.free ? T('Your setup is set') : T('Your fate is sealed');
   document
     .querySelectorAll('#wseg button,#gseg button,#mseg button,#freeBox input,#freeBox select,#freeBox button')
     .forEach(b => (b.disabled = true));

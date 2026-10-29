@@ -10,7 +10,6 @@
   "[ SYSTEM: Player Registration ]": "[ SYSTEM: 플레이어 등록 ]",
   "Converting your soul to data. Your world, race, standing and talent are all left to luck. This world will be unfair, cruel, and wickedly fun. When you die, you come back holding the one ability that made your last life special.": "영혼을 데이터로 바꿉니다. 세계도, 종족도, 신분도, 재능도 전부 운이 정합니다. 이 세계는 불공평하고, 잔혹하고, 지독하게 재밌을 겁니다. 죽으면 전생의 가장 특별했던 능력 하나를 들고 돌아옵니다.",
   "You are reborn holding a fragment of your past life. Your world and standing are left to luck once more.": "전생의 기억 한 조각을 들고 다시 태어납니다. 세계와 신분은 다시 운에 맡겨집니다.",
-  "Choose a name and gender; the dice decide your world, race, standing and talent. There are no take-backs.": "이름과 성별을 정하면 세계, 종족, 신분, 재능은 주사위가 정합니다. 결과는 되돌릴 수 없습니다.",
   "Name": "이름",
   "Gender": "성별",
   "Character profile (optional): looks, personality, verbal tics, backstory, anything weird you like": "플레이어 설정 (선택): 외형, 성격, 말버릇, 배경 서사, 엽기 설정 무엇이든",
@@ -1407,5 +1406,8 @@
   ", {n} unknown situation {n|key|keys} ({keys}): those pictures kept theirs": ", 모르는 상황 키 {n}개({keys}): 그 그림은 원래 상황을 그대로 둠",
   "An adult situation can only be merged into another adult one": "성인 상황은 다른 성인 상황으로만 합칠 수 있어요",
   "{label} is an adult situation with no adult one above it, and {n} {n|picture|pictures} use it. Move them to another situation first.": "{label}은(는) 위에 성인 상황이 없는 성인 상황이고, 그림 {n}장이 쓰고 있어요. 먼저 그 그림을 다른 상황으로 옮기세요.",
-  "Delete {label} from the dictionary? Its {n} {n|picture|pictures} move to {to}.": "{label}을(를) 사전에서 지울까요? 그 그림 {n}장은 {to}(으)로 옮겨져요."
+  "Delete {label} from the dictionary? Its {n} {n|picture|pictures} move to {to}.": "{label}을(를) 사전에서 지울까요? 그 그림 {n}장은 {to}(으)로 옮겨져요.",
+  "Choose a name and gender; the dice decide your world, race, standing and talent. You can reroll up to {n} times.": "이름과 성별을 정하면 세계, 종족, 신분, 재능은 주사위가 정합니다. 마음에 들지 않으면 {n}번까지 다시 굴릴 수 있어요.",
+  "Reroll ({n} left)": "다시 굴리기 ({n}번 남음)",
+  "Born and raised in this world": "이 세계에서 나고 자랐다"
 }
