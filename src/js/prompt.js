@@ -7,7 +7,7 @@ import { LIMITS } from './limits.js';
 import { withWeekday } from './calendar.js';
 import { platform, sget } from './db.js';
 import { app } from './app.js';
-import { promptLang, setting, storyLang } from './settings.js';
+import { choicesOff, promptLang, setting, storyLang } from './settings.js';
 import { N_, T, Tc, tIn } from './i18n.js';
 import { logErr } from './diag.js';
 import {
@@ -25,7 +25,8 @@ import {
 } from './rules.js';
 import { stripOdds } from './reply-words.js';
 import { activeRel, bondOf, BONDS, canonName, lastStoryReply } from './people.js';
-import { charSets, fitsWorld, frameTags, genderOf } from './images.js';
+import { charSets, fitsWorld, genderOf, setSituations } from './images.js';
+import { sitHint, sitRoot } from './situations.js';
 import { placeVocab } from './places.js';
 import { cardIndex, cardProfile, isOpenRole, namedSetFor, namedSetOf, setIds } from './casting.js';
 import { mentioned, namesOf, rosterFor, rosterNow } from './roster.js';
@@ -239,9 +240,8 @@ function recentForPrompt(recent) {
 function meBlock() {
   const l = app.state.life,
     s = app.state.stats;
-  const on = titlesOn(),
-    fx = app.state.titleFx || {};
-  const act = on.length ? on.map(t => `${t}${fx[t] ? `(${fx[t]})` : ''}`).join(', ') : pl('None');
+  const on = titlesOn();
+  const act = on.length ? on.map(titleText).join(', ') : pl('None');
   const held = (app.state.titles || []).filter(t => !on.includes(t));
   return pl(
     '[Player] {name}, {gender}, age {age}, race {race}, standing {origin} ({tier}), titles {titles}, life #{n}',
@@ -496,13 +496,26 @@ function profilesBlock(people, own) {
   }
   return lines.length ? fillTemplate(pr('profiles'), { list: lines.join(' | ') }) : '';
 }
-// the tags that tell their face's frames apart (images.js frameTags), for the narrator to name as "situation"; only
-// people whose set has such frames, in any world
+// The situations their face has pictures for (images.js setSituations), for the narrator to name as "situation": a
+// family's root, then in brackets only the more specific keys this set has; each hint given once. Only people whose
+// set has some, in any world.
 function situationBlock(people) {
-  const lines = [];
+  const lines = [],
+    told = new Set();
+  const say = s => {
+    const h = !told.has(s) && sitHint(s, promptLang());
+    told.add(s);
+    return h ? `${s}(${h})` : s;
+  };
   for (const [n, k] of people) {
-    const tags = k ? frameTags(k) : [];
-    if (tags.length) lines.push(`${n}: ${tags.slice(0, 16).join(', ')}`);
+    const ks = k ? setSituations(k).slice(0, 24) : [];
+    if (!ks.length) continue;
+    const roots = [...new Set(ks.map(sitRoot))];
+    const list = roots.map(r => {
+      const sub = ks.filter(s => s !== r && sitRoot(s) === r);
+      return say(r) + (sub.length ? `[${sub.map(say).join(', ')}]` : '');
+    });
+    lines.push(`${n}: ${list.join(', ')}`);
     if (lines.length >= PEOPLE_MAX) break;
   }
   return lines.length ? fillTemplate(pr('situation'), { list: lines.join(' | ') }) : '';
@@ -512,7 +525,7 @@ function widgetsBlock(cmd) {
   const W = prFor('widgets') || {};
   if (cmdIs(cmd, 'ask')) return '';
   if (cmd && W[cmd.type]) return fillTemplate(pr('widgetsCmd'), { schema: W[cmd.type] });
-  return isScenario() && !addonOn(ADDON.WIDGETS) ? '' : prFor('widgetsIdle');
+  return addonOn(ADDON.WIDGETS) ? prFor('widgetsIdle') : '';
 }
 function cmdBlock(cmd) {
   if (!cmd) return '';
@@ -559,10 +572,36 @@ function styleBlock() {
     ? `${pl('[Prose style: {name}] The prose style the player chose. Write the narration this way:', { name: n.name })}\n${n.text}`
     : '';
 }
+// The lines for skills, gear, the inventory and titles; plain (a scenario save) leaves out the grades, power and past
+// lives, and a skill list only goes once there is a skill.
+const titleText = t => {
+  const fx = app.state.titleFx || {};
+  return `${t}${fx[t] ? `(${fx[t]})` : ''}`;
+};
+const skillText = (k, plain) =>
+  `${k.name}(${plain ? '' : k.grade + ', '}Lv.${k.lv || 1}${k.cost ? pl(', cost {n}%', { n: k.cost }) : ''}${!plain && k.src === SKILL_SRC.INHERITED ? pl(', inherited from a past life') : ''}): ${k.desc}`;
+function skillBlock(plain) {
+  const list = app.state.skills.map(k => skillText(k, plain));
+  return plain ? ifAny(list, l => `${pl('[Skills]')} ${l}`) : `${pl('[Skills]')} ${list.join(' | ') || pl('None')}`;
+}
+function gearBlock(plain) {
+  const st = app.state;
+  const line = n => {
+    const it = (st.items || []).find(x => x.name === n) || {};
+    if (plain) return `${n}${it.note ? `(${it.note.slice(0, 40)})` : ''}`;
+    return `${n}(${it.grade || '-'}${it.power ? ', +' + it.power : ''}${it.note ? ': ' + it.note.slice(0, 40) : ''})`;
+  };
+  return ifAny((st.equipped || []).map(line), list => pl('[Gear] {list}', { list }));
+}
+function invBlock(plain) {
+  const st = app.state;
+  const line = it =>
+    `${it.name}${it.qty > 1 ? ' x' + it.qty : ''}${!plain && it.grade ? '(' + it.grade + ')' : ''}${it.note && !(st.equipped || []).includes(it.name) ? ': ' + it.note.slice(0, 30) : ''}`;
+  return ifAny((st.items || []).map(line), list => pl('[Inventory] {list}', { list }));
+}
 // a scenario save's player character, in place of the roguelike's [Player] line, with any titles its story granted
 function personaBlock(l) {
-  const fx = app.state.titleFx || {};
-  const titles = (app.state.titles || []).map(t => `${t}${fx[t] ? `(${fx[t]})` : ''}`);
+  const titles = (app.state.titles || []).map(titleText);
   return (
     pl('[Player character] {name}, {gender}', { name: l.name, gender: plLabel(GENDER_LABEL, l.gender) }) +
     (titles.length ? pl(', titles {list}', { list: titles.join(', ') }) : '')
@@ -592,23 +631,7 @@ function scenarioBlocks() {
           { ...s, money: moneyText(s.gold, st.life, promptLang()) },
         ) + (E ? `, ${E.name} ${E.cur}/${E.max}` : '')
       : '';
-  const skills = st.skills.map(
-    k => `${k.name}(Lv.${k.lv || 1}${k.cost ? pl(', cost {n}%', { n: k.cost }) : ''}): ${k.desc}`,
-  );
-  const gear = (st.equipped || []).map(n => {
-    const it = (st.items || []).find(x => x.name === n) || {};
-    return `${n}${it.note ? `(${it.note.slice(0, 40)})` : ''}`;
-  });
-  const inv = (st.items || []).map(
-    it =>
-      `${it.name}${it.qty > 1 ? ' x' + it.qty : ''}${it.note && !(st.equipped || []).includes(it.name) ? ': ' + it.note.slice(0, 30) : ''}`,
-  );
-  return {
-    stat,
-    skill: ifAny(skills, list => `${pl('[Skills]')} ${list}`),
-    gear: ifAny(gear, list => pl('[Gear] {list}', { list })),
-    inv: ifAny(inv, list => pl('[Inventory] {list}', { list })),
-  };
+  return { stat, skill: skillBlock(true), gear: gearBlock(true), inv: invBlock(true) };
 }
 // what the ticked notes take of the prompt's limit (0 when not known yet)
 export function notesShare(ids) {
@@ -692,7 +715,7 @@ export function buildPrompt(text, cmd, turn = {}) {
     stat: statBlock(),
     ext: extBlock(),
     clock: `${pl('[Time]')} D+${ck.day}${ck.date ? ', ' + withWeekday(ck.date) : ''}${ck.time ? ', ' + ck.time : ''}${ck.weather ? ', ' + ck.weather : ''}${ck.place ? ', ' + ck.place : ''}`,
-    skill: `${pl('[Skills]')} ${app.state.skills.map(k => `${k.name}(${k.grade}, Lv.${k.lv || 1}${k.cost ? pl(', cost {n}%', { n: k.cost }) : ''}${k.src === SKILL_SRC.INHERITED ? pl(', inherited from a past life') : ''}): ${k.desc}`).join(' | ') || pl('None')}`,
+    skill: skillBlock(false),
     note: app.state.stateNote ? pl('[Current situation] {note}', { note: app.state.stateNote }) : '',
     quest: ifAny(
       app.state.quests.filter(q => q.status === 'active').map(q => q.title + (q.note ? ` (${q.note})` : '')),
@@ -702,20 +725,8 @@ export function buildPrompt(text, cmd, turn = {}) {
       Object.entries(app.state.ledger || {}).map(([k, v]) => `${k}: ${v}`),
       list => pl('[Ledger] {list}', { list }),
     ),
-    gear: ifAny(
-      (app.state.equipped || []).map(n => {
-        const it = (app.state.items || []).find(x => x.name === n) || {};
-        return `${n}(${it.grade || '-'}${it.power ? ', +' + it.power : ''}${it.note ? ': ' + it.note.slice(0, 40) : ''})`;
-      }),
-      list => pl('[Gear] {list}', { list }),
-    ),
-    inv: ifAny(
-      (app.state.items || []).map(
-        it =>
-          `${it.name}${it.qty > 1 ? ' x' + it.qty : ''}${it.grade ? '(' + it.grade + ')' : ''}${it.note && !(app.state.equipped || []).includes(it.name) ? ': ' + it.note.slice(0, 30) : ''}`,
-      ),
-      list => pl('[Inventory] {list}', { list }),
-    ),
+    gear: gearBlock(false),
+    inv: invBlock(false),
     rel: relationsBlock(),
     lore: ifAny(
       lore.map(([k, v]) => `${k}: ${v}`),
@@ -779,11 +790,12 @@ export function buildPrompt(text, cmd, turn = {}) {
     if (P.ext) P.ext = [pr('scenarioExt'), P.ext, ladderStart()].filter(Boolean).join('\n');
   }
   const LEN = { short: pr('lenShort'), normal: '', long: pr('lenLong') }[setting('len')] || '';
+  const noChoices = choicesOff() ? pr('noChoices') : '';
   const tip = app.settings.langTip ? prLang('tip') : '';
   const extra = prLang(scen || !adminOn() ? 'scenarioLang' : 'lang') + (tip ? pl('\n[Extra output field] ') + tip : '');
   const style = styleBlock(); // after the language block, whose plain prose it replaces
   const base = prFor('rules') || '';
-  const rulesWith = st => withPlayerSettings(base, [LEN, extra, st].filter(Boolean).join('\n'));
+  const rulesWith = st => withPlayerSettings(base, [LEN, noChoices, extra, st].filter(Boolean).join('\n'));
   let rules = rulesWith(style);
   const build = skip =>
     rules +
@@ -956,6 +968,17 @@ export async function callNarrator(text, cmd, turn) {
     });
   }
 }
+// One model call that answers in JSON (the summaries, the ledger, an ending, Import characters, auto-sort): a reply
+// with text around its JSON is read too, as the narrator's is. A call that was cancelled stays an error.
+export async function sampleJson(prompt, opts = {}) {
+  try {
+    return await platform.sample.json(prompt, opts);
+  } catch (e) {
+    const j = !(opts.signal && opts.signal.aborted) && e && e.text ? extractJson(e.text) : null;
+    if (j) return j;
+    throw e;
+  }
+}
 export function extractJson(t) {
   if (!t) return null;
   t = String(t).replace(/```(?:json)?/gi, '');
@@ -1001,7 +1024,8 @@ export function normalize(o) {
   o.narration = noDash(o.narration || '');
   o.admin = noDash(o.admin || '');
   o.system = Array.isArray(o.system) ? o.system.map(x => noDash(x)).slice(0, LIMITS.perReply.system) : [];
-  o.choices = Array.isArray(o.choices) ? o.choices.map(x => noDash(x)).slice(0, LIMITS.perReply.choices) : [];
+  o.choices =
+    Array.isArray(o.choices) && !choicesOff() ? o.choices.map(x => noDash(x)).slice(0, LIMITS.perReply.choices) : [];
   if (o.widget && typeof o.widget === 'object') {
     const walk = v =>
       typeof v === 'string'

@@ -10,14 +10,26 @@ import { askConfirm } from './sheet.js';
 import { charSets } from './images.js';
 import { persist } from './persistence.js';
 import { seenSpan } from './reroll.js';
-import { bindOnePicker, oneInForm, renderNoteLibrary } from './notes-view.js';
+import { bindOnePicker, pickedStyle, renderNoteLibrary } from './notes-view.js';
 import { isScenario } from './rules.js';
 import { noteById, scenarioName, scenarioNote } from './notes.js';
 import { ADDON, STYLE } from './enums.js';
 import { addonRowsHtml, bindChoice, styleChips, styleNoteHtml } from './new-life.js';
 import { extFill, WORLD_EXT, worldExt } from './world-ext.js';
 import { renderStrip } from './status.js';
+import { runEnding } from './death.js';
 
+const endingsHtml = () => {
+  const list = app.state.endings || [];
+  return `<div class="sec"><h4>${T('Endings ({n})', { n: list.length })}</h4>${
+    list
+      .map(
+        e =>
+          `<div class="lore ending"><b>${esc(e.title)}</b><p>${esc(e.epitaph)}</p><p class="muted">${esc(e.summary)}</p>${e.highlights.map(h => `<p class="ending-moment">${esc(h)}</p>`).join('')}</div>`,
+      )
+      .join('') || `<p class="muted empty">${T('None yet')}</p>`
+  }<button class="btn ghost" id="endStory">${T('End the story')}</button></div>`;
+};
 export function renderMemory() {
   const box = $('#memBox');
   if (!app.state) {
@@ -88,7 +100,7 @@ export function renderMemory() {
         )
         .join('') || `<p class="muted empty">${T('None yet')}</p>`
     }</div>
-   ${scen ? '' : `<div class="sec"><h4>${T('Past lives ({n})', { n: app.state.pastLives.length })}</h4>${app.state.pastLives.map(p => `<div class="lore"><b>${T('life {n}', { n: p.lifeNo })}</b><p>${esc(p.world)}, ${esc(p.origin)}(${esc(p.tier)}), ${T('{score} pts.', { score: esc(p.score) })} ${esc(p.epitaph)}</p></div>`).join('') || `<p class="muted empty">${T('None yet')}</p>`}</div>`}
+   ${scen ? endingsHtml() : `<div class="sec"><h4>${T('Past lives ({n})', { n: app.state.pastLives.length })}</h4>${app.state.pastLives.map(p => `<div class="lore"><b>${T('life {n}', { n: p.lifeNo })}</b><p>${esc(p.world)}, ${esc(p.origin)}(${esc(p.tier)}), ${T('{score} pts.', { score: esc(p.score) })} ${esc(p.epitaph)}</p></div>`).join('') || `<p class="muted empty">${T('None yet')}</p>`}</div>`}
    <p class="muted mem-footer">${T('App settings (model, language and more) are under the ⚙ button at the top.')}</p>`;
   renderNoteLibrary();
   // From a note takes effect once a note is picked under it (or with the save's last one)
@@ -101,10 +113,8 @@ export function renderMemory() {
   bindChoice(box, '#memStyle', 'sty', async v => {
     const wrap = $('#mstyWrap');
     if (wrap) wrap.classList.toggle('hidden', v !== STYLE.NOTE);
-    if (v !== STYLE.NOTE) return setStyle(v);
-    const id = oneInForm('msty');
-    if (noteById(id)) return setStyle(v, id);
-    toast(T('Pick a note for the prose style'));
+    const s = pickedStyle('msty', v);
+    if (s) await setStyle(s.style, s.styleNoteId);
   });
   bindOnePicker('msty', id => noteById(id) && setStyle(STYLE.NOTE, id));
   box.querySelectorAll('.mem-addons [data-addon]').forEach(
@@ -122,6 +132,8 @@ export function renderMemory() {
         toast(T('Saved'));
       }),
   );
+  const end = $('#endStory');
+  if (end) end.onclick = () => runEnding().then(ok => ok && renderMemory());
   $('#notes').oninput = e => ($('#notesCount').textContent = e.target.value.length + '/' + LIMITS.userNotes);
   $('#saveNotes').onclick = async () => {
     app.state.userNotes = $('#notes').value.trim().slice(0, LIMITS.userNotes);

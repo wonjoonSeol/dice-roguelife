@@ -51,5 +51,6 @@ export default {
     signature: /^(?:signature|weapons?|skills?|abilit(?:y|ies)|arts?|techniques?)$/,
     ties: /^(?:ties|relationships?|relations)$/,
     secret: /^secrets?$/,
+    profile: /^profile$/, // a persona note's (new-life.js); a character list keeps it as a detail
   },
 };

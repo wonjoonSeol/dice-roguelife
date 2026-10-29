@@ -84,6 +84,13 @@ const cleanLine = raw =>
     .trim();
 // a # heading: the affiliation of the people under it
 export const isHeading = raw => HEADING.test(cleanLine(raw));
+// A line's parts as key: value, each with the field its key names in any language (rosterField, null for a key no
+// language has), else { raw }. A persona note is read this way too (new-life.js).
+export const lineFields = line =>
+  parts(line).map(p => {
+    const m = KEYED.exec(p);
+    return m ? { key: m[1].trim(), field: rosterField(m[1]), value: m[2].trim(), text: p } : { raw: p, text: p };
+  });
 
 // the people a pasted text holds, and what it skipped or changed (notes: { line, why, ... } for the preview)
 export function parseRoster(text, me = '') {
@@ -118,10 +125,7 @@ export function parseRoster(text, me = '') {
       cur = null;
       return;
     }
-    const ps = parts(t.replace(BULLET, '').replace(/^[\s/／|]+|[\s/／|]+$/g, '')).map(p => {
-      const m = KEYED.exec(p);
-      return m ? { key: m[1].trim(), field: rosterField(m[1]), value: m[2].trim() } : { raw: p };
-    });
+    const ps = lineFields(t.replace(BULLET, '').replace(/^[\s/／|]+|[\s/／|]+$/g, ''));
     const bare = ps.find(p => p.raw != null);
     if (bare) return reject('unlabeled', { text: bare.raw });
     const named = ps.filter(p => p.field === 'name');
@@ -174,7 +178,7 @@ export function parseRoster(text, me = '') {
           if (cur.aliases.length < LIMITS.roster.aliases && !cur.aliases.some(x => normName(x) === n))
             cur.aliases.push(a);
         }
-      } else if (p.field) cur.profile[p.field] = join(cur.profile[p.field], v);
+      } else if (PROFILE[p.field]) cur.profile[p.field] = join(cur.profile[p.field], v);
       else {
         cur.profile.traits = join(cur.profile.traits, `${p.key}: ${v}`); // a key it does not know stays as a detail
         skip('other', { label: p.key, name: cur.name });

@@ -9,17 +9,19 @@ import {
   aliasKeys,
   imagesChanged,
   imgUrl,
-  isOpening,
   openingKindToTags,
   picIds,
   picKeys,
+  setsChanged,
   setWorlds,
+  storyImages,
   turnImg,
   turnKeys,
   withModern,
   worldsOf,
 } from './images.js';
 import { T } from './i18n.js';
+import { loadSituations, saveSituations, situationsStored, tagsToSits } from './situations.js';
 
 export let imgError = '';
 export const SETDOC = k => platform.shared.doc(`sets/${k}`);
@@ -342,15 +344,18 @@ export async function migrateLegacy() {
   }
 }
 export async function loadSets() {
-  const [sets, flags] = await Promise.allSettled([
+  const [sets, flags, sits] = await Promise.allSettled([
     platform.shared.collection('sets').limit(1000).get(),
     sget('config/migrations'),
+    loadSituations(),
   ]);
+  if (sits.status === 'rejected') logErr('situations', sits.reason);
   app.setMeta = {};
   if (sets.status === 'fulfilled')
     sets.value.docs.forEach(d => {
       app.setMeta[d.id] = thaw(d.data());
     });
+  setsChanged();
   // asked once a boot at most, and only when a migration has work to do
   let asked;
   const priv = () => (asked = asked || isPrivileged());
@@ -360,6 +365,7 @@ export async function loadSets() {
     if (flags.status === 'rejected') throw flags.reason;
     const done = flags.value || {};
     if (sets.status === 'fulfilled' && !imgError && !done.modernLabels) await addModernLabels(priv, done);
+    if (sits.status === 'fulfilled' && !imgError && !done.situationTags) await migrateSituationTags(priv, done);
   } catch (e) {
     logErr('wlabels', e);
   }
@@ -385,6 +391,30 @@ export async function migrateWorldLabels(priv = isPrivileged) {
   await IMGX.flush(imgIds);
   toast(T('World labels updated: {sets} sets, {imgs} images', { sets: setKs.length, imgs: imgIds.length }), 4000);
 }
+// Writes the pages holding these rows ([picture, what undo needs]), three at a time; a page that fails puts its rows
+// back with undo(row), so memory matches it again. Resolves how many rows were saved and how many pages failed.
+async function savePagesOrUndo(rows, undo, label) {
+  const pages = new Map();
+  for (const r of rows) {
+    const p = IMGX.assign(r[0].id);
+    if (!pages.has(p)) pages.set(p, []);
+    pages.get(p).push(r);
+  }
+  let saved = 0,
+    failed = 0;
+  await inParallel([...pages], 3, async ([p, rs]) => {
+    try {
+      await IMGX.save(p);
+      saved += rs.length;
+    } catch (e) {
+      rs.forEach(undo);
+      imagesChanged(); // what was built from the changed rows is built again
+      failed++;
+      logErr(label, e);
+    }
+  });
+  return { saved, failed };
+}
 // one-time library upkeep marks itself done here, with the library, so the artifact and the standalone each run it once
 export const LIBFLAGS = () => platform.shared.doc('config/migrations');
 // Labels from before the modern world (withModern). Once per library, empty or not, so a chip the owner takes off or
@@ -398,17 +428,11 @@ export async function addModernLabels(priv, flags) {
   const setWork = Object.keys(app.setMeta)
     .map(k => [k, grown(app.setMeta[k])])
     .filter(([, n]) => n);
-  const pages = new Map();
-  for (const x of app.images) {
-    const n = x.kind === 'scene' && !isOpening(x) && grown(x);
-    if (!n) continue;
-    const p = IMGX.assign(x.id);
-    if (!pages.has(p)) pages.set(p, []);
-    pages.get(p).push([x, n]);
-  }
+  const bgWork = storyImages()
+    .map(x => [x, x.kind === 'scene' && grown(x)])
+    .filter(([, n]) => n);
   if (!(await priv())) return; // even with nothing to relabel, the owner's boot marks the library done
   let sets = 0,
-    bgs = 0,
     failed = 0;
   await inParallel(setWork, 8, async ([k, n]) => {
     const next = { ...app.setMeta[k] };
@@ -422,20 +446,41 @@ export async function addModernLabels(priv, flags) {
       logErr('modern labels: set', e);
     }
   });
-  await inParallel([...pages], 3, async ([p, xs]) => {
-    const before = xs.map(([x]) => [x, x.worlds, x.world]);
-    for (const [x, n] of xs) setWorlds(x, n);
-    try {
-      await IMGX.save(p);
-      bgs += xs.length;
-    } catch (e) {
-      for (const [x, worlds, world] of before) Object.assign(x, { worlds, world }); // memory matches the page again
-      failed++;
-      logErr('modern labels: backgrounds', e);
-    }
+  const rows = bgWork.map(([x, n]) => {
+    const row = [x, x.worlds, x.world];
+    setWorlds(x, n);
+    return row;
   });
-  if (!failed) await LIBFLAGS().set({ ...flags, modernLabels: nowIso() });
+  const bg = await savePagesOrUndo(
+    rows,
+    ([x, worlds, world]) => Object.assign(x, { worlds, world }),
+    'modern labels: backgrounds',
+  );
+  const bgs = bg.saved;
+  failed += bg.failed;
+  if (!failed) await LIBFLAGS().set(Object.assign(flags, { modernLabels: nowIso() })); // flags: what later steps write
   if (sets || bgs) toast(T('Modern Day added to {sets} sets and {bgs} backgrounds', { sets, bgs }), 4000);
+}
+
+// v2.17.1 read some tag words as situations (situations.js tagsToSits); once per library they move into the frames'
+// situations, so a later dictionary key never takes over a look tag. flags: config/migrations, as above.
+export async function migrateSituationTags(priv, flags) {
+  if (!(await priv())) return; // like the labels above: with nothing to move, the owner's boot marks it done
+  const rows = [];
+  for (const x of app.images) {
+    const was = { tags: x.tags, situations: x.situations };
+    if (tagsToSits(x)) rows.push([x, was]);
+  }
+  const { failed } = await savePagesOrUndo(
+    rows,
+    ([x, was]) => {
+      x.tags = was.tags;
+      if (was.situations) x.situations = was.situations;
+      else delete x.situations;
+    },
+    'situation tags',
+  );
+  if (!failed) await LIBFLAGS().set(Object.assign(flags, { situationTags: nowIso() }));
 }
 
 export async function findManifestAsset() {
@@ -484,9 +529,15 @@ export async function restoreFromManifest(m, onProgress = () => {}) {
       noteIgnored('restore from manifest: one image', e);
     }
   }
+  // the copy's own dictionary, unless this library already has one
+  if (m.situations && !(await situationsStored().catch(() => true)))
+    await loadSituations()
+      .then(() => saveSituations(m.situations))
+      .catch(e => noteIgnored('restore from manifest: situations', e));
   for (const [k, v] of Object.entries(m.sets || {})) {
     const cover = v.cover && app.images.find(x => x.shash === v.cover);
     app.setMeta[k] = cover ? Object.assign({}, v, { cover: cover.id }) : v;
+    setsChanged();
     await SETDOC(k)
       .set(app.setMeta[k])
       .catch(e => noteIgnored('images-view: SETDOC.set', e));

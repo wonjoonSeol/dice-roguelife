@@ -10,6 +10,7 @@ import {
   currencyOf,
   inPool,
   moneyFor,
+  normGender,
   ORIGINS,
   RACES,
   rollEntry,
@@ -45,7 +46,7 @@ import {
 } from './enums.js';
 import { isPrivileged, platform } from './db.js';
 import { NEW_SAVES, turnStore } from './turn-store.js';
-import { app, exclusive, lastSaveCard } from './app.js';
+import { app, exclusive } from './app.js';
 import { saveSettings, setting, storyLang } from './settings.js';
 import { adminOn, snapshotRules } from './rules.js';
 import { showTab } from './shell.js';
@@ -57,33 +58,26 @@ import { introPrompt, runTurn } from './turn.js';
 import { fillTemplate, normalize, pr, talentVars } from './prompt.js';
 import { chooseUiLang } from './settings-sheet.js';
 import { extStart, WORLD_EXT } from './world-ext.js';
-import { parseRoster, rosterTextOf, setRoster, snapOf } from './roster.js';
+import { lineFields, parseRoster, rosterTextOf, setRoster, snapOf } from './roster.js';
 import { bindRosterEditor, joinRoster, openImport, rosterEditorHtml } from './roster-view.js';
-import { lastNoteIds, noteById } from './notes.js';
+import { noteById } from './notes.js';
 import {
   bindNotePicker,
   bindOnePicker,
-  bindScenarioPicker,
   notePickerHtml,
   oneInForm,
   onePickerHtml,
   pickedInForm,
+  pickedStyle,
   saveBoxAsNote,
-  scenarioInForm,
-  scenarioPickerHtml,
 } from './notes-view.js';
 
 const TALENT_MAX = 5;
-// a regression keeps its save's notes; a new game starts with the last save's
-const startNotes = inherit => (inherit ? app.state.noteIds : lastNoteIds());
-// the prose style the same way: the save's, else the last save's
-const startStyle = inherit => {
-  const s = inherit ? app.state.style : (lastSaveCard() || {}).style;
-  return STYLES.includes(s) ? s : STYLE.DEFAULT;
-};
-// a new game opens in the last save's mode; a regression goes on as a roguelike
-const startPlay = inherit =>
-  !inherit && (lastSaveCard() || {}).mode === MODE.SCENARIO ? MODE.SCENARIO : MODE.ROGUELIKE;
+const REROLLS = 3; // more rolls a new game's fate screen allows with the same answers, then the fate is final
+// A regression goes on with its save's notes and prose style; a new game starts clean (nothing ticked, the default
+// style, the dice roguelike), whatever the last game used
+const startNotes = inherit => (inherit ? app.state.noteIds : []);
+const startStyle = inherit => (inherit && STYLES.includes(app.state.style) ? app.state.style : STYLE.DEFAULT);
 // A scenario's extras (enums.js ADDON), ticked on the form (sc) and in the Memory tab (mem); the world add-on only for
 // a world that has one (X), named by it, and listed first
 export const addonRowsHtml = (pre, on, X) =>
@@ -94,8 +88,6 @@ export const addonRowsHtml = (pre, on, X) =>
         `<label class="row opt${k === ADDON.EXT ? ' addon-ext' : ''}"><input type="checkbox" id="${pre}Addon-${k}" data-addon="${k}"${on[k] ? ' checked' : ''}> ${esc(T(k === ADDON.EXT ? X.name : ADDON_LABEL[k]))}</label>`,
     )
     .join('');
-// the form's ticks start from the last scenario save's
-const startAddons = () => ({ ...((lastSaveCard() || {}).addons || {}) });
 const formAddons = () =>
   Object.fromEntries([...document.querySelectorAll('#scAddons [data-addon]')].map(c => [c.dataset.addon, c.checked]));
 // the extras for the picked world: its add-on starts ticked, with a choice of where on its ladder the story starts
@@ -103,7 +95,7 @@ function syncAddons(worldId) {
   const box = $('#scAddons');
   if (!box) return;
   const X = WORLD_EXT[worldId] || null;
-  const on = { ...startAddons(), ...formAddons() };
+  const on = formAddons();
   if (X && !$('#scAddon-ext')) on.ext = true;
   box.innerHTML =
     addonRowsHtml('sc', on, X) +
@@ -118,20 +110,13 @@ export const styleChips = (cur, off) =>
       `<button type="button" data-sty="${s}" aria-pressed="${s === cur}"${off ? ' disabled' : ''}>${T(STYLE_LABEL[s])}</button>`,
   ).join('');
 const formStyle = () => ($('#styseg button[aria-pressed="true"]') || { dataset: {} }).dataset.sty;
-// a style note, like the style: the save's, else the last save's
-const startStyleNote = inherit => (inherit ? app.state.styleNoteId : (lastSaveCard() || {}).styleNoteId) || null;
+// a style note, like the style: the save's on a regression, else none
+const startStyleNote = inherit => (inherit && app.state.styleNoteId) || null;
 // the note picker under the style chips (#styNote, or #mstyNote in the Memory tab), shown while From a note is picked
 export const styleNoteHtml = (key, style, id) =>
   `<div id="${key}Wrap" class="style-note${style === STYLE.NOTE ? '' : ' hidden'}">${onePickerHtml(key, id)}</div>`;
 // the form's prose style, with its note when it is one; null (and a toast) when From a note has none picked
-function styleFromForm(inherit) {
-  const style = formStyle() || startStyle(inherit);
-  if (style !== STYLE.NOTE) return { style };
-  const id = oneInForm('sty');
-  if (noteById(id)) return { style, styleNoteId: id };
-  toast(T('Pick a note for the prose style'));
-  return null;
-}
+const styleFromForm = inherit => pickedStyle('sty', formStyle() || startStyle(inherit));
 let tierLocked = false;
 // free setup for players without owner rights stops at C; Random stays open, its odds are the fair ones
 function lockTierSel(sel) {
@@ -157,7 +142,15 @@ const talentRow = first =>
 let formInherit; // for redrawNewLifeForm
 // characters imported from the setting box before the world is known: the fate screen's list takes them
 let castDraft = '';
+// how many people a draft holds, read again only when the draft or the player's name changed
+let castMemo = { text: '', me: '', n: 0 };
+function castCount(text, me) {
+  if (!text) return 0;
+  if (castMemo.text !== text || castMemo.me !== me) castMemo = { text, me, n: parseRoster(text, me).people.length };
+  return castMemo.n;
+}
 export function startNewLifeForm(inherit) {
+  app.pendingRoll = null; // a fate left on an earlier screen (a redraw puts its own back)
   formInherit = inherit;
   castDraft = '';
   tierLocked = false;
@@ -169,7 +162,7 @@ export function startNewLifeForm(inherit) {
   $('#composer').classList.add('hidden');
   const log = $('#log');
   // the form's choices; play is the game mode, scWorld a scenario's picture world
-  const sel = { world: 'random', gender: GENDER.MALE, mode: 'gacha', play: startPlay(inherit), scWorld: 'none' };
+  const sel = { world: 'random', gender: GENDER.MALE, mode: 'gacha', play: MODE.ROGUELIKE, scWorld: 'none' };
   log.innerHTML = newLifeHtml(inherit, sel.play);
   bindChoice(log, '#playseg', 'pm', v => {
     sel.play = v;
@@ -183,6 +176,7 @@ export function startNewLifeForm(inherit) {
   bindChoice(log, '#gseg', 'g', v => (sel.gender = v));
   bindChoice(log, '#wseg', 'w', v => (sel.world = v));
   bindChoice(log, '#spseg', 'sp', v => (sel.sponsor = v));
+  bindChoice(log, '#enseg', 'en', v => (sel.entry = v));
   bindChoice(log, '#styseg', 'sty', v => $('#styWrap').classList.toggle('hidden', v !== STYLE.NOTE)); // read when the life begins (styleFromForm)
   bindChoice(log, '#mseg', 'm', v => {
     sel.mode = v;
@@ -195,6 +189,7 @@ export function startNewLifeForm(inherit) {
   bindProfileCount();
   bindNotePicker();
   bindOnePicker('sty');
+  bindOnePicker('per', id => fillPersona(noteById(id)));
   bindWorldNoteSave();
   bindScenarioForm();
   bindFormLang();
@@ -210,7 +205,7 @@ function showMode(to) {
 function bindScenarioForm() {
   const root = $('#scRoster');
   if (!root) return;
-  bindScenarioPicker();
+  bindOnePicker('sc');
   bindRosterEditor(root, null, $('#nm').value.trim(), v => (castDraft = v), { lang: storyLang() });
 }
 function syncScenarioCast() {
@@ -265,8 +260,6 @@ export function redrawNewLifeForm() {
   }
   $('#prof').dispatchEvent(new Event('input'));
   bindNotePicker();
-  bindScenarioPicker();
-  bindOnePicker('sty');
   bindWorldNoteSave();
   if (pending) {
     app.pendingRoll = pending;
@@ -297,11 +290,12 @@ function newLifeHtml(inherit, play) {
     <p class="narr intro-narr rl-only">${T('Converting your soul to data. Your world, race, standing and talent are all left to luck. This world will be unfair, cruel, and wickedly fun. When you die, you come back holding the one ability that made your last life special.')}</p>
     <p class="muted intro-note sc-only">${T('Play a story of your own: pick a scenario note (its world, rules, characters and style), say who you play, and start. Story prompts from other AI story apps work as they are.')}</p>`
     }
-    <p class="muted intro-note rl-only">${inherit ? T('You are reborn holding a fragment of your past life. Your world and standing are left to luck once more.') : T('Choose a name and gender; the dice decide your world, race, standing and talent. There are no take-backs.')}</p>
+    <p class="muted intro-note rl-only">${inherit ? T('You are reborn holding a fragment of your past life. Your world and standing are left to luck once more.') : T('Choose a name and gender; the dice decide your world, race, standing and talent. You can reroll up to {n} times.', { n: REROLLS })}</p>
     ${
       inherit
         ? ''
-        : `<div class="field"><label for="nm">${T('Name')}</label><input id="nm" maxlength="20" placeholder="${T('Name')}"></div>
+        : `<div class="field"><label>${T('Persona (optional)')}</label>${onePickerHtml('per', null)}</div>
+    <div class="field"><label for="nm">${T('Name')}</label><input id="nm" maxlength="20" placeholder="${T('Name')}"></div>
     <div class="field"><label>${T('Gender')}</label><div class="seg" id="gseg">${GENDERS.map(g => `<button type="button" data-g="${g}" aria-pressed="${g === GENDER.MALE}">${T(GENDER_LABEL[g])}</button>`).join('')}</div></div>`
     }
     <div class="field"><label for="prof">${T('Character profile (optional): looks, personality, verbal tics, backstory, anything weird you like')}</label><textarea id="prof" rows="3" maxlength="600" placeholder="${esc(T('e.g. Worked the night shift at a convenience store in a past life and is obsessed with instant noodles. Ends every sentence with "I mean, though." Loses all reason around cats.'))}">${esc(inherit ? app.state.life.profile || '' : app.settings.profile || '')}</textarea><div class="row profile-head"><label class="row profile-toggle"><input type="checkbox" id="profSave" checked> ${T('Save as the default for my next life')}</label><span class="muted count-note" id="profCount"></span></div></div>
@@ -331,6 +325,11 @@ function newLifeHtml(inherit, play) {
       <div class="field"><label>${T('Talents (grade, name, effect in one line)')}</label><div id="talents">${talentRow(true)}</div><button type="button" class="btn ghost add-talent" id="addTalent">${T('+ Add a talent')}</button></div>
       <div class="field"><label for="fAge">${T('Starting age')}</label><input id="fAge" type="number" min="0" max="90" placeholder="${T('Leave blank for random')}"></div>
       <div class="field"><label for="worldNote">${T('Setting and characters (optional)')}</label><textarea id="worldNote" rows="3" maxlength="${LIMITS.userNotes}" placeholder="${T('e.g. There is no magic in this world and the guilds rule the cities. My childhood friend Seoyun lives next door. Blunt on the outside, but always looking out for me.')}">${esc(app.settings.worldNote || '')}</textarea><div class="row note-tools"><button type="button" class="btn ghost" id="worldNoteSave" disabled>${T('Save as note')}</button><button type="button" class="btn ghost" id="worldNoteCast" disabled>${T('Import as characters')}</button></div><p class="muted field-note" id="worldNoteCastNote"></p><p class="muted field-note">${T('This goes into your notes, so it shapes the story from the first scene. You can edit it later in the Memory tab.')}</p></div>
+      <div class="field"><label>${T('Arrival')}</label><div class="seg" id="enseg"><button type="button" data-en="random" aria-pressed="true">${T('Random')}</button>${Object.keys(
+        ENTRY_LABEL,
+      )
+        .map(e => `<button type="button" data-en="${e}" aria-pressed="false">${T(ENTRY_LABEL[e])}</button>`)
+        .join('')}</div></div>
       <div class="field"><label>${T('Constellations')}</label><div class="seg" id="spseg"><button type="button" data-sp="random" aria-pressed="true">${T('Random')}</button><button type="button" data-sp="on" aria-pressed="false">${T('Yes')}</button><button type="button" data-sp="off" aria-pressed="false">${T('None')}</button></div></div>
     </div>
     <details class="odds guide rl-only"><summary>${T('How to play')}</summary>
@@ -352,7 +351,7 @@ function newLifeHtml(inherit, play) {
 // a scenario game's own fields: its note (required), an optional first scene, the world its pictures come from and
 // its characters
 function scenarioHtml() {
-  return `<div class="field sc-only"><label>${T('Scenario: a note from your library')}</label>${scenarioPickerHtml((lastSaveCard() || {}).scenarioId || null)}</div>
+  return `<div class="field sc-only"><label>${T('Scenario: a note from your library')}</label>${onePickerHtml('sc', null)}</div>
     <div class="field sc-only"><label for="scFirst">${T('First scene (optional)')}</label><textarea id="scFirst" rows="4" maxlength="${LIMITS.userNotes}" placeholder="${esc(T('e.g. The rain has not stopped for three days. You push open the door of the bookshop at the end of the alley.'))}"></textarea><label class="row opt"><input type="checkbox" id="scVerbatim"> ${T('Show this text as the first message, as it is')}</label><p class="muted field-note">${T('Unticked, the narrator writes the opening from the scenario, starting from this situation when there is one.')}</p></div>
     <div class="field sc-only"><label>${T('World of the pictures (optional)')}</label><div class="seg" id="scwseg"><button type="button" data-scw="none" aria-pressed="true">${T('None')}</button>${WORLDS.map(w => `<button type="button" data-scw="${w.id}" aria-pressed="false">${T(w.name)}</button>`).join('')}</div><p class="muted field-note">${T('It only decides which pictures fit. None means any picture.')}</p></div>
     <div class="field sc-only"><label>${T('Extras')}</label><div id="scAddons" class="addons"></div><p class="muted field-note">${T('Each extra brings in only its own part of the game. You can change them later in the Memory tab.')}</p></div>
@@ -415,7 +414,7 @@ function bindWorldNoteSave() {
   const sync = () => {
     save.disabled = !box.value.trim() || !!app.pendingRoll; // a rolled fate already took the text
     cast.disabled = !!app.pendingRoll; // the fate screen's list imports from then on
-    const n = castDraft ? parseRoster(castDraft, me()).people.length : 0;
+    const n = castCount(castDraft, me());
     $('#worldNoteCastNote').textContent = n
       ? T("{n} {n|person|people} imported. They join this world's character list once your fate is rolled.", { n })
       : '';
@@ -466,6 +465,40 @@ function untickInForm(id) {
   box.checked = false;
   box.dispatchEvent(new Event('change'));
 }
+// A persona note fills the name, gender and profile. A line that starts with one of their keys (any language, as a
+// character list reads them: roster.js lineFields) is read part by part; every other line or part is the profile.
+const PERSONA_KEYS = ['name', 'gender', 'profile'];
+function fillPersona(note) {
+  if (!note) return;
+  const got = { profile: [] };
+  for (const line of String(note.text || '').split(/\r?\n/)) {
+    const ps = lineFields(line.trim());
+    if (!ps.length || !PERSONA_KEYS.includes(ps[0].field)) {
+      got.profile.push(line);
+      continue;
+    }
+    for (const p of ps) {
+      if (p.field === 'name') {
+        // what follows a slash in a name is no part of it ("Name: Baek / swordsman")
+        const cut = p.value.search(/[/／|]/);
+        got.name = cut < 0 ? p.value : p.value.slice(0, cut).trim();
+        if (cut >= 0 && p.value.slice(cut + 1).trim()) got.profile.push(p.value.slice(cut + 1).trim());
+      } else if (p.field === 'gender') got.gender = p.value;
+      else got.profile.push(p.field === 'profile' ? p.value : p.text);
+    }
+  }
+  const nm = $('#nm');
+  if (nm) nm.value = String(got.name || note.name).slice(0, 20);
+  const g = normGender(got.gender);
+  const gb = (g === GENDER.MALE || g === GENDER.FEMALE) && $(`#gseg button[data-g="${g}"]`);
+  if (gb) gb.click();
+  const prof = $('#prof'),
+    text = got.profile.join('\n').trim();
+  if (!prof) return;
+  prof.value = text.slice(0, prof.maxLength);
+  prof.dispatchEvent(new Event('input'));
+  if (text.length > prof.maxLength) toast(T('The profile was cut to {n} characters', { n: prof.maxLength }));
+}
 // the profile box shows how much of its 600 characters is used
 function bindProfileCount() {
   const ta = $('#prof'),
@@ -500,6 +533,7 @@ function readFreeSetup(sel) {
             .slice(0, TALENT_MAX - 1),
     age: $('#fAge').value,
     sponsor: sel.sponsor || 'random',
+    entry: sel.entry || 'random',
   };
 }
 // the roll button: read the form, ask the narrator how the player's own setup leans (gacha only), roll, show the fate
@@ -515,8 +549,11 @@ async function rollFromForm(inherit, sel) {
   const gender = inherit ? app.state.life.gender : sel.gender;
   const free = sel.mode === 'free' ? readFreeSetup(sel) : null;
   const profTxt = ($('#prof').value || '').trim().slice(0, 600);
+  const prev = app.pendingRoll; // a reroll's fate, which Begin could take while the profile is read
   let aff = null;
   if (profTxt && !free) {
+    const accept = $('#acceptBtn');
+    if (accept) accept.disabled = true;
     rb.disabled = true;
     rb.textContent = T('Reading your profile...');
     try {
@@ -526,13 +563,17 @@ async function rollFromForm(inherit, sel) {
     }
     rb.disabled = false;
     rb.textContent = T('Roll your fate');
+    if (app.pendingRoll !== prev) return; // the game began, or a new screen opened, meanwhile
   }
   const life = rollLife(name, gender, sel.world, free, aff);
   life.profile = profTxt;
   const wn = $('#worldNote');
   if (wn && sel.mode === 'free') life.seedNotes = wn.value.trim().slice(0, LIMITS.userNotes); // the save's first user notes, so the opening scene knows them
   rememberFormDefaults(life);
-  app.pendingRoll = { life, inherit, lang: storyLang() }; // the language the fate was rolled in, even if the screen changes before starting
+  // the language the fate was rolled in, even if the screen changes before starting; a reroll counts on from the last
+  // fate, and keeps its character list draft while the world stays the same
+  app.pendingRoll = { life, inherit, lang: storyLang(), rerolls: prev ? (prev.rerolls || 0) + 1 : 0 };
+  if (prev && prev.roster != null && prev.life.world.id === life.world.id) app.pendingRoll.roster = prev.roster;
   revealFate(life, inherit);
 }
 // the form's answers become the next new game's defaults (each save keeps the copy it started with). A scenario's
@@ -659,7 +700,7 @@ export let rollLife = function rollLife(name, gender, worldChoice, free, aff) {
   const tr = x => tIn(L, x);
   const table = (worldChoice !== 'random' && WORLDS.find(w => w.id === worldChoice)) || pickWorld(gender, aff);
   const world = worldIn(table, L);
-  const entry = rollEntry(table, aff),
+  const entry = free && ENTRY_LABEL[free.entry] ? free.entry : rollEntry(table, aff),
     sponsor = rollSponsor(table, free && free.sponsor, setting('adminPersona'));
   const rl = (
     entry === 'transfer' ? TRANSFER_RACES[table.from ? 'other' : 'earth'] : RACES[table.id] || [N_('Human')]
@@ -748,15 +789,18 @@ function revealFate(life, inherit, again) {
       ? [T('Talent'), life.talent.name, life.talent.desc, life.talentTier]
       : [T('Talent'), T('No talent'), '', null],
   ];
-  if (life.entry && life.entry !== 'native')
+  // a custom setup shows its arrival even as a native, since it may have been picked there
+  if (life.entry && (life.entry !== 'native' || life.free))
     cards.push([
       T('Arrival'),
       T(ENTRY_LABEL[life.entry]),
-      life.entry === 'possess'
-        ? T('In the body of a character from a novel about this world. You know how the story goes')
-        : T('Fell here from {from}. Nothing makes sense, not even the language', {
-            from: life.world.from || T('modern-day Earth'),
-          }),
+      life.entry === 'native'
+        ? T('Born and raised in this world')
+        : life.entry === 'possess'
+          ? T('In the body of a character from a novel about this world. You know how the story goes')
+          : T('Fell here from {from}. Nothing makes sense, not even the language', {
+              from: life.world.from || T('modern-day Earth'),
+            }),
       null,
     ]);
   if (life.sponsor)
@@ -802,8 +846,12 @@ function revealFate(life, inherit, again) {
         i * 350 + 150,
       ),
     );
-  $('#rollBtn').disabled = true;
-  $('#rollBtn').textContent = life.free ? T('Your setup is set') : T('Your fate is sealed');
+  const rb = $('#rollBtn'),
+    left = inherit ? 0 : REROLLS - (app.pendingRoll.rerolls || 0); // a regression stays left to luck
+  rb.disabled = left <= 0;
+  rb.classList.replace('primary', 'ghost'); // Begin with this fate is the step now
+  rb.textContent =
+    left > 0 ? T('Reroll ({n} left)', { n: left }) : life.free ? T('Your setup is set') : T('Your fate is sealed');
   document
     .querySelectorAll('#wseg button,#gseg button,#mseg button,#freeBox input,#freeBox select,#freeBox button')
     .forEach(b => (b.disabled = true));
@@ -816,8 +864,33 @@ function revealFate(life, inherit, again) {
     if (style) beginLife(style);
   };
 }
+// A new state: what every life starts with, then what this one brings
+const freshState = (life, overrides) => ({
+  v: 1,
+  goldV: 2,
+  life,
+  lifeNo: 1,
+  title: '',
+  skills: [],
+  lifeStart: 0,
+  turnNo: 0,
+  quests: [],
+  lore: {},
+  relations: {},
+  cast: {},
+  clock: { day: 0, date: '', time: '', weather: '', place: '' },
+  summaries: [],
+  summarizedUpto: -1,
+  stateNote: '',
+  pastLives: [],
+  userNotes: '',
+  roster: {},
+  dead: false,
+  next: 0,
+  ...overrides,
+});
 // style: the form's prose style (styleFromForm)
-async function beginLife({ style, styleNoteId }) {
+async function beginLife(style) {
   const { life, inherit, lang, roster } = app.pendingRoll;
   app.pendingRoll = null;
   castDraft = ''; // the list it went into is the one kept
@@ -847,40 +920,28 @@ async function beginLife({ style, styleNoteId }) {
       if (!skills.find(x => x.name === s.name)) skills.push(s);
   }
   life.money = moneyFor(lang);
-  app.state = {
-    v: 1,
-    goldV: 2,
+  app.state = freshState(life, {
     rules: inherit ? app.state.rules : snapshotRules(),
     lang,
     mode: MODE.ROGUELIKE,
-    life,
     lifeNo,
     stats: Object.assign(
       { hp: b.hp, maxHp: b.hp, power: b.power, gold: b.gold * currencyOf(life)[1], fame: 0, age: life.age },
       rollSubStats(life.originTier),
     ),
-    title: '',
     skills,
     lifeStart: inherit ? app.state.next : 0,
-    turnNo: 0,
-    quests: [],
     lore,
-    relations: {},
-    cast: {},
-    clock: { day: 0, date: '', time: '', weather: '', place: '' },
     ...extStart(life.world.id, life.originTier),
     summaries: inherit ? app.state.summaries : [],
     summarizedUpto: inherit ? app.state.summarizedUpto : -1,
-    stateNote: '',
     pastLives: past,
     userNotes,
     roster: (inherit && app.state.roster) || {}, // every world's list goes on; this life uses its own world's
     noteIds, // the library notes ticked on this screen (notes.js)
-    style,
-    ...(styleNoteId ? { styleNoteId } : {}),
-    dead: false,
+    ...style,
     next: inherit ? app.state.next : 0,
-  };
+  });
   if (roster != null) setRoster(app.state, life.world.id, roster);
   if (!inherit) openNewSave(T("{name}'s Fate", { name: life.name }));
   else app.currentSave.lifeNo = lifeNo;
@@ -933,7 +994,7 @@ async function startScenario(sel) {
     $('#nm').focus();
     return;
   }
-  const note = noteById(scenarioInForm());
+  const note = noteById(oneInForm('sc'));
   if (!note) {
     toast(T('Pick a scenario note'));
     return;
@@ -967,14 +1028,12 @@ async function startScenario(sel) {
   const first = ($('#scFirst').value || '').trim();
   const verbatim = !!first && $('#scVerbatim').checked;
   const X = table && WORLD_EXT[table.id];
-  const addons = { ...Object.fromEntries(ADDONS.map(k => [k, false])), ...formAddons() };
+  const addons = formAddons(); // an extra it leaves out is off (rules.js addonOn)
   addons.ext = !!X && addons.ext;
   const pickStep = $('#scExtStart') ? $('#scExtStart').value : '';
   const step = addons.ext && X.ladder && pickStep !== '' ? Number(pickStep) : null;
   const b = BASE.C;
-  app.state = {
-    v: 1,
-    goldV: 2,
+  app.state = freshState(life, {
     rules: snapshotRules(), // dice and the gambler's fate come from the extras (rules.js rule)
     lang,
     mode: MODE.SCENARIO,
@@ -984,29 +1043,10 @@ async function startScenario(sel) {
     scenarioId: note.id,
     scenarioName: note.name,
     firstScene: first,
-    life,
-    lifeNo: 1,
     stats: Object.assign({ hp: b.hp, maxHp: b.hp, power: b.power, gold: 0, fame: 0, age: 0 }, rollSubStats('C')), // kept, never shown or sent
-    title: '',
-    skills: [],
-    lifeStart: 0,
-    turnNo: 0,
-    quests: [],
-    lore: {},
-    relations: {},
-    cast: {},
-    clock: { day: 0, date: '', time: '', weather: '', place: '' },
-    summaries: [],
-    summarizedUpto: -1,
-    stateNote: '',
-    pastLives: [],
-    userNotes: '',
-    roster: {},
     noteIds: (pickedInForm() ?? startNotes(false)).filter(id => id !== note.id), // the scenario goes once
     ...style,
-    dead: false,
-    next: 0,
-  };
+  });
   if (castDraft.trim()) setRoster(app.state, life.world.id, castDraft);
   castDraft = '';
   openNewSave(T('{scenario} ({name})', { scenario: note.name, name }));

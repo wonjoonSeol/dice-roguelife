@@ -1,14 +1,15 @@
 /* ============ death & ledger ============ */
-import { esc } from './util.js';
+import { esc, nowIso, toast } from './util.js';
 import { tierRank, TIERS } from './data.js';
 import { platform } from './db.js';
 import { app, currentRun, exclusive } from './app.js';
 import { setting } from './settings.js';
 import { cueScore } from './sound.js';
-import { pushTurn } from './persistence.js';
+import { persist, pushTurn } from './persistence.js';
 import { renderLog } from './log.js';
 import { sampleError } from './turn.js';
-import { fillTemplate, pl, pr, prLang, turnText } from './prompt.js';
+import { fillTemplate, pl, pr, prLang, sampleJson, turnText } from './prompt.js';
+import { askConfirm } from './sheet.js';
 import { T } from './i18n.js';
 
 export function deathPanel() {
@@ -27,6 +28,63 @@ export function ledgerCard(o, ti) {
 export function runLedger() {
   return exclusive(writeLedger);
 }
+// A scenario save never dies, so its story ends when the player says so: an ending card without a score, kept in the
+// save (state.endings, shown in Memory and carried in the save file). Play can go on after it. True once written.
+export async function runEnding() {
+  if (!(await askConfirm(T('End the story here and write its ending card? You can keep playing after it.'))))
+    return false;
+  return exclusive(writeEnding);
+}
+// what the ledger and an ending card read: this life's summaries, and the last turns up to 8000 characters
+const lifeSummary = st =>
+  st.summaries
+    .filter(x => x.life === st.lifeNo)
+    .map(x => x.text)
+    .join(' ');
+const recentForLedger = () => app.turns.slice(-16).map(turnText).join('\n\n').slice(-8000);
+async function writeEnding() {
+  const run = currentRun();
+  toast(T('Writing the ending'));
+  try {
+    const st = app.state;
+    const o = await sampleJson(
+      fillTemplate(pr('scenarioEnding'), {
+        scenario: st.scenarioName || st.life.world.name,
+        name: st.life.name,
+        summary: lifeSummary(st),
+        recent: recentForLedger(),
+        langLine: prLang('ledgerLang'),
+      }),
+      { modelTier: setting('tier'), cache: false },
+    );
+    if (run.abandoned) return false;
+    const line = (v, n) =>
+      String(v || '')
+        .trim()
+        .slice(0, n);
+    const last = app.turns[app.turns.length - 1];
+    st.endings = [
+      ...(st.endings || []),
+      {
+        at: last ? last.i : 0,
+        date: nowIso(),
+        title: line(o.title, 60),
+        epitaph: line(o.epitaph, 120),
+        summary: line(o.summary, 600),
+        highlights: (Array.isArray(o.highlights) ? o.highlights : [])
+          .map(h => line(h, 160))
+          .filter(Boolean)
+          .slice(0, 4),
+      },
+    ].slice(-30);
+    await persist();
+    toast(T('Ending saved in Memory'));
+    return true;
+  } catch (e) {
+    if (!run.abandoned) sampleError(e);
+    return false;
+  }
+}
 async function writeLedger() {
   const run = currentRun();
   app.phase = 'ledger';
@@ -37,8 +95,7 @@ async function writeLedger() {
   );
   const cap = TIERS[Math.min(TIERS.length - 1, Math.max(tierRank(best), tierRank('SSS')))];
   try {
-    const recent = app.turns.slice(-16).map(turnText).join('\n\n');
-    const o = await platform.sample.json(
+    const o = await sampleJson(
       fillTemplate(pr('ledger'), {
         name: app.state.life.name,
         cap,
@@ -50,11 +107,8 @@ async function writeLedger() {
         power: app.state.stats.power,
         title: app.state.title || pl('None'),
         skills: app.state.skills.map(k => k.name + '(' + k.grade + ')').join(', '),
-        summary: app.state.summaries
-          .filter(x => x.life === app.state.lifeNo)
-          .map(x => x.text)
-          .join(' '),
-        recent: recent.slice(-8000),
+        summary: lifeSummary(app.state),
+        recent: recentForLedger(),
         langLine: prLang('ledgerLang'),
       }),
       { modelTier: setting('tier'), cache: false },

@@ -18,13 +18,21 @@ export const MONEY = Object.freeze({ WON: 'won', YEN: 'yen', DOLLARS: 'dollars' 
 export const MODE = Object.freeze({ ROGUELIKE: 'roguelike', SCENARIO: 'scenario' });
 export const MODES = Object.freeze(Object.values(MODE));
 export const MODE_LABEL = Object.freeze({ roguelike: N_('Dice roguelike'), scenario: N_('Scenario') });
-// a library note's job (note.type): ticked and sent every turn, a scenario, a prose style, character sheets to import.
+// a library note's job (note.type): ticked and sent every turn, a scenario, who the player plays, a prose style,
+// character sheets to import.
 // A note without one is general. Only the pickers go by it; a ticked note is sent whatever its type
-export const NOTE_TYPE = Object.freeze({ GENERAL: 'general', SCENARIO: 'scenario', STYLE: 'style', CAST: 'cast' });
+export const NOTE_TYPE = Object.freeze({
+  GENERAL: 'general',
+  SCENARIO: 'scenario',
+  PERSONA: 'persona',
+  STYLE: 'style',
+  CAST: 'cast',
+});
 export const NOTE_TYPES = Object.freeze(Object.values(NOTE_TYPE));
 export const NOTE_TYPE_LABEL = Object.freeze({
   general: N_('General'),
   scenario: N_('Scenario'),
+  persona: N_('Persona'),
   style: N_('Prose style'),
   cast: N_('Cast'),
 });

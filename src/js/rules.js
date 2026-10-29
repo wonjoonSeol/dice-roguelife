@@ -11,6 +11,8 @@ export const isScenario = (st = app.state) => !!st && st.mode === MODE.SCENARIO;
 export const addonOn = (k, st = app.state) => !isScenario(st) || !!(st.addons && st.addons[k]);
 // the rules a scenario save's extras decide instead of its start snapshot: dice checks, and the gambler's fate
 const ADDON_RULE = { dice: ADDON.DICE, gambler: ADDON.LUCK };
+// life's small luck: a scenario's comes with its luck extra, dice or not; a roguelike's goes with its dice
+export const luckOn = () => (isScenario() ? addonOn(ADDON.LUCK) : rule('dice') !== false);
 // the ⚙ ADMIN persona that turns ADMIN off for every save
 export const ADMIN_OFF = 'off';
 // whether ADMIN speaks in this save: not when ⚙ turns it off, and in a scenario only with its ADMIN extra

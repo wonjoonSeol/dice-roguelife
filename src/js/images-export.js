@@ -7,6 +7,7 @@ import { IMAGE_TYPES, imgUrl, worldsOf } from './images.js';
 import { logErr } from './diag.js';
 import { T } from './i18n.js';
 import { makeZip } from './zip.js';
+import { frameSits, sitDict } from './situations.js';
 
 // a type's first extension (jpg, not jpeg)
 const EXT = Object.fromEntries(
@@ -17,7 +18,7 @@ const EXT = Object.fromEntries(
 const TIMES = ['day', 'sunset', 'night', 'indoor'];
 
 // one canonical file name per image (no extension): the same names the upload rules read back
-function baseName(x) {
+export function baseName(x) {
   if (x.kind === 'char') {
     const set = x.set || x.name || 'unnamed';
     return `${set}_${x.emotion || 'neutral'}${x.variant ? '_' + x.variant : ''}`;
@@ -39,9 +40,14 @@ function nameAll(imgs, extOf) {
   });
 }
 
+// the situation dictionary as tags.json writes it: label and hint always, first
+const dictJson = () =>
+  Object.fromEntries(
+    Object.entries(sitDict()).map(([k, e]) => [k, { label: e.label || '', hint: e.hint || '', ...e }]),
+  );
 // the tags.json the import button reads, keyed by the pack's file names
 export function buildTagsJson(imgs, names) {
-  const out = { sets: {}, images: {}, backgrounds: {} };
+  const out = { situations: dictJson(), sets: {}, images: {}, backgrounds: {} };
   imgs.forEach((x, i) => {
     const fn = names[i];
     const ws = worldsOf(x);
@@ -62,8 +68,9 @@ export function buildTagsJson(imgs, names) {
         if (cover >= 0) s.cover = names[cover]; // by file name: ids are this install's
         out.sets[k] = s;
       }
-      const e = { emotion: x.emotion || 'neutral', tags: x.tags || [] };
+      const e = { set: k, emotion: x.emotion || 'neutral', situations: frameSits(x), tags: x.tags || [] };
       if (ws.length) e.worlds = ws;
+      if (x.off) e.off = true;
       out.images[fn] = e;
     } else if (x.kind === 'scene') {
       const parts = String(x.name || '').split('_');
@@ -72,6 +79,7 @@ export function buildTagsJson(imgs, names) {
       if (parts.join('_')) e.place = parts.join('_');
       if (time) e.time = time;
       if (ws.length) e.worlds = ws;
+      if (x.off) e.off = true;
       out.backgrounds[fn] = e;
     }
   });
@@ -93,7 +101,8 @@ export async function exportPack(withImages) {
   const say = t => {
     setStat(t);
   };
-  const imgs = app.images.filter(x => x.kind === 'char' || x.kind === 'scene' || x.kind === 'fx');
+  // a picture auto-sort excluded is never handed on
+  const imgs = app.images.filter(x => !x.excluded && (x.kind === 'char' || x.kind === 'scene' || x.kind === 'fx'));
   if (!imgs.length) {
     toast(T('No images to export'));
     return;
