@@ -4,15 +4,23 @@ import { N_, T } from './i18n.js';
 import { thaw, userCol, userDoc } from './db.js';
 import { app, lastSaveCard } from './app.js';
 
-// One document per note, P/notes/items/<id> = { name, text, updatedAt }, shared by every save of this player. A save
-// keeps the ids it uses in state.noteIds; the narrator gets those notes whole (prompt.js buildPrompt).
+// One document per note, P/notes/items/<id> = { name, text, updatedAt, cast? }, shared by every save of this player. A
+// save keeps the ids it uses in state.noteIds; the narrator gets those notes whole (prompt.js buildPrompt). cast is what
+// Import characters made of the text (roster-view.js): never sent, never counted in the note's size.
 export const NOTE_MAX = 32768; // UTF-8 bytes of one note's text
 export const NOTE_NAME_MAX = 60;
 export const NOTES_UNREAD = N_("Couldn't read your note library. Try again in a moment.");
 const noteDoc = id => userDoc(`notes/items/${id}`);
 const byName = (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 // a note in memory: the document, its id, and its text's size, counted once
-const inMemory = (id, d) => ({ name: d.name, text: d.text, updatedAt: d.updatedAt, id, bytes: utf8Bytes(d.text) });
+const inMemory = (id, d) => ({
+  name: d.name,
+  text: d.text,
+  updatedAt: d.updatedAt,
+  cast: d.cast && typeof d.cast === 'object' ? d.cast : undefined,
+  id,
+  bytes: utf8Bytes(d.text),
+});
 
 // app.notes: the library, or null when it has never been read; a failed read keeps what was read before
 export async function loadNotes() {
@@ -71,6 +79,8 @@ export function savesUsing(id) {
 
 async function writeNote({ id, name, text }) {
   const doc = { name: cleanNoteName(name), text: String(text), updatedAt: nowIso() };
+  const old = noteById(id);
+  if (old && old.cast && old.text === doc.text) doc.cast = old.cast; // a rename keeps it
   await noteDoc(id).set(doc);
   return inMemory(id, doc);
 }
@@ -90,6 +100,17 @@ export async function saveNotes(list) {
   putNotes(saved);
   const failed = done.find(r => r.status === 'rejected');
   return { saved, error: failed ? failed.reason : null };
+}
+// Import characters' result kept on the note. The document is read first, so another device's newer text is not
+// written over; the note's text and updatedAt stay as they are
+export async function saveNoteCast(id, cast) {
+  const ref = noteDoc(id),
+    n = noteById(id);
+  const got = await ref.get();
+  const d = got.exists ? thaw(got.data()) : null;
+  if (!n || !d || d.text !== n.text) return;
+  await ref.set({ ...d, cast });
+  n.cast = cast;
 }
 export async function deleteNote(id) {
   await noteDoc(id).delete();
