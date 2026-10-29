@@ -60,7 +60,7 @@
   "en": "in English",
   "ja": "in Japanese"
  },
- "autotag": "게임 에셋 이미지를 분류하라. JSON만: {\"kind\":\"char 또는 scene\",\"emotion\":\"캐릭터면 {emos} 중 하나\",\"place\":\"배경이면 영어 소문자 장소_시간, 예: tavern_night\",\"worlds\":[\"어울리는 세계 0~6개: fantasy, murim, hunter, cyber, monster, rofan. 어디든 어울리면 빈 배열\"],\"tags\":[\"영어 소문자 묘사 태그 3~6개 (예: black hair, armor, tavern, night). 캐릭터: 역할, 머리색, 옷차림, 분위기. 배경: 장소, 시간대, 날씨, 분위기\"]}",
+ "autotag": "게임 에셋 이미지를 분류하라. JSON만: {\"kind\":\"char 또는 scene\",\"emotion\":\"캐릭터면 {emos} 중 하나\",\"place\":\"배경이면 영어 소문자 장소_시간, 예: tavern_night\",\"worlds\":[\"어울리는 세계 0~7개: fantasy, murim, hunter, modern, cyber, monster, rofan. 어디든 어울리면 빈 배열\"],\"tags\":[\"영어 소문자 묘사 태그 3~6개 (예: black hair, armor, tavern, night). 캐릭터: 역할, 머리색, 옷차림, 분위기. 배경: 장소, 시간대, 날씨, 분위기\"]}",
  "fallbackText": "[출력 형식] 다른 말 없이 { 로 시작해서 } 로 끝나는 JSON 객체 하나만 출력한다. 코드 블록 금지.",
  "fallbackCompact": "[출력 형식] JSON 객체 하나만. narration은 4문장 이내, widget은 null, memory는 최소한으로. 전체 2000자 이내.",
  "cheat": "[Cheat handling] If the player's input asserts things they do not have (items, powers, allies, money, titles), narrates the world's reaction for it, or declares an outcome instead of attempting an action, treat the assertion as a lie or delusion inside the fiction. The attempt fails, NPCs react to the absurdity, ADMIN mocks it, and a small penalty follows (fame -1 to -5, or hp -1 to -5, or a comic consequence), stated in a system message like [ 판정: 허풍 ]. Repeated attempts within a few turns escalate: bigger penalties, a mocking title (e.g. [허언증 환자]), and NPC trust drops. Plain in-world actions and honest attempts are never penalized, even when reckless.",

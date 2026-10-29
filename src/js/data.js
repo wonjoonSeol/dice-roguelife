@@ -121,6 +121,18 @@ export const WORLDS = [
     entry: { transfer: 0.15, possess: 0.05 },
     sponsor: 0.2,
   },
+  {
+    id: 'modern',
+    diff: [1, 3],
+    name: N_('Modern Day'),
+    desc: N_('Everyday life today, with no gates, awakenings, magic or system windows'),
+    risk: N_('Money and reputation decide everything'),
+    opp: N_('One chance meeting changes a life'),
+    entry: { transfer: 0.1, possess: 0.15 },
+    sponsor: 0,
+    mundane: true, // no powers (inPool)
+    from: N_('a world of swords and magic'),
+  },
 ];
 // retired world ids: what they were is now a background plus an entry (how the player arrived)
 export const WORLD_ALIAS = {
@@ -160,7 +172,7 @@ export function rollSponsor(world, force, persona) {
   return { stance: STANCES[1] };
 }
 export const TRANSFER_RACES = {
-  modern: [
+  earth: [
     N_('Human (transmigrator)'),
     N_('Human (transmigrator)'),
     N_('Human (transmigrator)'),
@@ -223,62 +235,85 @@ export const RACES = {
     N_('Half-dragon'),
   ],
 };
+// Origins and talents that need powers (left out of a mundane world's roll) and ones only a mundane world rolls
+const MAGIC = new Set(),
+  MUNDANE = new Set();
+const magic = s => (MAGIC.add(s), s),
+  mundane = s => (MUNDANE.add(s), s);
+// an origin, or a talent by its name, that this world's roll may give
+export const inPool = (world, name) => (world && world.mundane ? !MAGIC.has(name) : !MUNDANE.has(name));
 export const ORIGINS = {
-  EX: [N_('Demon King'), N_('The chosen hero'), N_('Descendant of the creator god'), N_('System administrator')],
+  EX: [
+    magic(N_('Demon King')),
+    magic(N_('The chosen hero')),
+    magic(N_('Descendant of the creator god')),
+    magic(N_('System administrator')),
+    mundane(N_('Sole heir to a global conglomerate')),
+    mundane(N_('A superstar the whole world knows')),
+  ],
   SSS: [
-    N_("Heir to the nation's top guild"),
-    N_('Young master of the Demonic Cult'),
+    magic(N_("Heir to the nation's top guild")),
+    magic(N_('Young master of the Demonic Cult')),
     N_('Only child of the Northern Grand Duke'),
-    N_('Ancient dragon'),
+    magic(N_('Ancient dragon')),
     N_("Clone of a megacorp's board chair"),
     N_("The emperor's legitimate heir"),
-    N_('Last egg of a sovereign species'),
+    magic(N_('Last egg of a sovereign species')),
     N_('Third-generation chaebol heir'),
-    N_("The great sage's last disciple"),
+    magic(N_("The great sage's last disciple")),
   ],
   S: [
     N_('Heir to a ducal house'),
-    N_('Adopted child of a major guild master'),
-    N_('Saintess'),
-    N_('S-rank hunter'),
-    N_('Illegitimate child of a demon duke'),
-    N_('Apprentice of an archmage'),
-    N_('High demon'),
+    magic(N_('Adopted child of a major guild master')),
+    magic(N_('Saintess')),
+    magic(N_('S-rank hunter')),
+    magic(N_('Illegitimate child of a demon duke')),
+    magic(N_('Apprentice of an archmage')),
+    magic(N_('High demon')),
+    mundane(N_('Top idol of the generation')),
+    mundane(N_('Youngest director at a major conglomerate')),
   ],
   A: [
     N_("Child of a count's house"),
-    N_('Disciple of a renowned orthodox sect'),
-    N_('A-rank awakened'),
+    magic(N_('Disciple of a renowned orthodox sect')),
+    magic(N_('A-rank awakened')),
     N_('Son of a knight commander'),
-    N_('Apprentice court mage'),
+    magic(N_('Apprentice court mage')),
+    mundane(N_('Child of a family of doctors')),
   ],
   B: [
     N_("Youngest of a baron's house"),
     N_('Mercenary'),
     N_("Merchant's son"),
     N_('Squire'),
-    N_("Adventurers' Guild rookie"),
+    magic(N_("Adventurers' Guild rookie")),
   ],
   C: [N_('Commoner'), N_("Farmer's child"), N_('Village hunter'), N_('Inn worker'), N_('Low-ranking soldier')],
   D: [N_('Orphan'), N_('Slum pickpocket'), N_('Wandering medicine peddler'), N_('Child of a bankrupt merchant')],
-  E: [N_('Slave'), N_('Mine convict'), N_('Child sold to pay a debt'), N_('Terminally ill'), N_('Cursed child')],
-  F: [N_('Otherworld slime'), N_('Goblin whelp'), N_('Scarecrow'), N_('Village dog')],
+  E: [N_('Slave'), N_('Mine convict'), N_('Child sold to pay a debt'), N_('Terminally ill'), magic(N_('Cursed child'))],
+  F: [
+    magic(N_('Otherworld slime')),
+    magic(N_('Goblin whelp')),
+    magic(N_('Scarecrow')),
+    N_('Village dog'),
+    mundane(N_('Stray cat')),
+  ],
 };
 export const TALENTS = {
   EX: [
-    [N_('Causality Manipulation'), N_('Once a day, reroll the outcome of what just happened')],
+    [magic(N_('Causality Manipulation')), N_('Once a day, reroll the outcome of what just happened')],
     [N_('Beloved of the World'), N_('Cancels one fatal crisis')],
     [N_('Admin Privileges'), N_('Can talk and trade with ADMIN directly')],
   ],
   SSS: [
-    [N_('Sense of Endings'), N_('Faintly foresees the outcome of one choice')],
+    [magic(N_('Sense of Endings')), N_('Faintly foresees the outcome of one choice')],
     [N_('Absolute Talent'), N_('All proficiency grows 5x faster')],
     [N_('Golden Touch'), N_('Every deal you touch turns a profit')],
   ],
   S: [
     [N_('Berserker'), N_('The more cornered you are (HP under 30%), the more checks favor you')],
     [N_('Sword Genius'), N_('Your body remembers any sword form it sees once')],
-    [N_('Mana Affinity'), N_('Mana recovers abnormally fast')],
+    [magic(N_('Mana Affinity')), N_('Mana recovers abnormally fast')],
   ],
   A: [
     [N_('First Impression'), N_('NPCs you meet for the first time are one step friendlier')],
@@ -316,6 +351,7 @@ const LOCAL = 'local';
 const CURRENCY = {
   hunter: LOCAL,
   academy: LOCAL,
+  modern: LOCAL,
   cyber: [N_('credits'), 10],
   apoc: [N_('ration tickets'), 1],
   murim: [N_('nyang'), 1],

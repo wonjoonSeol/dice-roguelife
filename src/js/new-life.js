@@ -5,6 +5,7 @@ import {
   cmdName,
   CMDS,
   currencyOf,
+  inPool,
   moneyFor,
   ORIGINS,
   RACES,
@@ -190,7 +191,7 @@ function newLifeHtml(inherit) {
     </details>
     <details class="odds guide"><summary>${T('Odds')}</summary>
       <p>${T('<b>Standing and talent</b> are rolled separately: {odds}.', { odds: TIER_P.map(([t, p]) => `<code>${t}</code> ${p}%`).join(', ') })}</p>
-      <p>${T("<b>World</b>: one of 11 at random (or pick one). <b>Difficulty</b> ★1-5 is rolled each life within the world's range. Monster Realm is always ★5.")}</p>
+      <p>${T("<b>World</b>: one of {n} at random (or pick one). <b>Difficulty</b> ★1-5 is rolled each life within the world's range. Monster Realm is always ★5.", { n: WORLDS.length })}</p>
       <p>${T('<b>Arrival</b> (native, transmigrator, possessor) and <b>whether there are constellations</b> are also rolled by world. Possession is common in romance fantasy and palace worlds, constellations in hunter and tower worlds. If there are constellations, their stance toward ADMIN (indifferent, rivals, hostile, allies) is rolled too.')}</p>
       <p>${T('<b>Your profile</b> leans the world, race, arrival, and which standing and talent you get within a grade, but never the odds of a grade.')}</p>
     </details>
@@ -333,21 +334,31 @@ function wpick(items) {
   return items[items.length - 1][0];
 }
 const AFF_FALLBACK = [
-  [/무협|강호|내공|검객|문파|murim|wuxia|martial art|cultivat/i, 'murim'],
-  [/헌터|게이트|각성|hunter|\bgate|awaken/i, 'hunter'],
-  [/게임|레벨|유저|vr|mmo|\bgame|\blevel/i, 'vrmmo'],
-  [/학원|아카데미|학생|입학|academy|school|student/i, 'academy'],
-  [/사이버|해킹|안드로이드|기업|cyber|hack|android|megacorp/i, 'cyber'],
-  [/영애|황녀|공녀|악녀|북부 대공|young lady|princess|villainess|grand duke/i, 'rofan'],
-  [/좀비|멸망|생존|zombie|apocalyp|surviv/i, 'apoc'],
-  [/후궁|황궁|조정|궁녀|harem|palace|imperial court|concubine/i, 'palace'],
-  [/전이|트럭|소환|isekai|truck|summon/i, 'isekai'],
-  [/마왕|용사|기사|마법|demon king|\bhero|knight|magic/i, 'fantasy'],
+  [/무협|강호|내공|검객|문파|武侠|武林|江湖|内功|門派|murim|wuxia|martial art|cultivat/i, 'murim'],
+  [/헌터|게이트|각성|ハンター|ゲート|覚醒|hunter|\bgate|awaken/i, 'hunter'],
+  [/게임|레벨|유저|ゲーム|レベル|ユーザー|vr|mmo|\bgame|\blevel/i, 'vrmmo'],
+  [/학원|아카데미|학생|입학|学園|アカデミー|学生|入学|academy|school|student/i, 'academy'],
+  [
+    /사이버|해킹|안드로이드|메가코프|거대 ?기업|サイバー|ハッキング|アンドロイド|巨大企業|メガコープ|cyber|hack|android|megacorp/i,
+    'cyber',
+  ],
+  [/영애|황녀|공녀|악녀|북부 대공|令嬢|皇女|公女|悪女|北部大公|young lady|princess|villainess|grand duke/i, 'rofan'],
+  [/좀비|멸망|생존|ゾンビ|滅亡|生存|zombie|apocalyp|surviv/i, 'apoc'],
+  [/후궁|황궁|조정|궁녀|後宮|皇宮|朝廷|宮女|harem|palace|imperial court|concubine/i, 'palace'],
+  [/전이|트럭|소환|이세계|転移|トラック|召喚|異世界|isekai|truck|summon|another world/i, 'isekai'],
+  [/마왕|용사|기사|마법|魔王|勇者|騎士|魔法|demon king|\bhero|knight|magic/i, 'fantasy'],
 ];
+// everyday words fill other worlds' profiles too (an office worker who wakes in a novel), so they come out first and
+// lean the modern world only when no other world's word is left
+const AFF_MODERN =
+  /회사|직장|(?<!거대 ?)기업|대학|(?:고등|중|초등)학(?:생|교)|연애|재벌|연예|아이돌|러닝|(?:택시|버스|배달) ?기사|会社|職場|(?<!巨大)企業|サラリーマン|大学|高校|中学|小学|恋愛|財閥|芸能|アイドル|ランニング|\boffice\b|\bcompan(?:y|ies)\b|salary ?m[ae]n|(?:college|universit(?:y|ies))(?: students?)?|(?:high|middle|elementary) school(?:ers?| students?)?|\bromance(?!\s*fantasy)|\bdating\b|chaebol|\bidols?\b|k-?pop|running (?:crew|club)/gi;
+// a profile read before the world list changed is read again
+const affWorlds = () => WORLDS.map(w => w.id).join();
 async function profileAffinity(text) {
   text = String(text || '').trim();
   if (!text) return null;
-  if (app.settings.profileAff && app.settings.profileAff.text === text) return app.settings.profileAff.data;
+  const seen = app.settings.profileAff;
+  if (seen && seen.text === text && seen.worlds === affWorlds()) return seen.data;
   let data = null;
   if (platform.sample) {
     try {
@@ -369,15 +380,17 @@ async function profileAffinity(text) {
     }
   }
   if (!data || typeof data !== 'object') {
+    const plain = text.replace(AFF_MODERN, ' ');
+    const hits = AFF_FALLBACK.filter(([re]) => re.test(plain)).map(([, w]) => w);
     data = {
-      worlds: [...new Set(AFF_FALLBACK.filter(([re]) => re.test(text)).map(([, w]) => w))].slice(0, 3),
+      worlds: (hits.length ? hits : plain !== text ? ['modern'] : []).slice(0, 3),
       races: [],
       keywords: [],
     };
   }
-  const entryHint = /빙의|원작|possess|original (novel|story)|inside (a|the) novel/i.test(text)
+  const entryHint = /빙의|원작|憑依|原作|possess|original (novel|story)|inside (a|the) novel/i.test(text)
     ? 'possess'
-    : /전이|이세계로|떨어[졌진]|transport|transmigrat|another world|isekai/i.test(text)
+    : /전이|이세계로|떨어[졌진]|転移|転生|異世界|transport|transmigrat|another world|isekai/i.test(text)
       ? 'transfer'
       : null; // the player's own words about how they arrived
   data = {
@@ -386,7 +399,7 @@ async function profileAffinity(text) {
     races: (Array.isArray(data.races) ? data.races : []).map(String).slice(0, 3),
     keywords: (Array.isArray(data.keywords) ? data.keywords : []).map(String).filter(Boolean).slice(0, 8),
   };
-  app.settings.profileAff = { text, data };
+  app.settings.profileAff = { text, worlds: affWorlds(), data };
   saveSettings().catch(e => noteIgnored('new-life: dset settings', e));
   return data;
 }
@@ -419,7 +432,7 @@ export let rollLife = function rollLife(name, gender, worldChoice, free, aff) {
   const entry = rollEntry(table, aff),
     sponsor = rollSponsor(table, free && free.sponsor, setting('adminPersona'));
   const rl = (
-    entry === 'transfer' ? TRANSFER_RACES[table.from ? 'other' : 'modern'] : RACES[table.id] || [N_('Human')]
+    entry === 'transfer' ? TRANSFER_RACES[table.from ? 'other' : 'earth'] : RACES[table.id] || [N_('Human')]
   ).map(tr);
   const rw =
     aff && aff.races.length
@@ -436,19 +449,21 @@ export let rollLife = function rollLife(name, gender, worldChoice, free, aff) {
   let ot = rollTier(),
     tt = rollTier();
   const kw = aff ? [...aff.keywords, ...aff.races] : [];
-  let origin = tr(affPick(ORIGINS[ot], tr, kw));
-  let [tn, td] = affPick(TALENTS[tt], x => tr(x[0]) + ' ' + tr(x[1]), kw).map(tr);
+  const origins = t => ORIGINS[t].filter(x => inPool(table, x)),
+    talents = t => TALENTS[t].filter(x => inPool(table, x[0]));
+  let origin = tr(affPick(origins(ot), tr, kw));
+  let [tn, td] = affPick(talents(tt), x => tr(x[0]) + ' ' + tr(x[1]), kw).map(tr);
   let age = pick([0, 0, 7, 12, 16, 17, 19, 24, 31]);
   if (free) {
     if (free.race) race = free.race.slice(0, 20);
     ot = TIERS.includes(free.originTier) ? free.originTier : ot;
-    origin = free.origin || tr(pick(ORIGINS[ot]));
+    origin = free.origin || tr(pick(origins(ot)));
     tt = TIERS.includes(free.talentTier) ? free.talentTier : tt;
     if (free.talent) {
       tn = free.talent;
       td = free.talentDesc || '';
     } else {
-      [tn, td] = pick(TALENTS[tt]).map(tr);
+      [tn, td] = pick(talents(tt)).map(tr);
     }
     if (free.age !== '') age = Math.max(0, Math.min(90, parseInt(free.age) || 0));
   }
