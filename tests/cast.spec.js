@@ -230,7 +230,7 @@ test('cast', async ({ game }) => {
 
 // A person's faction rules out another group's face on every casting path. The library itself says 정파 goes with
 // 화산파 (one set carries both), so a 정파 face and a faction-free one stay; with only other groups left, a lead still
-// gets a real face
+// gets a real face. Each filter is checked where the -30 alone would not do it
 test('casting keeps the faction', async ({ game }) => {
   const { pg, errs } = await game(claudeMock(), { size: [420, 900] });
   await pg.waitForSelector('#rollBtn');
@@ -238,12 +238,14 @@ test('casting keeps the faction', async ({ game }) => {
   await pg.waitForFunction('DR.app.state && DR.app.state.life && DR.isIdle()', null, { timeout: 20000 });
   const got = await pg.evaluate(() => {
     const px = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+    const LOOKS = ['old man', 'white beard', 'elder', 'scar', 'blue robe', 'sword', 'tall', 'topknot'];
     const sets = {
       hwasan_f: ['faction:정파', 'faction:화산파', 'woman'],
-      cheong_elder: ['faction:정파', 'faction:청성파', 'old man', 'white beard', 'elder'],
+      cheong_elder: ['faction:정파', 'faction:청성파', ...LOOKS],
       mudang_m: ['faction:정파', 'faction:무당파', 'old man', 'white beard'],
       jeongpa_m: ['faction:정파', 'young man'],
       plain_elder: ['old man', 'white beard'],
+      tang_m: ['clan:唐', 'young man'],
     };
     const load = list => {
       DR.app.images = Object.entries(list).map(([k, tags], i) => ({
@@ -256,24 +258,34 @@ test('casting keeps the faction', async ({ game }) => {
         tags,
       }));
       for (const k of Object.keys(list))
-        DR.app.setMeta[k] =
-          k === 'shadow_male' ? { gender: 'male', tier: 'generic' } : { gender: k === 'hwasan_f' ? 'female' : 'male' };
+        DR.app.setMeta[k] = k.startsWith('shadow')
+          ? { gender: 'male', tier: 'generic' }
+          : { gender: k === 'hwasan_f' ? 'female' : 'male' };
       DR.imagesChanged();
       DR.app.state.cast = {};
     };
-    const who = (name, weight) => ({
+    const who = (name, weight, look = ['white beard', 'old man', 'faction:화산파']) => ({
       name,
       gender: 'male',
       weight,
-      look: ['white beard', 'old man', 'faction:화산파'],
+      look,
     });
     load(sets);
     const cands = DR.castCandidates(who('학송 장로', 'major'), 12);
-    const lead = DR.castFor(who('학송 장로', 'major')); // the word-scored path, without the model
+    const both = DR.castCandidates(
+      who('학송 장로', 'major', ['white beard', 'old man', 'faction:정파', 'faction:화산파']),
+      12,
+    );
+    const clan = DR.castCandidates(who('당호', 'major', ['young man', 'clan:唐']), 12);
+    // the word-scored lead: the rival elder matches eight look words, the faction-free face none
+    load({ hwasan_f: sets.hwasan_f, cheong_elder: sets.cheong_elder, young_plain: ['young man'] });
+    const lead = DR.castFor(who('학송 장로', 'major', [...LOOKS, 'faction:화산파']));
+    // an extra whose only look match is the rival: a silhouette instead
+    load({ hwasan_f: sets.hwasan_f, cheong_elder: sets.cheong_elder, shadow_male: [] });
     const extra = DR.castFor(who('화산 노복', 'extra'));
     load({ hwasan_f: sets.hwasan_f, cheong_elder: sets.cheong_elder, shadow_male: [] });
     const only = DR.castCandidates(who('학송 장로', 'major'), 12);
-    return { cands, lead, extra, only };
+    return { cands, both, clan, lead, extra, only };
   });
   console.log('faction casting:', JSON.stringify(got));
   const other = k => k === 'cheong_elder' || k === 'mudang_m';
@@ -283,7 +295,10 @@ test('casting keeps the faction', async ({ game }) => {
     'the same camp and a faction-free face stay',
     got.cands.includes('jeongpa_m') && got.cands.includes('plain_elder'),
   );
-  check(errs, 'the word-scored lead and an extra skip another sect too', !other(got.lead) && !other(got.extra));
+  check(errs, 'naming the camp too keeps another sect out', !got.both.some(other));
+  check(errs, 'a one-letter value keeps its own face', got.clan.includes('tang_m'));
+  check(errs, 'the word-scored lead skips another sect even with eight look matches', got.lead === 'young_plain');
+  check(errs, 'an extra takes a silhouette over another sect', got.extra === 'shadow_male');
   check(errs, 'with only another sect left, a lead is still offered its real face', got.only.includes('cheong_elder'));
   expect(errs).toEqual([]);
 });

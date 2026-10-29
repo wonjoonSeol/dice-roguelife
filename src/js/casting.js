@@ -110,37 +110,48 @@ const idMatch = (a, b) => {
   return !!(x && y && x.length >= 2 && y.length >= 2 && (x === y || x.includes(y) || y.includes(x)));
 };
 // pairs of one kind's values that some set carries together (faction:정파 with faction:화산파), per library
-let together = { sets: null, pairs: new Set(), seen: new Set() };
+let together = { sets: null, pairs: new Set(), vals: new Map() };
 function pairsOf() {
   const sets = charSetsAll();
   if (together.sets === sets) return together;
   const pairs = new Set(),
-    seen = new Set();
+    vals = new Map(); // by kind: every value the library uses
   for (const k of Object.keys(sets)) {
-    const ids = setIds(k).map(i => i.key + ':' + idNorm(i.val));
-    for (const x of ids) {
-      seen.add(x);
-      for (const y of ids) if (x !== y) pairs.add(x + '|' + y);
+    const ids = setIds(k).map(i => ({ key: i.key, val: idNorm(i.val) }));
+    for (const a of ids) {
+      if (!vals.has(a.key)) vals.set(a.key, new Set());
+      vals.get(a.key).add(a.val);
+      for (const b of ids) if (a.key === b.key) pairs.add(a.key + ':' + a.val + '|' + b.val);
     }
   }
-  return (together = { sets, pairs, seen });
+  return (together = { sets, pairs, vals });
 }
-// a value of the person's kind that no set shows with theirs: another group (a value the library never saw judges nothing)
+// the library's values a person's value stands for: itself, or one written inside it or around it ("화산파 장로")
+const known = (P, a) => {
+  const v = idNorm(a.val);
+  return [...(P.vals.get(a.key) || [])].filter(
+    x => x === v || (x.length >= 2 && v.length >= 2 && (x.includes(v) || v.includes(x))),
+  );
+};
+// a set value of the person's kind that never shares a set with what the person is: another group. A value the
+// library never saw judges nothing
 function apart(ids, s) {
   const P = pairsOf();
   return ids.some(a => {
-    const x = a.key + ':' + idNorm(a.val);
-    return P.seen.has(x) && s.some(b => b.key === a.key && !P.pairs.has(x + '|' + b.key + ':' + idNorm(b.val)));
+    const xs = known(P, a);
+    return (
+      xs.length > 0 && s.some(b => b.key === a.key && !xs.some(x => P.pairs.has(a.key + ':' + x + '|' + idNorm(b.val))))
+    );
   });
 }
 export function idConflict(k, ids) {
   if (!ids || !ids.length) return false;
   const s = setIds(k);
-  return s.length > 0 && !ids.some(a => s.some(b => idMatch(a, b))) && apart(ids, s);
+  return s.length > 0 && apart(ids, s);
 }
 // the faces that keep the person's group, unless no real face does
 const ownGroup = (pool, ids) => {
-  const f = pool.filter(k => isGeneric(k) || !idConflict(k, ids));
+  const f = pool.filter(k => !idConflict(k, ids));
   return f.some(k => !isGeneric(k)) ? f : pool;
 };
 // scored from the person's side: how many of their identities this set answers (+12 each, +1 when the kind agrees). A
@@ -157,7 +168,7 @@ function idScore(k, ids) {
       if (m.key === a.key) n += 1;
     }
   }
-  return n || (apart(ids, s) ? -30 : -4);
+  return apart(ids, s) ? n - 30 : n || -4;
 }
 // every real face that died in this life, whoever wore it; silhouettes are a kind, not a person, and never retire
 export const retiredSets = () =>
@@ -640,7 +651,7 @@ function castExtra(who) {
   if (share.length) {
     const lh = k => overlap(d.look, hayWords(k));
     const faces = share.filter(k => !isGeneric(k) && !idConflict(k, d.ids) && (lh(k) >= 2 || idScore(k, d.ids) > 0)),
-      gens = share.filter(isGeneric);
+      gens = share.filter(k => isGeneric(k) && !idConflict(k, d.ids));
     // a passer-by stays faceless unless a face clearly matches how they were described, or answers to the same faction
     const pool = faces.length ? faces : gens.length ? gens : share;
     const sc = k => lh(k) * 4 + overlap(d.role, hayWords(k)) * 2 + idScore(k, d.ids);
@@ -667,14 +678,16 @@ function castLead(who) {
     k => !isGeneric(k) && !used.has(k) && !reserved(k) && fitsWorld(metaOf(k), w),
   );
   if (g) pool = pool.filter(k => fitsGender(k, g)).sort((a, b) => (genderOf(b) === g) - (genderOf(a) === g));
-  if (!pool.length && want === 'minor') pool = sharedForMinor(g, w);
-  pool = ownGroup(pool, describe(who, false).ids);
+  const d = describe(who, true); // what they look like counts most: 정장, 갑옷, 교복
+  // the person's own group first, from the free faces, then from those a minor may share; another group's only if neither has one
+  const own = list => list.filter(k => !idConflict(k, d.ids));
+  const shared = !pool.length || !own(pool).length ? (want === 'minor' ? sharedForMinor(g, w) : []) : [];
+  pool = own(pool).length ? own(pool) : own(shared).length ? own(shared) : pool.length ? pool : shared;
   if (!pool.length) {
     // nothing else left: anyone may wear a silhouette (it is never retired)
     const k = bestGeneric(who);
     return k ? assign(who.name, k, { look: [], role: [] }) : null;
   }
-  const d = describe(who, true); // what they look like counts most: 정장, 갑옷, 교복
   const lookHits = k => overlap(d.look, hayWords(k));
   const score = k => {
     const h = hayWords(k);
