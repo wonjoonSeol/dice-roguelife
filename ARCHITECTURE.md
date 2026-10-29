@@ -55,7 +55,7 @@
 | `data.js` | 데이터 테이블: 등급과 확률(`rollTier`, `tierRank`), 세계, 종족, 신분, 재능(힘이 필요한 것과 힘 없는 세계 전용은 `inPool`이 세계의 `mundane`으로 가름), 명령어(`CMDS`, 특성 표 `COMMAND_TYPES`와 `cmdIs`), 감정 |
 | `world-ext.js`, `murim.js` | 세계 애드온: 일부 세계만 가진 체계(아래 "세계 애드온"). `murim.js`는 무림의 것(경지 `REALMS`, 내공, 무공) |
 | `limits.js` | 남기는 양(`LIMITS`): 답 하나의 글자 수와 항목 수, 저장이 평생 들고 있는 양(`kept`), 한 답이 움직일 수 있는 양(`move`) |
-| `calendar.js` | 게임 안 날짜와 시각: `parseKDate`, `addDaysISO`, `clockMin`, `withWeekday` |
+| `calendar.js` | 게임 안 날짜와 시각: `parseKDate`, `addDaysISO`, `clockMin`, `withWeekday`. 읽을 수 있는 달력 날짜는 코드가 `days_passed`로 셉니다(`clock.anchor`). 코드가 셀 수 없는 그 세계의 달력("정월 열사흘")은 내레이터가 날이 바뀔 때마다 새 날짜를 줍니다. 저장하는 날짜는 내레이터가 준 글 그대로와 그날(`clock.dateDay`)이고, 화면과 프롬프트에만 그 뒤 지난 날수를 붙여 보입니다(`clockDate`, "정월 열사흘 (+2일)"). 붙인 날수까지 되돌려 준 날짜나 띄어쓰기만 다른 같은 날짜는 새 날짜로 치지 않습니다(`ownDateText`, `sameOwnDate`, `apply.js` `applyClock`). 달력 날짜는 맨 앞에 있어야 읽으므로(`parseKDate`) "제국력 1203년 3월 5일"은 그 세계의 달력입니다 |
 | `db.js` | 기능 핸들과 저장 모드(`platform`), 특권 사용자(`isPrivileged`), 메모리 DB, 압축(gzip + base64, 내보내기용 Z85), `packTurn`/`inflate`, `userDoc`/`userCol`, `dget`/`dset`, 공유 문서 읽기 `sget` |
 | `turn-store.js` | `turnStore`: 턴을 크기 제한 페이지 문서로 묶어 저장, 충돌 감지(`StoreConflict`), `NEW_SAVES`/`GONE_SAVES` |
 | `app.js` | 앱 정보(`APP_VERSION`, `REPO_URL`), 공유 상태(`app`), 한 번에 동작 하나(`exclusive`, `app.phase`, `abandonAction`) |

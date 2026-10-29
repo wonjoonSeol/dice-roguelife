@@ -4,7 +4,7 @@ import { currencyOf, moneyText, moneyUnit, normEmo, STAT_LABEL, SUB_STATS, tierR
 import { SKILL_SRC } from './enums.js';
 import { T, tIn, uiLang } from './i18n.js';
 import { LIMITS } from './limits.js';
-import { addDaysISO, clockMin, fmtKDate, parseKDate } from './calendar.js';
+import { addDaysISO, clockMin, fmtKDate, ownDateText, parseKDate, sameOwnDate } from './calendar.js';
 import { app } from './app.js';
 import { promptLang, storyLang } from './settings.js';
 import { costPct, growthLevel, isScenario, sameQuest, TITLES_MAX, titlesOn } from './rules.js';
@@ -540,38 +540,43 @@ function applyClock(ctx) {
   const { stats, deltas } = ctx;
   const c = ctx.reply.clock;
   if (!c || typeof c !== 'object') return;
+  const ck = app.state.clock;
   let d = Math.max(0, Math.min(LIMITS.move.days, Math.round(Number(c.days_passed) || 0)));
-  const tPrev = clockMin(app.state.clock.time),
+  const tPrev = clockMin(ck.time),
     tNew = c.time ? clockMin(c.time) : null;
   let keepTime = false;
   if (d === 0 && tPrev != null && tNew != null && tNew < tPrev) {
     if (tPrev - tNew >= NEW_DAY_GAP) d = 1;
     else keepTime = true;
   } /* night into morning is a new day even unreported; a few minutes back within a day keep the earlier time */
-  if (!app.state.clock.anchor) {
-    const iso = parseKDate(app.state.clock.date);
-    if (iso) app.state.clock.anchor = { date: iso, day: app.state.clock.day };
+  if (!ck.anchor) {
+    const iso = parseKDate(ck.date);
+    if (iso) ck.anchor = { date: iso, day: ck.day };
   } /* a save from before the code counted dates: today's date becomes the anchor, so passing days move it */
-  const before = app.state.clock.day;
-  app.state.clock.day += d;
-  const yrs = Math.floor(app.state.clock.day / 365) - Math.floor(before / 365);
+  const before = ck.day;
+  ck.day += d;
+  const yrs = Math.floor(ck.day / 365) - Math.floor(before / 365);
   if (yrs > 0) {
     stats.age += yrs;
     deltas.age = yrs;
   }
-  for (const k of ['weather', 'place']) if (c[k]) app.state.clock[k] = String(c[k]).slice(0, LIMITS.text.label);
-  if (c.time && !keepTime) app.state.clock.time = String(c.time).slice(0, LIMITS.text.label);
-  if (app.state.clock.anchor)
-    app.state.clock.date = fmtKDate(
-      addDaysISO(app.state.clock.anchor.date, app.state.clock.day - app.state.clock.anchor.day),
+  for (const k of ['weather', 'place']) if (c[k]) ck[k] = String(c[k]).slice(0, LIMITS.text.label);
+  if (c.time && !keepTime) ck.time = String(c.time).slice(0, LIMITS.text.label);
+  if (ck.anchor)
+    ck.date = fmtKDate(
+      addDaysISO(ck.anchor.date, ck.day - ck.anchor.day),
       storyLang(),
     ); /* a real calendar: the code counts the date */
   else if (c.date) {
     const iso = parseKDate(c.date);
     if (iso) {
-      app.state.clock.anchor = { date: iso, day: app.state.clock.day };
-      app.state.clock.date = fmtKDate(iso, storyLang());
-    } else app.state.clock.date = String(c.date).slice(0, LIMITS.text.label);
+      ck.anchor = { date: iso, day: ck.day };
+      ck.date = fmtKDate(iso, storyLang());
+    } else {
+      // the date shown to the narrator, said back, is not a new one (ARCHITECTURE.md, calendar.js)
+      const named = ownDateText(c.date).slice(0, LIMITS.text.label);
+      if (named && !sameOwnDate(named, ck.date)) [ck.date, ck.dateDay] = [named, ck.day];
+    }
   }
 }
 

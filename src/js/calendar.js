@@ -1,7 +1,8 @@
 /* ============ calendar: in-game dates and clock times ============ */
 // The weekday is computed, never written by the narrator: only for plain calendar dates, never for a world's own
 // calendar ("제국력 1203년"). Each language's date and time patterns are in reply/<lang>.js.
-import { locale } from './i18n.js';
+import { locale, tIn } from './i18n.js';
+import { normName } from './util.js';
 import { any, profiles } from './reply-words.js';
 
 // the first date in s by profile p (at its start when anchored): { y, m, d, text }, or null
@@ -30,10 +31,29 @@ const formatter = (kind, lang) =>
   ));
 const weekday = (dt, lang) => formatter('wd', lang).format(dt);
 
+// a world's own calendar date without the days-since count the screen adds to it ("정월 열사흘 (+2일)"), in half or
+// full width
+const SINCE = /\s*[(（][+＋][0-9０-９]+[^)）]*[)）]\s*$/;
+export const ownDateText = s =>
+  String(s || '')
+    .replace(SINCE, '')
+    .trim();
+// the same own-calendar date written a little differently ("정월열사흘", "Day 3. of Frost")
+const bareDate = s => normName(s).replace(/[.,、。]/g, '');
+export const sameOwnDate = (a, b) => bareDate(a) === bareDate(b);
+// the date to show for a clock (a turn's copy or the save's): a real date with its weekday; a world's own calendar with
+// the days since the narrator last named it, until it names the next
+export function clockDate(ck, lang) {
+  if (!ck || !ck.date) return '';
+  const n = !ck.anchor && ck.dateDay != null ? ck.day - ck.dateDay : 0;
+  return n > 0 ? tIn(lang, '{date} (+{n} {n|day|days})', { date: ck.date, n }) : withWeekday(ck.date);
+}
+// a clock's shown parts after D+: date, time, weather, place
+export const clockParts = (ck, lang) => [clockDate(ck, lang), ck.time, ck.weather, ck.place].filter(Boolean);
 export function parseKDate(x) {
   const s = String(x || '');
   for (const p of profiles()) {
-    const f = dateBy(p, s);
+    const f = dateBy(p, s.trim(), true); // at the start: "제국력 1203년 3월 5일" is a world's own calendar
     if (f) return utcDate(f.y, f.m, f.d) ? isoOf(f.y, f.m, f.d) : null;
   }
   return null;

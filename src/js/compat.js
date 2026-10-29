@@ -34,6 +34,8 @@ export function compat(st) {
   if (st.stats && st.stats.str === undefined) Object.assign(st.stats, rollSubStats(st.life ? st.life.originTier : 'C'));
   if (st.stats && st.stats.con === undefined) st.stats.con = rollSubStats(st.life ? st.life.originTier : 'C').con;
   st.clock = st.clock || { day: 0, date: '', time: '', weather: '', place: '' };
+  // a world's own calendar date from before the code counted the days since it (calendar.js clockDate)
+  if (st.clock.date && !st.clock.anchor && st.clock.dateDay == null) st.clock.dateDay = st.clock.day;
   murimStanding(st);
   extFill(st);
   if (!okLang(st.lang)) st.lang = langOfLife(st.life);
