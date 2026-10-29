@@ -73,7 +73,7 @@ import {
 } from './notes-view.js';
 
 const TALENT_MAX = 5;
-const REROLLS = 3; // more rolls the fate screen allows with the same answers, then the fate is final
+const REROLLS = 3; // more rolls a new game's fate screen allows with the same answers, then the fate is final
 // A regression goes on with its save's notes and prose style; a new game starts clean (nothing ticked, the default
 // style, the dice roguelike), whatever the last game used
 const startNotes = inherit => (inherit ? app.state.noteIds : []);
@@ -549,8 +549,11 @@ async function rollFromForm(inherit, sel) {
   const gender = inherit ? app.state.life.gender : sel.gender;
   const free = sel.mode === 'free' ? readFreeSetup(sel) : null;
   const profTxt = ($('#prof').value || '').trim().slice(0, 600);
+  const prev = app.pendingRoll; // a reroll's fate, which Begin could take while the profile is read
   let aff = null;
   if (profTxt && !free) {
+    const accept = $('#acceptBtn');
+    if (accept) accept.disabled = true;
     rb.disabled = true;
     rb.textContent = T('Reading your profile...');
     try {
@@ -560,6 +563,7 @@ async function rollFromForm(inherit, sel) {
     }
     rb.disabled = false;
     rb.textContent = T('Roll your fate');
+    if (app.pendingRoll !== prev) return; // the game began, or a new screen opened, meanwhile
   }
   const life = rollLife(name, gender, sel.world, free, aff);
   life.profile = profTxt;
@@ -568,7 +572,6 @@ async function rollFromForm(inherit, sel) {
   rememberFormDefaults(life);
   // the language the fate was rolled in, even if the screen changes before starting; a reroll counts on from the last
   // fate, and keeps its character list draft while the world stays the same
-  const prev = app.pendingRoll;
   app.pendingRoll = { life, inherit, lang: storyLang(), rerolls: prev ? (prev.rerolls || 0) + 1 : 0 };
   if (prev && prev.roster != null && prev.life.world.id === life.world.id) app.pendingRoll.roster = prev.roster;
   revealFate(life, inherit);
@@ -844,7 +847,7 @@ function revealFate(life, inherit, again) {
       ),
     );
   const rb = $('#rollBtn'),
-    left = REROLLS - (app.pendingRoll.rerolls || 0);
+    left = inherit ? 0 : REROLLS - (app.pendingRoll.rerolls || 0); // a regression stays left to luck
   rb.disabled = left <= 0;
   rb.classList.replace('primary', 'ghost'); // Begin with this fate is the step now
   rb.textContent =
