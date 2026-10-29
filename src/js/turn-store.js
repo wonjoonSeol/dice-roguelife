@@ -1,12 +1,11 @@
 /* ============ turn store: turns packed into size-capped page documents ============ */
-import { noteIgnored, pad } from './util.js';
+import { noteIgnored, pad, utf8Bytes } from './util.js';
 import { dset, inflate, packTurn, platform, thaw, userCol, userDoc } from './db.js';
 import { app } from './app.js';
 import { T } from './i18n.js';
 
 export const DB_DOC_CAP = 5000; // documents per artifact database
-const TEXT_ENCODER = new TextEncoder();
-const jbytes = o => TEXT_ENCODER.encode(JSON.stringify(o)).length;
+const jbytes = o => utf8Bytes(JSON.stringify(o));
 export const savePageDoc = (id, p) => userDoc(`saves/items/${id}/pages/${pad(p)}`);
 const savePagesCol = id => userCol(`saves/items/${id}/pages`);
 class StoreConflict extends Error {

@@ -400,8 +400,7 @@ function applyEvolutions(ctx) {
 // a new skill is capped one grade above the best the character already has (origin, talent or skills)
 function applyNewSkills(ctx) {
   const best = Math.min(
-    tierRank(app.state.life.originTier),
-    tierRank(app.state.life.talentTier),
+    ...[app.state.life.originTier, app.state.life.talentTier].filter(Boolean).map(tierRank), // no talent: no grade
     ...app.state.skills.map(k => tierRank(k.grade)),
   );
   for (const k of (ctx.reply.add_skills || []).slice(0, LIMITS.perReply.addSkills)) {

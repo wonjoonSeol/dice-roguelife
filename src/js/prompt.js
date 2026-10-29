@@ -1,6 +1,6 @@
 /* ============ prompt ============ */
 import PR_DEFAULT from '../../prompts.json' with { type: 'json' };
-import { stripMarks } from './util.js';
+import { kb, stripMarks, utf8Bytes } from './util.js';
 import { askOf, cmdIs, moneyText, powerGrade } from './data.js';
 import { GENDER_LABEL, SKILL_SRC, STANCE_LABEL } from './enums.js';
 import { LIMITS } from './limits.js';
@@ -19,6 +19,7 @@ import { cardIndex, cardProfile, isOpenRole, namedSetFor, namedSetOf, setIds } f
 import { mentioned, namesOf, rosterFor, rosterNow } from './roster.js';
 import { widgetOf } from './widgets.js';
 import { nextStep, standingRows, worldExt } from './world-ext.js';
+import { NOTES_UNREAD, notesReady, pickedNotes } from './notes.js';
 
 export let prompts = PR_DEFAULT; // narrator prompt text; config/prompt in the db overrides field by field
 // a prompts.json map keyed by story language ("lang", "tip", "ledgerLang", "summaryLang")
@@ -29,6 +30,11 @@ export const pr = k => {
   return en && en[k] !== undefined ? en[k] : prompts[k];
 };
 export const pl = (en, vars) => tIn(promptLang(), en, vars);
+// the talent fields of a life's opening prompt and first row; a life started with no talent says so
+export const talentVars = life =>
+  life.talent
+    ? { talent: life.talent.name, talentTier: life.talentTier }
+    : { talent: pl('None'), talentTier: pl('this life has no talent') };
 // an enum's label in the prompt's language (an unknown value as it is)
 export const plLabel = (labels, v) => (labels[v] ? pl(labels[v]).toLowerCase() : v);
 export const fillTemplate = (str, v) =>
@@ -43,14 +49,12 @@ export async function loadPromptConfig() {
 }
 
 export const recentBudget = () => Math.max(10000, Math.min(200000, Number(app.settings.recentBytes) || 40000)); // bytes of raw recent turns before the summaries take over
-const ENCODER = new TextEncoder();
-export const tbytes = x => ENCODER.encode(x).length;
 // counted in exchanges (one narrator reply with the player's line before it), the same unit as the top bar
 function recentEstimate() {
   const pool = app.turns.slice(-80);
   const ai = pool.filter(t => t.kind === 'ai').length;
   if (!ai) return null;
-  const bytes = pool.reduce((a, t) => a + tbytes(turnText(t, true)), 0);
+  const bytes = pool.reduce((a, t) => a + utf8Bytes(turnText(t, true)), 0);
   return Math.max(3, Math.round(recentBudget() / Math.max(400, bytes / ai)));
 }
 export function recentLine() {
@@ -61,19 +65,30 @@ export function recentLine() {
     (est ? T("At this game's average turn size, up to about {m} turns fit. ", { m: est }) : '')
   );
 }
-export function recentWindow() {
-  // the newest turns, taken from the end until the budget is spent (older player turns count trimmed); at least six
+export const recentWindow = () => windowOf(recentBudget()).rows;
+// the newest turns, taken from the end until the budget is spent (older player turns count trimmed); at least six.
+// used: the bytes they took of it
+function windowOf(budget) {
   const pool = app.turns.filter(t => t.i > app.state.summarizedUpto);
-  const out = [];
+  const rows = [];
   let used = 0;
   for (let i = pool.length - 1; i >= 0; i--) {
     const t = pool[i];
-    const b = tbytes(turnText(t, i < pool.length - 1));
-    if (out.length >= 6 && used + b > recentBudget()) break;
-    out.unshift(t);
+    const b = utf8Bytes(turnText(t, i < pool.length - 1));
+    if (rows.length >= 6 && used + b > budget) break;
+    rows.unshift(t);
     used += b;
   }
-  return out;
+  return { rows, used };
+}
+let sent = null; // the rows the last narrator prompt carried: { save, from, to } turn numbers
+// The rows the summaries keep out: the ones the last prompt sent, which a prompt over its limit cuts below the
+// setting's window. Without a prompt for the latest rows of this save, the setting's window.
+export function sentWindow() {
+  const last = app.turns[app.turns.length - 1];
+  if (!sent || !last || !app.currentSave || sent.save !== app.currentSave.id || sent.to < last.i - 1)
+    return recentWindow();
+  return app.turns.filter(t => t.i >= sent.from && t.i > app.state.summarizedUpto);
 }
 export function turnText(t, trim, noAdmin) {
   if (t.kind === 'user') {
@@ -169,8 +184,8 @@ const PROMPT_ORDER = [
 ];
 // recent turns for the prompt: older player turns are trimmed (the action survives, the long deliberation does not),
 // and only the last three remarks ADMIN actually made are kept
-function recentForPrompt() {
-  const recent = recentWindow();
+const recentBlock = str => (str ? `${pl('[Recent]')}\n${str}` : '');
+function recentForPrompt(recent) {
   const aiIdx = recent.map((t, i) => (t.kind === 'ai' && t.out && t.out.admin ? i : -1)).filter(i => i >= 0);
   const keepAdmin = new Set(aiIdx.slice(-3)); // the last three remarks ADMIN actually made
   const recentStr = recent
@@ -354,7 +369,7 @@ function namedBlock(hay, turn, sets, own) {
     .map((g, i) => [g, g.vals.some(v => v && ctx.includes(v)) ? 1 : 0, (i - r + N) % N])
     .sort((a, b) => b[1] - a[1] || b[0].roster - a[0].roster || a[2] - b[2]) // mentioned, then the roster's, then rotation
     .map(([g]) => g);
-  const bytes = x => new TextEncoder().encode(x).length;
+  const bytes = utf8Bytes;
   const parts = [];
   let size = 0,
     open = false,
@@ -472,14 +487,41 @@ function rollBlock(roll) {
         : '';
 }
 const ifAny = (items, f) => (items.length ? f(items.join(' | ')) : '');
+// the player's notes: the Memory tab's box, then each ticked library note under its own name
+const noteHead = n => `\n\n${pl('[Note: {name}]', { name: n.name })}\n`;
+function userBlock(memo, notes) {
+  if (!memo && !notes.length) return '';
+  const head = pl('[Player notes: always follow]') + (memo ? '\n' + memo : '');
+  return head + notes.map(n => noteHead(n) + n.text).join('');
+}
+// the notes' part of that block in bytes: what the size error and the meter count
+export const notesBytes = notes => notes.reduce((a, n) => a + utf8Bytes(noteHead(n)) + n.bytes, 0);
+// what the ticked notes take of the prompt's limit (0 when not known yet)
+export function notesShare(ids) {
+  const bytes = notesBytes(pickedNotes({ noteIds: ids }));
+  const max = (platform.limits && platform.limits.maxPromptBytes) || 0;
+  return { bytes, max, heavy: !!max && bytes > max / 3 };
+}
+const notesTooLarge = (notes, max) =>
+  Object.assign(
+    new Error(
+      T(
+        "The ticked notes ({kb}) don't fit in this model's prompt ({max}) with the story, so nothing was sent. Untick or shorten some in the Memory tab, then try again.",
+        { kb: kb(notesBytes(notes)), max: kb(max) },
+      ),
+    ),
+    { code: 'notes_too_large', shown: true },
+  );
 
 // turn: what runTurn rolled for this reply (roll, luck, fate) and what a rewrite must fix (redo)
 export function buildPrompt(text, cmd, turn = {}) {
   const { roll = null, luck = null, fate = null, redo = '' } = turn;
   const l = app.state.life,
     ck = app.state.clock;
-  const recentStr = recentForPrompt();
+  let win = windowOf(recentBudget());
+  const recentStr = recentForPrompt(win.rows);
   const hay = recentStr.slice(-3000) + ' ' + text;
+  const notes = pickedNotes();
   const sets = charSets(),
     ix = cardIndex(sets),
     own = rosterCards(ix);
@@ -530,7 +572,7 @@ export function buildPrompt(text, cmd, turn = {}) {
     stat: statBlock(),
     ext: extBlock(),
     clock: `${pl('[Time]')} D+${ck.day}${ck.date ? ', ' + withWeekday(ck.date) : ''}${ck.time ? ', ' + ck.time : ''}${ck.weather ? ', ' + ck.weather : ''}${ck.place ? ', ' + ck.place : ''}`,
-    skill: `${pl('[Skills]')} ${app.state.skills.map(k => `${k.name}(${k.grade}, Lv.${k.lv || 1}${k.cost ? pl(', cost {n}%', { n: k.cost }) : ''}${k.src === SKILL_SRC.INHERITED ? pl(', inherited from a past life') : ''}): ${k.desc}`).join(' | ')}`,
+    skill: `${pl('[Skills]')} ${app.state.skills.map(k => `${k.name}(${k.grade}, Lv.${k.lv || 1}${k.cost ? pl(', cost {n}%', { n: k.cost }) : ''}${k.src === SKILL_SRC.INHERITED ? pl(', inherited from a past life') : ''}): ${k.desc}`).join(' | ') || pl('None')}`,
     note: app.state.stateNote ? pl('[Current situation] {note}', { note: app.state.stateNote }) : '',
     quest: ifAny(
       app.state.quests.filter(q => q.status === 'active').map(q => q.title + (q.note ? ` (${q.note})` : '')),
@@ -574,12 +616,12 @@ export function buildPrompt(text, cmd, turn = {}) {
     sum: app.state.summaries.length
       ? `${pl('[Story so far]')}\n${app.state.summaries.map(x => '- ' + x.text).join('\n')}`
       : '',
-    user: app.state.userNotes ? `${pl('[Player notes: always follow]')}\n${app.state.userNotes}` : '',
+    user: userBlock(app.state.userNotes, notes),
     named: namedBlock(hay, turn, sets, own),
     profiles: profilesBlock(people, own),
     situation: situationBlock(people),
     bg: pl('[Place words] {list}', { list: vocab.length ? vocab.join(', ') : pl('none. scene is null') }),
-    recent: recentStr ? `${pl('[Recent]')}\n${recentStr}` : '',
+    recent: recentBlock(recentStr),
     widgets: widgetsBlock(cmd),
     cmd: cmdBlock(cmd),
     redo: redo ? fillTemplate(pr('redo'), { reason: redo }) : '',
@@ -618,7 +660,31 @@ export function buildPrompt(text, cmd, turn = {}) {
       .join('\n\n');
   let p = build([]);
   const max = (platform.limits && platform.limits.maxPromptBytes) || 0;
-  if (max && new Blob([p]).size > max * 0.9) p = build(['lore', 'bg', 'past']);
+  const room = max * 0.9; // the request id and a retry's format line still fit
+  if (max && utf8Bytes(p) > room) {
+    const skip = ['lore', 'bg', 'past'];
+    p = build(skip);
+    // then fewer recent turns, down to six rows; the notes are never cut
+    let size = utf8Bytes(p);
+    if (size > room && win.rows.length > 6) {
+      while (size > room && win.rows.length > 6) {
+        const was = utf8Bytes(P.recent);
+        win = windowOf(win.used - (size - room));
+        P.recent = recentBlock(recentForPrompt(win.rows));
+        size -= was - utf8Bytes(P.recent);
+      }
+      p = build(skip);
+      size = utf8Bytes(p);
+    }
+    // when the notes alone take the prompt over, nothing is sent
+    if (notes.length && size > room) {
+      P.user = userBlock(app.state.userNotes, []);
+      if (utf8Bytes(build(skip)) <= room) throw notesTooLarge(notes, max);
+    }
+  }
+  const rows = win.rows;
+  sent =
+    app.currentSave && rows.length ? { save: app.currentSave.id, from: rows[0].i, to: rows[rows.length - 1].i } : null;
   return p;
 }
 
@@ -671,13 +737,14 @@ export function peekReply(text) {
 // turn: the reply being written (turn.js runTurn); its request id, its stop handle, and what to do as it streams (turn.onText)
 export async function callNarrator(text, cmd, turn) {
   const req = turn.req;
+  if (!(await notesReady())) throw Object.assign(new Error(T(NOTES_UNREAD)), { code: 'notes_unread', shown: true });
   const prompt = buildPrompt(text, cmd, turn) + (req ? `\n(req ${req})` : '');
   const cacheOpt = () => (!req ? false : STALE_REQ.has(req) ? Object.assign({ refresh: true }, REPLAY) : REPLAY);
   const stale = () => {
     if (req) STALE_REQ.add(req);
   };
   try {
-    const tok = Math.round(new TextEncoder().encode(prompt).length / 2.6);
+    const tok = Math.round(utf8Bytes(prompt) / 2.6);
     promptStats.push(tok);
     promptStats = promptStats.slice(-20);
   } catch {
@@ -743,7 +810,10 @@ export async function callNarrator(text, cmd, turn) {
       logErr('compact', e3);
       if (e3 && FATAL.includes(e3.code)) throw e3;
     }
-    throw Object.assign(new Error(T("Couldn't read the reply (see ⚙ → Recent errors)")), { code: 'no_json' });
+    throw Object.assign(new Error(T("Couldn't read the reply (see ⚙ → Recent errors)")), {
+      code: 'no_json',
+      shown: true,
+    });
   }
 }
 function extractJson(t) {

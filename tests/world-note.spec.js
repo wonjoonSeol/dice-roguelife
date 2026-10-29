@@ -48,6 +48,7 @@ test('world note', async ({ game }) => {
   await pg.waitForTimeout(400);
   await pg.click('#mseg [data-m="free"]');
   await pg.fill('#worldNote', '이번 생엔 오빠가 있다.');
+  await pg.selectOption('#talents .trow >> nth=0 >> .tt', 'none'); // and no talent at all
   await pg.click('#rollBtn');
   await pg.waitForTimeout(1500);
   await pg.click('#acceptBtn');
@@ -59,5 +60,23 @@ test('world note', async ({ game }) => {
     'the next life adds its note once to the notes it inherits',
     n === '전투 묘사는 짧게.\n' + NOTE + '\n이번 생엔 오빠가 있다.',
   );
+  const bare = await pg.evaluate(() => ({ talent: DR.app.state.life.talent, opening: window.__prompts.at(-1) }));
+  check(
+    errs,
+    'a life with no talent starts with none, and its opening says so with no undefined',
+    bare.talent === null && bare.opening.includes('재능 없음') && !bare.opening.includes('undefined'),
+  );
+  // the box kept as a library note instead: ticked for the game and emptied, so it isn't sent twice
+  await pg.evaluate("DR.startNewLifeForm({name:''});0");
+  await pg.click('#mseg [data-m="free"]');
+  await pg.fill('#worldNote', '노트로 남길 설정.');
+  await pg.click('#worldNoteSave');
+  await pg.click('#dlgOk');
+  await pg.waitForFunction("!!DR.noteByName('세계관')");
+  const kept = await pg.evaluate(() => ({
+    ticked: document.querySelector(`#nlNote-${DR.noteByName('세계관').id}`)?.checked,
+    box: document.querySelector('#worldNote').value,
+  }));
+  check(errs, 'the setting box saved as a note is ticked and emptied', kept.ticked === true && kept.box === '');
   expect(errs).toEqual([]);
 });

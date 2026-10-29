@@ -23,10 +23,12 @@ import { loadSaves, useCapability } from './boot.js';
 import { IMGX, withPicKeys } from './library.js';
 import { imgUrl } from './images.js';
 import { startNewLifeForm } from './new-life.js';
-import { closeGone, openSave } from './persistence.js';
+import { cardFields, closeGone, openSave } from './persistence.js';
 import { renderTurn } from './log.js';
 import { widgetOf } from './widgets.js';
 import { locale, T, Tc, uiLang } from './i18n.js';
+import { deleteNote, NOTES_UNREAD, notesForFile, notesReady, planNotes, saveNotes } from './notes.js';
+import { libraryChanged } from './notes-view.js';
 
 /* ============ story export ============ */
 function openExport(id) {
@@ -146,6 +148,11 @@ export async function exportSaveFile(id) {
       toast(T('No state found'));
       return;
     }
+    if (!(await notesReady(state))) {
+      say('');
+      toast(T(NOTES_UNREAD));
+      return;
+    }
     const all =
       app.currentSave && app.currentSave.id === id ? await turnStore.loadAll(id) : await turnStore.loadAll(id);
     const file = {
@@ -156,6 +163,7 @@ export async function exportSaveFile(id) {
       save: meta,
       state,
       turns: await withPicKeys(all, say),
+      notes: notesForFile(state), // another install has its own library, without these ids
     };
     const raw = await gzipBytes(file);
     if (!raw) {
@@ -211,14 +219,29 @@ export async function importSaveFile(f) {
   const say = t => {
     if (st) st.textContent = t;
   };
+  if (!(await notesReady(j.state))) {
+    toast(T(NOTES_UNREAD));
+    return;
+  }
+  // the notes go in first: one that can't be written leaves the save's ticks, and a save that can't be written takes
+  // its notes back out
+  const plan = planNotes(j.notes, j.state.noteIds);
+  const { saved, error } = plan.add.length ? await saveNotes(plan.add) : { saved: [], error: null };
+  const lost = plan.add.filter(n => !saved.some(s => s.id === n.id));
+  j.state.noteIds = plan.ids.filter(nid => !lost.some(n => n.id === nid));
   const id = uid();
-  const meta = Object.assign({}, j.save || {}, {
-    id,
-    name: T('{name} (imported)', { name: (j.save && j.save.name) || T('Imported life') }),
-    updatedAt: nowIso(),
-    parent: null,
-    store: 2,
-  });
+  const meta = Object.assign(
+    {},
+    j.save || {},
+    {
+      id,
+      name: T('{name} (imported)', { name: (j.save && j.save.name) || T('Imported life') }),
+      updatedAt: nowIso(),
+      parent: null,
+      store: 2,
+    },
+    cardFields(j.state),
+  );
   try {
     say(T('Saving turns'));
     const rows = [];
@@ -229,18 +252,30 @@ export async function importSaveFile(f) {
       say(T('Saving turns {k}/{n}', { k: k + 1, n: pages.length }));
     }
     meta.pages = pages.length;
-    meta.turns = j.turns.length;
     await userDoc(`states/items/${id}`).set(j.state);
     await userDoc(`saves/items/${id}`).set(meta);
     await loadSaves();
-    say('');
-    toast(T('Imported: {name} ({n} {n|turn|turns})', { name: meta.name, n: j.turns.length }), 4000);
-    renderSaves();
   } catch (e) {
     say('');
+    await Promise.allSettled(saved.map(n => deleteNote(n.id)));
+    if (saved.length) libraryChanged();
     toast(T('Import failed: {err}', { err: e.code || e.message }));
     logErr('import', e);
+    return;
   }
+  say('');
+  if (saved.length) libraryChanged();
+  const said = [
+    T('Imported: {name} ({n} {n|turn|turns})', { name: meta.name, n: j.turns.length }),
+    lost.length &&
+      T('Notes not added: {names} ({err}).', {
+        names: lost.map(n => n.name).join(', '),
+        err: error.code || error.message,
+      }),
+    plan.big.length && T('Over 32 KB, not added: {names}.', { names: plan.big.join(', ') }),
+  ].filter(Boolean);
+  toast(said.join(' '), said.length > 1 ? 6000 : 4000);
+  renderSaves();
 }
 export async function exportStory(id, fmt, range, mine, stat) {
   const meta = app.saves.find(s => s.id === id);
@@ -436,6 +471,7 @@ async function dbUsage() {
   const used =
     new Set(IMGX.map.values()).size +
     Object.keys(app.setMeta).length +
+    (app.notes || []).length +
     app.saves.reduce((a, s) => a + docsOf(s), 0) +
     hallCount +
     8;

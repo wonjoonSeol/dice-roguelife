@@ -505,6 +505,10 @@ function playTurnCue(res, turn) {
 }
 export function sampleError(e) {
   const c = e && e.code;
+  if (e && e.shown) {
+    toast(e.message, 8000); // the game worded it itself
+    return;
+  }
   toast(
     c === 'rate_limited'
       ? T('Too many requests. Try again in a moment')

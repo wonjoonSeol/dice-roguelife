@@ -78,15 +78,21 @@ const UTF8 = new TextDecoder();
 // labels, in the caller's order) it is valid in, else in the first one anyway. macOS writes decomposed (NFD) Hangul
 // and kana, so every name is composed to match names typed elsewhere.
 function entryName(u8, flags, legacy) {
-  if (flags & UTF8_NAMES) return UTF8.decode(u8).normalize('NFC');
+  return (flags & UTF8_NAMES ? UTF8.decode(u8) : decodeText(u8, legacy)).normalize('NFC');
+}
+// text in UTF-8 when it is valid as such (a BOM dropped), else in the first legacy encoding it is valid in, else in
+// the first one anyway
+export function decodeText(u8, legacy) {
   for (const label of ['utf-8', ...legacy])
     try {
-      return new TextDecoder(label, { fatal: true }).decode(u8).normalize('NFC');
+      return new TextDecoder(label, { fatal: true }).decode(u8);
     } catch {
       // not valid in this encoding: try the next
     }
-  return new TextDecoder(legacy[0]).decode(u8).normalize('NFC');
+  return new TextDecoder(legacy[0]).decode(u8);
 }
+// the legacy encodings to try, by the screen's language: Japanese Windows writes shift_jis, Korean euc-kr
+export const legacyEncodings = lang => (lang === 'ja' ? ['shift_jis', 'euc-kr'] : ['euc-kr', 'shift_jis']);
 
 // The entries of a zip, read in slices so a pack of hundreds of MB is never in memory at once. Each has a path and
 // either open (resolves a Blob: a slice when stored, inflated when deflated) or skip, why it can't be opened:

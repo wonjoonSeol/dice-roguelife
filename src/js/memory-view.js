@@ -1,5 +1,6 @@
 /* ============ memory view ============ */
 import { $, esc, toast } from './util.js';
+import { LIMITS } from './limits.js';
 import { T } from './i18n.js';
 import { app, isIdle } from './app.js';
 import { renamePerson, saveRoster } from './people.js';
@@ -9,18 +10,21 @@ import { askConfirm } from './sheet.js';
 import { charSets } from './images.js';
 import { persist } from './persistence.js';
 import { seenSpan } from './reroll.js';
+import { renderNoteLibrary } from './notes-view.js';
 
 export function renderMemory() {
   const box = $('#memBox');
   if (!app.state) {
-    box.innerHTML = `<h3 class="view-title mem-empty-title">${T('Memory')}</h3><p class="muted mem-empty">${T("No game in progress yet. Once you start one, this save's notes, summaries, lore, relationships and casting gather here.<br>App settings are under the ⚙ button at the top.")}</p>`;
+    box.innerHTML = `<h3 class="view-title mem-empty-title">${T('Memory')}</h3><p class="muted mem-empty">${T("No game in progress yet. Once you start one, this save's notes, summaries, lore, relationships and casting gather here.<br>App settings are under the ⚙ button at the top.")}</p><div class="sec note-lib" id="noteLib"></div>`;
+    renderNoteLibrary();
     return;
   }
   const none = `<span class="muted">${T('None')}</span>`;
   box.innerHTML = `<h3 class="view-title">${T('Memory')}</h3><p class="muted mem-intro">${T('This applies to this save slot only. It never mixes with other saves or other chats.')}</p>
    <div class="field"><label>${T('Character profile (fixed for this life; you can change it on the new game screen of your next life)')}</label><p class="lore mem-profile">${app.state.life.profile ? esc(app.state.life.profile) : none}</p></div>
-   <div class="field"><label for="notes">${T('Notes: sent to Claude every turn')}</label><textarea id="notes" rows="5" maxlength="1200" placeholder="${T('e.g. Make ADMIN more cynical. Keep fight scenes short. There is no magic in this world. My childhood friend Seoyun lives next door.')}">${esc(app.state.userNotes)}</textarea>
-    <div class="row"><button class="btn" id="saveNotes">${T('Save notes')}</button><span class="muted count-note" id="notesCount">${app.state.userNotes.length}/1200</span></div></div>
+   <div class="field"><label for="notes">${T('Notes: sent to Claude every turn')}</label><textarea id="notes" rows="5" maxlength="${LIMITS.userNotes}" placeholder="${T('e.g. Make ADMIN more cynical. Keep fight scenes short. There is no magic in this world. My childhood friend Seoyun lives next door.')}">${esc(app.state.userNotes)}</textarea>
+    <div class="row"><button class="btn" id="saveNotes">${T('Save notes')}</button><span class="muted count-note" id="notesCount">${app.state.userNotes.length}/${LIMITS.userNotes}</span></div></div>
+   <div class="sec note-lib" id="noteLib"></div>
    <div class="sec mem-roster"><h4>${T('Characters ({n})', { n: rosterNow().length })}</h4><p class="muted mem-hint">${T("For {world} lives in this save; a life in another world keeps its own list. A name that matches a set card's name or alias in the Images tab wears that face.", { world: esc(app.state.life.world.name) })}</p>${rosterEditorHtml(rosterTextOf(app.state, app.state.life.world.id))}
     <div class="row"><button class="btn" data-roster-save>${T('Save characters')}</button></div></div>
    <div class="sec"><h4>${T('Current situation')}</h4><p class="lore mem-state">${app.state.stateNote ? esc(app.state.stateNote) : none}</p></div>
@@ -76,9 +80,10 @@ export function renderMemory() {
     }</div>
    <div class="sec"><h4>${T('Past lives ({n})', { n: app.state.pastLives.length })}</h4>${app.state.pastLives.map(p => `<div class="lore"><b>${T('life {n}', { n: p.lifeNo })}</b><p>${esc(p.world)}, ${esc(p.origin)}(${esc(p.tier)}), ${T('{score} pts.', { score: esc(p.score) })} ${esc(p.epitaph)}</p></div>`).join('') || `<p class="muted empty">${T('None yet')}</p>`}</div>
    <p class="muted mem-footer">${T('App settings (model, language and more) are under the ⚙ button at the top.')}</p>`;
-  $('#notes').oninput = e => ($('#notesCount').textContent = e.target.value.length + '/1200');
+  renderNoteLibrary();
+  $('#notes').oninput = e => ($('#notesCount').textContent = e.target.value.length + '/' + LIMITS.userNotes);
   $('#saveNotes').onclick = async () => {
-    app.state.userNotes = $('#notes').value.trim();
+    app.state.userNotes = $('#notes').value.trim().slice(0, LIMITS.userNotes);
     await persist();
     toast(T('Notes saved'));
   };
