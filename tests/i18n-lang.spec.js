@@ -154,7 +154,8 @@ test('changing the language on a rolled fate keeps the form and the fate', async
   const before = await pg.evaluate('JSON.stringify(DR.app.pendingRoll.life)');
   await pg.selectOption('#nlLang', 'ko');
   await pg.waitForTimeout(300);
-  check(errs, 'the form is Korean', (await pg.textContent('#rollBtn')).includes('운명'));
+  // the roll button now offers a reroll, in Korean
+  check(errs, 'the form is Korean', (await pg.textContent('#rollBtn')).includes('다시 굴리기'));
   check(errs, 'the fate is the same', (await pg.evaluate('JSON.stringify(DR.app.pendingRoll.life)')) === before);
   check(errs, 'the fate cards are shown', (await pg.locator('#fate .card').count()) >= 4);
   check(errs, 'gender stays female', (await pg.getAttribute('#gseg [data-g="female"]', 'aria-pressed')) === 'true');
