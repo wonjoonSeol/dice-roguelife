@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import { join } from 'node:path';
-import { adoptOldData, checkConfig } from '../server.js';
+import tls from 'node:tls';
+import { adoptOldData, checkConfig, trustSystemCertificates } from '../server.js';
 import { openStore } from '../store.js';
 import { hostStatus, openServer, tempDir } from './support.js';
 
@@ -303,5 +304,48 @@ test('an update copies the data and config.json older versions kept in the app f
   } finally {
     rmSync(from, { recursive: true, force: true });
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the server trusts the system certificate store too', () => {
+  // older Node versions the app allows lack the call, and keep their own list
+  if (!tls.setDefaultCACertificates) return assert.equal(trustSystemCertificates(), false);
+  assert.equal(trustSystemCertificates(), true);
+  const now = new Set(tls.getCACertificates('default'));
+  assert.ok(tls.getCACertificates('system').every(c => now.has(c)));
+});
+
+test('a provider that cannot be reached says why, a certificate only the system trusts with its own code', async () => {
+  let reason = '';
+  const s = await openServer({
+    fetcher: async () => {
+      throw Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error(reason), { code: reason }) });
+    },
+  });
+  const config = { provider: 'anthropic', endpoint: 'https://api.anthropic.com/v1', protocol: 'anthropic', model: 'm' };
+  const sample = async () => (await s.call('/api/sample', { prompt: 'hi' })).json();
+  const logged = [];
+  const error = console.error;
+  console.error = line => logged.push(line);
+  try {
+    await s.call('/api/connection/set', { name: 'P', config, apiKey: 'secret-1' });
+    reason = 'SELF_SIGNED_CERT_IN_CHAIN';
+    assert.deepEqual(await sample(), { code: 'provider_certificate' });
+    reason = 'DEPTH_ZERO_SELF_SIGNED_CERT'; // a self-signed local server is not security software
+    assert.deepEqual(await sample(), { code: 'provider_error' });
+    reason = 'ECONNREFUSED';
+    assert.deepEqual(await sample(), { code: 'provider_error' });
+    reason = '';
+    assert.deepEqual(await sample(), { code: 'provider_error' });
+    assert.deepEqual(logged, [
+      'Provider request failed: SELF_SIGNED_CERT_IN_CHAIN',
+      'Provider request failed: DEPTH_ZERO_SELF_SIGNED_CERT',
+      'Provider request failed: ECONNREFUSED',
+      'Provider request failed: TypeError',
+    ]);
+    assert.ok(!logged.join().includes('secret-1'), 'the key never reaches the log');
+  } finally {
+    console.error = error;
+    await s.stop();
   }
 });

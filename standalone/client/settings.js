@@ -8,9 +8,13 @@ import { $, esc } from '../../src/js/util.js';
 import { tr } from './i18n.js';
 import { post } from './net.js';
 import {
+  DEFAULT_MAX,
+  MODELS,
   PROVIDERS,
+  STOCK_MAX,
   activeProfile,
   deleteProfile,
+  modelPreset,
   profileConfig,
   profileHasKey,
   profileNames,
@@ -59,6 +63,7 @@ function panelHtml() {
     ${field('apiKey', tr('API key (optional for local models)'), 'type="password" autocomplete="off"')}
     ${check('apiForget', tr('Remove the saved key'))}
     ${field('apiModel', tr('Model ID (Azure: deployment name)'), 'autocomplete="off"')}
+    <div class="row" id="apiPresets"></div>
     ${field('apiSummary', tr('Summary model ID (optional)'), 'autocomplete="off"')}
     ${field('apiVersion', tr('Azure API version'), 'placeholder="2024-10-21"')}
     ${check('apiVision', tr('Enable image analysis (vision model required)'))}
@@ -138,6 +143,15 @@ export function bindProviderSettings(root) {
     // Claude Code has no address, pictures or network retries; its key is optional (else claude's own login)
     for (const id of ['Endpoint', 'Vision', 'Retries']) box(id).hidden = cli;
   };
+  const stockMax = () => STOCK_MAX.has(Number(q('Max').value)); // false once the player typed their own limit
+  // the provider's recommended models, one button each (a datalist would only list what matches the filled-in text)
+  const suggest = () => {
+    const list = MODELS[q('Provider').value] || [];
+    q('Presets').innerHTML = list.length
+      ? `<span class="muted">${tr('Recommended')}</span>` +
+        list.map(([m]) => `<button type="button" class="btn ghost" data-model="${esc(m)}">${esc(m)}</button>`).join('')
+      : '';
+  };
   // the profile list, then the chosen profile's settings (a new one starts from the defaults)
   const show = name => {
     const names = profileNames();
@@ -155,6 +169,7 @@ export function bindProviderSettings(root) {
     q('Delete').textContent = tr('Delete profile');
     armed = false;
     protocolFields();
+    suggest();
   };
   // after the profiles changed: show the one in use, and let the game know its limits
   const refresh = async message => {
@@ -188,8 +203,27 @@ export function bindProviderSettings(root) {
     const p = PROVIDERS.find(p => p.id === q('Provider').value);
     q('Endpoint').value = p.endpoint;
     q('Protocol').value = p.protocol;
-    q('Key').value = q('Model').value = q('Summary').value = '';
+    // a provider with recommended models starts on the first one, with its summary model and token limit
+    const first = (MODELS[p.id] || [])[0];
+    q('Key').value = '';
+    q('Model').value = first ? first[0] : '';
+    q('Summary').value = first ? first[1] : '';
+    if (stockMax()) q('Max').value = first ? first[2] : DEFAULT_MAX;
     protocolFields();
+    suggest();
+  };
+  q('Presets').onclick = e => {
+    const b = e.target.closest('button[data-model]');
+    if (!b) return;
+    q('Model').value = b.dataset.model;
+    q('Model').onchange();
+  };
+  // choosing a recommended model fills an empty summary model, and the token limit while it is still a stock value
+  q('Model').onchange = () => {
+    const m = modelPreset(q('Provider').value, q('Model').value.trim());
+    if (!m) return;
+    if (!q('Summary').value.trim()) q('Summary').value = m[1];
+    if (stockMax()) q('Max').value = m[2];
   };
   q('Protocol').onchange = protocolFields;
   const save = async () => {
