@@ -78,7 +78,9 @@ test('clock', async ({ game }) => {
       const ck = DR.app.state.clock;
       return [ck.date, DR.clockDate(ck, 'ko'), DR.buildPrompt('간다', null).includes(DR.clockDate(ck, 'ko'))];
     }, clock);
-  await pg.evaluate("DR.app.state.clock={day:1,date:'정월 열사흘',dateDay:1,time:'오전 6시 30분',weather:'',place:''};0");
+  await pg.evaluate(
+    "DR.app.state.clock={day:1,date:'정월 열사흘',dateDay:1,time:'오전 6시 30분',weather:'',place:''};0",
+  );
   const twoLater = await own({ days_passed: 2, time: '오후 6시 40분' });
   const oneMore = await own({ days_passed: 1, time: '오전 6시 30분' });
   const echoed = await own({ days_passed: 0, time: '오전 7시', date: '정월 열사흘 (+3일)' });
