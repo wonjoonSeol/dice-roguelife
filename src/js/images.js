@@ -94,27 +94,69 @@ export const picIds = ti =>
     ...listOf(ti.opening),
     ti.banner,
   ].filter(Boolean);
+// Openings are marked by tags on any kind of picture (ARCHITECTURE.md, 오프닝): opening or opening:<name> makes it a
+// frame of that sequence, order:<n> its place; game-master marks the banner shown when no sequence fits.
+const OPENING_RE = /^opening(?:\s*[:：]\s*(.*))?$/i;
+const ORDER_RE = /^order\s*[:：]\s*(\d+)$/i;
+const tagList = x => (x && Array.isArray(x.tags) ? x.tags.map(t => String(t).trim()) : []);
+// the sequence a frame belongs to ('' for plain opening), or null for any other picture
+export function openingSeq(x) {
+  for (const t of tagList(x)) {
+    const m = OPENING_RE.exec(t);
+    if (m) return (m[1] || '').trim();
+  }
+  return null;
+}
+export const isOpening = x => openingSeq(x) !== null;
+export const isGameMaster = x => tagList(x).some(t => t.toLowerCase() === 'game-master');
+const orderOf = x => {
+  const m = tagList(x)
+    .map(t => ORDER_RE.exec(t))
+    .find(Boolean);
+  return m ? +m[1] : Infinity;
+};
+const fileOf = x => String(x.file || x.name || '');
+// order:<n> first, then file names in natural order (panel 2 before panel 10)
 const byOrder = (a, b) =>
-  (a.order || 0) - (b.order || 0) || String(a.file || a.name).localeCompare(String(b.file || b.name));
-export const openingName = x => `opening_${x.set ? x.set + '_' : ''}${x.order || 1}`;
-// opening sequences (opening_{n}, opening_{set}_{n}): the sequence name ('' for the unnamed one) -> frames in order
+  orderOf(a) - orderOf(b) || fileOf(a).localeCompare(fileOf(b), undefined, { numeric: true, sensitivity: 'base' });
+// tags making a picture frame n of a sequence, in place of any opening tags it had
+export const withOpeningTags = (tags, seq, n) => [
+  seq ? 'opening:' + seq : 'opening',
+  ...(n >= 1 ? ['order:' + Math.floor(n)] : []),
+  ...(Array.isArray(tags) ? tags : []).filter(
+    t => !OPENING_RE.test(String(t).trim()) && !ORDER_RE.test(String(t).trim()),
+  ),
+];
+// v2.16.4 stored openings as their own kind (set: the sequence, order: the number); such a row becomes a tagged scene
+export function openingKindToTags(x) {
+  if (!x || x.kind !== 'opening') return x;
+  x.tags = withOpeningTags(x.tags, x.set || '', x.order);
+  x.kind = 'scene';
+  delete x.set;
+  delete x.order;
+  return x;
+}
+// the sequence name ('' for the unnamed one) -> its frames in order
 export function openingSets() {
   const m = {};
-  for (const x of app.images) if (x.kind === 'opening') (m[x.set || ''] = m[x.set || ''] || []).push(x);
+  for (const x of app.images) {
+    const k = openingSeq(x);
+    if (k !== null) (m[k] = m[k] || []).push(x);
+  }
   for (const k in m) m[k].sort(byOrder);
   return m;
 }
 // a sequence fits every world any of its frames names (none: every world); a retired frame retires the sequence
 export const openingWorlds = frames => [...new Set(frames.flatMap(worldsOf))];
 export const openingOff = frames => frames.some(x => x.off);
-// The first turn of a life: a sequence that fits the world, else a bg_game-master background, else the admin set's
+// The first turn of a life: a sequence that fits the world, else a picture tagged game-master, else the admin set's
 // picture. Stored on the turn's img as opening (frame ids) or banner (one id).
 export function openingFor(w) {
   const seqs = Object.values(openingSets()).filter(f => !openingOff(f) && fitsWorld({ worlds: openingWorlds(f) }, w));
   if (seqs.length) return { opening: pick(seqs).map(x => x.id) };
-  const gm = app.images.filter(
-    x => x.kind === 'scene' && !x.off && bgKey(x).startsWith('game-master') && fitsWorld(x, w),
-  );
+  // a face is labelled on its set card
+  const fits = x => fitsWorld(x, w) && (x.kind !== 'char' || fitsWorld(app.setMeta[x.set || x.name], w));
+  const gm = app.images.filter(x => isGameMaster(x) && !x.off && fits(x));
   if (gm.length) return { banner: pick(gm).id };
   const adm = charSetsAll().admin || [];
   const emo = e => adm.find(x => (x.emotion || 'neutral') === e);
@@ -144,7 +186,7 @@ export function setCover(k, imgs) {
 export function charSetsAll() {
   const m = {};
   for (const x of app.images) {
-    if (x.kind !== 'char') continue;
+    if (x.kind !== 'char' || isOpening(x)) continue;
     const k = x.set || x.name;
     (m[k] = m[k] || []).push(x);
   }
@@ -153,7 +195,13 @@ export function charSetsAll() {
 export function charSets() {
   const m = {};
   for (const x of app.images) {
-    if (x.kind !== 'char' || x.off || (app.setMeta[x.set || x.name] || {}).off || (x.set || x.name) === 'admin')
+    if (
+      x.kind !== 'char' ||
+      x.off ||
+      (app.setMeta[x.set || x.name] || {}).off ||
+      (x.set || x.name) === 'admin' ||
+      isOpening(x)
+    )
       continue;
     const k = x.set || x.name;
     (m[k] = m[k] || []).push(x);

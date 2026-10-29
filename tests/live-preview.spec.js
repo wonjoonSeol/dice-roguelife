@@ -12,16 +12,19 @@ const J = String.raw`async(p,o)=>{
     window.__same=DR.app.turn&&DR.app.turn.preview===window.__first; window.__text=document.querySelector('#livePrev').textContent;}
   return {admin:'',narration:'골목으로 들어선다.',system:[],choices:['a'],stat_changes:{},clock:{days_passed:0},memory:{},dead:false,scene:'alley, day'}}`;
 
-// a life's first reply shows an opening: a hunter sequence (listed out of order), a murim one, bg_game-master
-// backgrounds (one for every world, one for murim) and the admin set, which only comes after them
+// a life's first reply shows an opening, from the stored list: a hunter sequence of a background, a face and a
+// v2.16.4 row of the old opening kind (its order:1 puts it first, then panel 2 before panel 10), a murim sequence,
+// pictures tagged game-master (one for every world, one for murim) and the admin set, which only comes after them
 const OPENING = [
-  { id: 'o2', kind: 'opening', set: '', order: 2, name: 'opening_2', worlds: ['hunter'], world: 'hunter', tags: [] },
-  { id: 'o1', kind: 'opening', set: '', order: 1, name: 'opening_1', worlds: ['hunter'], world: 'hunter', tags: [] },
-  { id: 'm1', kind: 'opening', set: 'murim', order: 1, name: 'opening_murim_1', worlds: ['murim'], world: 'murim' },
-  { id: 'g1', kind: 'scene', name: 'game-master_indoor', worlds: [], world: 'any', tags: [] },
-  { id: 'g2', kind: 'scene', name: 'game-master_hall', worlds: ['murim'], world: 'murim', tags: [] },
+  { id: 'o2', kind: 'scene', name: 'panel_10', file: 'panel 10.png', worlds: ['hunter'], tags: ['opening'] },
+  { id: 'o1', kind: 'char', set: 'x', name: 'x_neutral', file: 'panel 2.png', worlds: ['hunter'], tags: ['opening'] },
+  { id: 'o3', kind: 'opening', set: '', order: 1, name: 'opening_1', file: 'z.png', worlds: ['hunter'], tags: [] },
+  { id: 'm1', kind: 'scene', name: 'm', file: 'a.png', worlds: ['murim'], tags: ['opening:murim'] },
+  { id: 'g1', kind: 'char', set: 'gm', emotion: 'neutral', name: 'gm_neutral', worlds: [], tags: ['game-master'] },
+  { id: 'g2', kind: 'scene', name: 'hall', worlds: ['murim'], tags: ['game-master'] },
   { id: 'a1', kind: 'char', set: 'admin', emotion: 'neutral', name: 'admin_neutral', tags: [] },
 ];
+const STORED = `__store.set('imgidx/0000',${JSON.stringify({ p: 0, n: OPENING.length, rows: OPENING })});`;
 // the first reply's stored opening, its banner, and the frames on screen in order
 const openingOf = pg =>
   pg.evaluate(() => {
@@ -31,30 +34,27 @@ const openingOf = pg =>
   });
 const withLibrary = async (pg, world) => {
   await pg.waitForSelector('#rollBtn');
-  await pg.evaluate(
-    ([L, O]) => {
-      DR.app.images.push(...L.rows, ...O);
-      Object.assign(DR.app.setMeta, L.sets);
-    },
-    [library(), OPENING],
-  );
+  await pg.evaluate(L => {
+    DR.app.images.push(...L.rows);
+    Object.assign(DR.app.setMeta, L.sets);
+  }, library());
   await startLife(pg, { world });
   await pg.waitForFunction('DR.app.turns.length>0&&DR.isIdle()', null, { timeout: 20000 });
 };
 
 test('live preview', async ({ game }) => {
-  const { pg, errs } = await game(claudeMock(J), { size: [420, 900] });
+  const { pg, errs } = await game(claudeMock(J, { before: STORED }), { size: [420, 900] });
   await withLibrary(pg, 'hunter');
   const op = await openingOf(pg);
   console.log('hunter opening:', JSON.stringify(op));
-  if (!same(op, [['o1', 'o2'], null, ['/_blob/o1', '/_blob/o2']]))
+  if (!same(op, [['o3', 'o1', 'o2'], null, ['/_blob/o3', '/_blob/o1', '/_blob/o2']]))
     errs.push("a hunter life's first reply did not show the hunter sequence in frame order");
-  const other = await game(claudeMock(J), { size: [420, 900] });
+  const other = await game(claudeMock(J, { before: STORED }), { size: [420, 900] });
   await withLibrary(other.pg, 'modern');
   const fb = await openingOf(other.pg);
   console.log('modern opening:', JSON.stringify(fb));
   if (!same(fb, [null, 'g1', ['/_blob/g1']]))
-    errs.push('with no sequence for the world, the first reply did not show the bg_game-master banner that fits');
+    errs.push('with no sequence for the world, the first reply did not show the game-master picture that fits');
   errs.push(...other.errs);
   const n = await pg.evaluate('DR.app.turns.length');
   await pg.evaluate('window.__stream=true;0');

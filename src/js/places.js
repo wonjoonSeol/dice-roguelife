@@ -2,13 +2,13 @@
 import { pick } from './util.js';
 import { EMOS } from './data.js';
 import { app } from './app.js';
-import { bgKey, fitsWorld, turnImg } from './images.js';
+import { bgKey, fitsWorld, isOpening, turnImg } from './images.js';
 
 function bgList() {
   const w = app.state.life.world.id,
     m = {};
   for (const x of app.images) {
-    if (x.kind !== 'scene' || x.off) continue;
+    if (x.kind !== 'scene' || x.off || isOpening(x)) continue;
     if (!fitsWorld(x, w)) continue;
     const k = bgKey(x);
     (m[k] = m[k] || []).push(x);

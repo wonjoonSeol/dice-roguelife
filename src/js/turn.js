@@ -12,7 +12,7 @@ import { aliasOut, lastStoryReply } from './people.js';
 import { snapOf } from './roster.js';
 import { cueDeath, cueDoom, cueFanfare, cueItem, cueQuest, cueRealm, cueReveal, cueSkill } from './sound.js';
 import { ensureSample } from './boot.js';
-import { imgUrl, openingFor, pickEmotion } from './images.js';
+import { imgUrl, isOpening, openingFor, pickEmotion } from './images.js';
 import { resolveScene } from './places.js';
 import { aiWillPick, castFor, earlyCast, presentOf, resolveAiPicks, startAiPick, takePromoted } from './casting.js';
 import { closeGone, openSave, persist, pushTurn, staleSave, storeError } from './persistence.js';
@@ -61,7 +61,7 @@ export let showDice = function showDice(r) {
       return;
     }
     const key = x => [x.name, ...(x.tags || [])].join(' ').toLowerCase();
-    const fx = app.images.filter(x => x.kind === 'fx' && !x.off && /dice/.test(key(x)));
+    const fx = app.images.filter(x => x.kind === 'fx' && !x.off && !isOpening(x) && /dice/.test(key(x)));
     const okRe = /succ|crit|win|high|(^|[^0-9])20($|[^0-9])/,
       badRe = /fail|lose|low|(^|[^0-9])1($|[^0-9])/;
     const good = fx.filter(x => (r.ok ? okRe : badRe).test(key(x)));

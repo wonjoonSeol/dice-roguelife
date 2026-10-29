@@ -9,6 +9,8 @@ import {
   aliasKeys,
   imagesChanged,
   imgUrl,
+  isOpening,
+  openingKindToTags,
   picIds,
   picKeys,
   setWorlds,
@@ -258,6 +260,7 @@ export async function loadImages() {
       noteIgnored('images: restore from manifest', e);
     }
   }
+  app.images.forEach(openingKindToTags); // kept in memory; a page write saves the tags
   if (!app.images.length && !platform.memMode && !platform.localMode) {
     // owner: move the index out of the private subtree once
     try {
@@ -397,7 +400,7 @@ export async function addModernLabels(priv, flags) {
     .filter(([, n]) => n);
   const pages = new Map();
   for (const x of app.images) {
-    const n = x.kind === 'scene' && grown(x);
+    const n = x.kind === 'scene' && !isOpening(x) && grown(x);
     if (!n) continue;
     const p = IMGX.assign(x.id);
     if (!pages.has(p)) pages.set(p, []);
@@ -473,7 +476,7 @@ export async function restoreFromManifest(m, onProgress = () => {}) {
       const h = await sha256Hex(b);
       const it = byS.get(h);
       if (!it) continue;
-      const row = Object.assign({}, it, { id: a.id, shash: h, createdAt: a.createdAt || nowIso() });
+      const row = openingKindToTags(Object.assign({}, it, { id: a.id, shash: h, createdAt: a.createdAt || nowIso() }));
       await IMGDOC(a.id).set(row);
       app.images.push(row);
       hit++;
