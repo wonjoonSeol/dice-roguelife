@@ -1402,5 +1402,10 @@
   "Persona (optional)": "페르소나 (선택)",
   "Play as {name}": "{name}(으)로 플레이",
   "A persona is a note about who you play: name, gender and profile, one per line (Name: ..., Gender: ...). Picking one fills the fields below, and you can still change them.": "페르소나는 내가 플레이할 인물을 적은 노트예요. 이름, 성별, 캐릭터 설정을 한 줄씩 적으면(이름: ..., 성별: ...) 고를 때 아래 칸이 채워지고, 채운 뒤에도 고칠 수 있어요.",
-  "The profile was cut to {n} characters": "캐릭터 설정을 {n}자로 잘랐어요"
+  "The profile was cut to {n} characters": "캐릭터 설정을 {n}자로 잘랐어요",
+  "The pack's situations couldn't be saved, so nothing was applied: {err}": "팩의 상황을 저장하지 못해서 아무것도 적용하지 않았어요: {err}",
+  ", {n} unknown situation {n|key|keys} ({keys}): those pictures kept theirs": ", 모르는 상황 키 {n}개({keys}): 그 그림은 원래 상황을 그대로 둠",
+  "An adult situation can only be merged into another adult one": "성인 상황은 다른 성인 상황으로만 합칠 수 있어요",
+  "{label} is an adult situation with no adult one above it, and {n} {n|picture|pictures} use it. Move them to another situation first.": "{label}은(는) 위에 성인 상황이 없는 성인 상황이고, 그림 {n}장이 쓰고 있어요. 먼저 그 그림을 다른 상황으로 옮기세요.",
+  "Delete {label} from the dictionary? Its {n} {n|picture|pictures} move to {to}.": "{label}을(를) 사전에서 지울까요? 그 그림 {n}장은 {to}(으)로 옮겨져요."
 }

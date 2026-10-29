@@ -20,7 +20,7 @@ import {
   worldsOf,
 } from './images.js';
 import { T } from './i18n.js';
-import { cleanDict, loadSituations, saveSituations, situationsStored } from './situations.js';
+import { cleanDict, loadSituations, saveSituations, situationsStored, tagsToSits } from './situations.js';
 
 export let imgError = '';
 export const SETDOC = k => platform.shared.doc(`sets/${k}`);
@@ -363,6 +363,7 @@ export async function loadSets() {
     if (flags.status === 'rejected') throw flags.reason;
     const done = flags.value || {};
     if (sets.status === 'fulfilled' && !imgError && !done.modernLabels) await addModernLabels(priv, done);
+    if (sits.status === 'fulfilled' && !imgError && !done.situationTags) await migrateSituationTags(priv, done);
   } catch (e) {
     logErr('wlabels', e);
   }
@@ -437,8 +438,37 @@ export async function addModernLabels(priv, flags) {
       logErr('modern labels: backgrounds', e);
     }
   });
-  if (!failed) await LIBFLAGS().set({ ...flags, modernLabels: nowIso() });
+  if (!failed) await LIBFLAGS().set(Object.assign(flags, { modernLabels: nowIso() })); // flags: what later steps write
   if (sets || bgs) toast(T('Modern Day added to {sets} sets and {bgs} backgrounds', { sets, bgs }), 4000);
+}
+
+// v2.17.1 read some tag words as situations (situations.js tagsToSits); once per library they move into the frames'
+// situations, so a later dictionary key never takes over a look tag. flags: config/migrations, as above.
+export async function migrateSituationTags(priv, flags) {
+  if (!(await priv())) return; // like the labels above: with nothing to move, the owner's boot marks it done
+  const pages = new Map();
+  for (const x of app.images) {
+    const was = { tags: x.tags, situations: x.situations };
+    if (!tagsToSits(x)) continue;
+    const p = IMGX.assign(x.id);
+    if (!pages.has(p)) pages.set(p, []);
+    pages.get(p).push([x, was]);
+  }
+  let failed = 0;
+  await inParallel([...pages], 3, async ([p, xs]) => {
+    try {
+      await IMGX.save(p);
+    } catch (e) {
+      for (const [x, was] of xs) {
+        x.tags = was.tags; // memory matches the page again
+        if (was.situations) x.situations = was.situations;
+        else delete x.situations;
+      }
+      failed++;
+      logErr('situation tags', e);
+    }
+  });
+  if (!failed) await LIBFLAGS().set(Object.assign(flags, { situationTags: nowIso() }));
 }
 
 export async function findManifestAsset() {

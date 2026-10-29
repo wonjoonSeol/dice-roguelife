@@ -94,8 +94,8 @@ async function saveFrame(box, x, list) {
   }
 }
 
-// Every character frame with the old key, in its list or as a tag, gets the new one instead (none when it is empty).
-// In memory only; returns the ids to write.
+// Every character frame with the old key gets the new one instead (none when it is empty). In memory only; returns
+// the ids to write.
 function rewriteFrames(from, to) {
   const ids = [];
   for (const x of app.images) {
@@ -108,10 +108,13 @@ function rewriteFrames(from, to) {
   }
   return ids;
 }
-// the entries under `from` go under `to`, or under nothing; next is a copy, so the live dictionary stays as it is
+// The entries under `from` go under `to`, or under nothing; next is a copy, so the live dictionary stays as it is. An
+// entry that was adult through `from` says so itself first.
 function reparent(next, from, to) {
+  const adult = isAdultSit(from);
   for (const e of Object.values(next))
     if (e.parent === from) {
+      if (adult) e.adult = true;
       if (to) e.parent = to;
       else delete e.parent;
     }
@@ -172,43 +175,80 @@ export async function editSituation(key = '') {
   const r = await answer;
   if (!r) return null;
   // a renamed key keeps its place in the list, and every frame and entry under it follows
-  const next = {};
-  for (const [k, v] of Object.entries(clone(d))) next[k === key ? r.k : k] = k === key ? r.entry : v;
-  if (!key) next[r.k] = r.entry;
-  if (key && r.k !== key) reparent(next, key, r.k);
+  const at = (src, keepOld) => {
+    const out = {};
+    for (const [k, v] of Object.entries(clone(src))) {
+      if (k !== key) out[k] = v;
+      else {
+        if (keepOld) out[k] = v;
+        out[r.k] = clone(r.entry);
+      }
+    }
+    if (!key) out[r.k] = clone(r.entry);
+    return out;
+  };
   try {
-    await commit(key && r.k !== key ? rewriteFrames(key, r.k) : [], next);
+    if (!key || r.k === key) await saveSituations(at(d, false));
+    else {
+      // both keys while the frames move, so a failure at any step leaves every frame on a key in the dictionary
+      await saveSituations(at(d, true));
+      const ids = rewriteFrames(key, r.k);
+      if (ids.length) await IMGX.flush(ids);
+      const next = reparent(clone(sitDict()), key, r.k);
+      delete next[key];
+      await saveSituations(next);
+    }
     return r.k;
   } catch (err) {
     failed(err);
     return null;
   }
 }
+// an adult situation goes only into another adult one, or its pictures would show in any scene
 async function mergeSituation(from) {
   const d = sitDict();
-  const others = Object.keys(d).filter(k => k !== from);
+  const others = Object.keys(d).filter(k => k !== from && (!isAdultSit(from) || isAdultSit(k)));
+  if (!others.length) {
+    toast(T('An adult situation can only be merged into another adult one'), 5000);
+    return;
+  }
   const answer = openDialog(
     `<p class="dlg-msg">${T('Merge {from} into', { from: `<b>${esc(sitLabel(from))}</b>` })}</p><select id="sfInto" class="set-select">${others.map(k => `<option value="${esc(k)}">${esc(sitLabel(k))} (${esc(k)})</option>`).join('')}</select><p class="muted field-note">${T('Its pictures get the other situation, and it leaves the dictionary.')}</p><div class="row actions"><button class="btn primary" id="dlgOk">${T('Merge')}</button><button class="btn ghost" id="dlgNo">${T('Cancel')}</button></div>`,
   );
   $('#dlgOk').onclick = () => answerDialog($('#sfInto').value);
   $('#dlgNo').onclick = () => answerDialog(null);
   const into = await answer;
-  if (!into || !d[into]) return;
+  if (!into || !d[into] || !others.includes(into)) return;
   const next = reparent(clone(d), from, into);
   delete next[from];
   await commit(rewriteFrames(from, into), next);
 }
-async function dropSituation(k) {
+// An adult situation's pictures move to the nearest adult one above it; with none above, it stays while pictures use
+// it, so they never turn into plain pictures.
+export async function dropSituation(k) {
   const n = (usage()[k] || {}).frames || 0;
-  if (
-    !(await askConfirm(
-      T('Delete {label} from the dictionary? {n} {n|picture|pictures} lose it.', { label: sitLabel(k), n }),
-    ))
-  )
+  const to = isAdultSit(k) ? sitAncestors(k).find(isAdultSit) || '' : '';
+  if (isAdultSit(k) && !to && n) {
+    toast(
+      T(
+        '{label} is an adult situation with no adult one above it, and {n} {n|picture|pictures} use it. Move them to another situation first.',
+        { label: sitLabel(k), n },
+      ),
+      6000,
+    );
     return;
+  }
+  const ask = to
+    ? T('Delete {label} from the dictionary? Its {n} {n|picture|pictures} move to {to}.', {
+        label: sitLabel(k),
+        n,
+        to: sitLabel(to),
+      })
+    : T('Delete {label} from the dictionary? {n} {n|picture|pictures} lose it.', { label: sitLabel(k), n });
+  if (!(await askConfirm(ask))) return;
   const next = reparent(clone(sitDict()), k, sitDict()[k].parent);
   delete next[k];
-  await commit(rewriteFrames(k, ''), next);
+  await commit(rewriteFrames(k, to), next);
 }
 
 // One set of listeners on the images tab, which redraws its contents; job runs a change that writes many frames.

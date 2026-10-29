@@ -7,7 +7,7 @@ import { IMAGE_TYPES, imgUrl, worldsOf } from './images.js';
 import { logErr } from './diag.js';
 import { T } from './i18n.js';
 import { makeZip } from './zip.js';
-import { frameSits, lookTags, sitDict } from './situations.js';
+import { frameSits, sitDict } from './situations.js';
 
 // a type's first extension (jpg, not jpeg)
 const EXT = Object.fromEntries(
@@ -77,8 +77,9 @@ export function buildTagsJson(imgs, names) {
         if (cover >= 0) s.cover = names[cover]; // by file name: ids are this install's
         out.sets[k] = s;
       }
-      const e = { set: k, emotion: x.emotion || 'neutral', situations: frameSits(x), tags: lookTags(x.tags) };
+      const e = { set: k, emotion: x.emotion || 'neutral', situations: frameSits(x), tags: x.tags || [] };
       if (ws.length) e.worlds = ws;
+      if (x.off) e.off = true;
       out.images[fn] = e;
     } else if (x.kind === 'scene') {
       const parts = String(x.name || '').split('_');
@@ -87,6 +88,7 @@ export function buildTagsJson(imgs, names) {
       if (parts.join('_')) e.place = parts.join('_');
       if (time) e.time = time;
       if (ws.length) e.worlds = ws;
+      if (x.off) e.off = true;
       out.backgrounds[fn] = e;
     }
   });
@@ -108,7 +110,8 @@ export async function exportPack(withImages) {
   const say = t => {
     setStat(t);
   };
-  const imgs = app.images.filter(x => x.kind === 'char' || x.kind === 'scene' || x.kind === 'fx');
+  // a picture auto-sort excluded is never handed on
+  const imgs = app.images.filter(x => !x.excluded && (x.kind === 'char' || x.kind === 'scene' || x.kind === 'fx'));
   if (!imgs.length) {
     toast(T('No images to export'));
     return;

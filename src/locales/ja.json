@@ -1333,5 +1333,10 @@
   "Persona (optional)": "ペルソナ（任意）",
   "Play as {name}": "{name}で遊ぶ",
   "A persona is a note about who you play: name, gender and profile, one per line (Name: ..., Gender: ...). Picking one fills the fields below, and you can still change them.": "ペルソナは自分が演じる人物を書いたノートです。名前、性別、キャラクター設定を1行ずつ書くと（名前: ...、性別: ...）、選んだときに下の欄が埋まり、そのあとも変えられます。",
-  "The profile was cut to {n} characters": "キャラクター設定を{n}文字に切りました"
+  "The profile was cut to {n} characters": "キャラクター設定を{n}文字に切りました",
+  "The pack's situations couldn't be saved, so nothing was applied: {err}": "パックの状況を保存できなかったので、何も適用していません：{err}",
+  ", {n} unknown situation {n|key|keys} ({keys}): those pictures kept theirs": "、不明な状況キー{n}個（{keys}）：その画像は元の状況のまま",
+  "An adult situation can only be merged into another adult one": "成人向けの状況は、ほかの成人向けの状況にだけ統合できます",
+  "{label} is an adult situation with no adult one above it, and {n} {n|picture|pictures} use it. Move them to another situation first.": "{label}は上に成人向けの状況がない成人向けの状況で、画像{n}枚が使っています。先にその画像をほかの状況に移してください。",
+  "Delete {label} from the dictionary? Its {n} {n|picture|pictures} move to {to}.": "{label}を辞書から削除しますか？その画像{n}枚は{to}に移ります。"
 }

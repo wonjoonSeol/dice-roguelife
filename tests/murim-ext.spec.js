@@ -22,8 +22,15 @@ const IMAGES = [
     tags: ['male1', 'determined11'],
     situations: ['battle'],
   },
-  // an older pack's tag that is a dictionary key counts as the situation
-  { id: 'm4', kind: 'char', set: 'male1', emotion: 'smile', name: 'male1_smile15', tags: ['male1', 'smile15', 'hug'] },
+  {
+    id: 'm4',
+    kind: 'char',
+    set: 'male1',
+    emotion: 'smile',
+    name: 'male1_smile15',
+    tags: ['male1', 'smile15'],
+    situations: ['hug'],
+  },
   { id: 'f1', kind: 'char', set: 'female1', emotion: 'neutral', name: 'female1_neutral1', tags: ['female1'] },
   { id: 'f2', kind: 'char', set: 'female2', emotion: 'neutral', name: 'female2_neutral1', tags: ['female2'] },
   {
@@ -32,7 +39,8 @@ const IMAGES = [
     set: 'female2',
     emotion: 'smile',
     name: 'female2_smile15',
-    tags: ['female2', 'smile15', 'hug'],
+    tags: ['female2', 'smile15'],
+    situations: ['hug'],
   },
   { id: 'f4', kind: 'char', set: 'female3', emotion: 'neutral', name: 'female3_neutral', situations: ['nsfw'] },
 ];
@@ -216,18 +224,25 @@ async function murimChecks(pg, errs) {
   await turn(pg, '미소 짓는다', { speaker: '백리운', speaker_gender: 'male', emotion: 'smile' });
   const i4 = await last(pg);
   // a made-up key under nsfw, as a pack's dictionary would bring
-  const adult = await pg.evaluate(`(() => {
+  const adult = await pg.evaluate(async () => {
     DR.app.situations = Object.assign({}, DR.app.situations, { 'pose-a': { adult: true, parent: 'nsfw' } });
     DR.imagesChanged();
-    return [DR.pickEmotion('female3', 'smile', []), DR.pickEmotion('female3', 'smile', [], 'pose-a')].map(x => x && x.id);
-  })()`);
+    const out = ['', 'pose-a', 'undress'].map(s => (DR.pickEmotion('female3', 'smile', [], s) || {}).id || null);
+    // deleting an adult key moves its pictures up to the nearest adult key, never to plain
+    const f4 = DR.app.images.find(x => x.id === 'f4');
+    f4.situations = ['pose-a'];
+    DR.askConfirm = async () => true;
+    await DR.dropSituation('pose-a');
+    DR.mock('askConfirm', null);
+    return [...out, f4.situations, 'pose-a' in DR.app.situations];
+  });
   check(errs, 'situation Battle (streamed, any case) picks the battle frame', i1.char === 'm3');
   check(
     errs,
     "the person's situations reach the prompt, each with its hint",
     tp.includes('[그림 태그] 백리운: battle(싸우거나 무공, 마법을 쓰는 중일 때), hug(안거나 안길 때)'),
   );
-  check(errs, 'situation hug (a tag in an older pack) picks the hug frame over the joy emotion', i2.char === 'm4');
+  check(errs, 'situation hug picks the hug frame over the joy emotion', i2.char === 'm4');
   check(
     errs,
     'a situation the set has no frame for: the plain joy frame, its ponytail tag no situation',
@@ -238,6 +253,12 @@ async function murimChecks(pg, errs) {
     errs,
     'a set with only an adult frame shows no face unless named; a key under nsfw falls back to it',
     adult[0] === null && adult[1] === 'f4',
+  );
+  check(errs, 'naming a broader key never shows a narrower one (undress shows no nsfw frame)', adult[2] === null);
+  check(
+    errs,
+    'deleting an adult key moves its pictures to the adult key above it',
+    same(adult[3], ['nsfw']) && adult[4] === false,
   );
 
   // a passer-by never gets an open role's face by chance

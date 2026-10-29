@@ -18,6 +18,7 @@ import {
   imgUrl,
   inheritKeys,
   isOpening,
+  isSystemTag,
   openingOff,
   openingSets,
   openingWorlds,
@@ -42,7 +43,6 @@ import { GENDER, GENDER_LABEL } from './enums.js';
 import {
   cleanSit,
   frameSits,
-  lookTags,
   saveSituations,
   setFrameSits,
   SIT_KEY_RE,
@@ -50,6 +50,7 @@ import {
   sitKey,
   sitKeyOf,
   sitLabel,
+  tagsToSits,
 } from './situations.js';
 import { bindSituations, setSitsHtml, sitDictHtml, sitPickerHtml } from './situations-view.js';
 
@@ -190,7 +191,7 @@ function setCardHtml(k, imgs) {
          '',
        )}</select><input data-sf="charName" value="${esc(m.charName || '')}" maxlength="20" placeholder="${T('Fixed name (if the picture has a name on it)')}" class="set-input"><button class="btn ghost" data-srename title="${T("Renaming a set renames every frame and the open save's casting")}">${T('Rename')}</button><input data-sf="aliases" value="${esc((m.aliases || []).join(', '))}" placeholder="${T('Other names (comma separated)')}" class="set-input set-input-narrow"></div><div class="set-row">${worldChips(worldsOf(m), 'data-sw')}</div>
      <div class="seg set-tags">${(() => {
-       const all = [...new Set(imgs.flatMap(x => lookTags(x.tags)))];
+       const all = [...new Set(imgs.flatMap(x => x.tags || []))];
        return [...all.filter(isIdTag), ...all.filter(t => !isIdTag(t))]
          .map(
            t =>
@@ -1650,13 +1651,23 @@ export async function importTags(file, names = null) {
         nsit++;
       }
     }
+    // no frame is touched when its keys did not get in
     if (nsit)
-      await saveSituations(next).catch(e => {
-        nsit = 0;
+      try {
+        await saveSituations(next);
+      } catch (e) {
         logErr('tags', e);
-        toast(T('Save failed: {err}', { err: e.code || e.message }), 5000);
-      });
+        toast(
+          T("The pack's situations couldn't be saved, so nothing was applied: {err}", { err: e.code || e.message }),
+          6000,
+        );
+        return;
+      }
   }
+  // a pack from before situations: its tag words that were situations become them, as library.js does once
+  const oldSits =
+    !j.situations && !Object.values(j.images || {}).some(m => m && typeof m === 'object' && 'situations' in m);
+  const unknown = new Set();
   for (let i = 0; i < setEntries.length; i += 8) {
     say(T('Saving sets {i}/{n}', { i: Math.min(i + 8, setEntries.length), n: setEntries.length }));
     await Promise.all(
@@ -1713,6 +1724,7 @@ export async function importTags(file, names = null) {
         [...(m.tags ? toTags(m.tags) : []), m.place, m.time, ...(m.mood ? toTags(m.mood) : [])].filter(Boolean),
       ),
     ].slice(0, 10);
+    if (m && m.off === true) x.off = true;
     touched.add(x.id);
     nb++;
   }
@@ -1734,10 +1746,13 @@ export async function importTags(file, names = null) {
       x.set = to;
       x.name = `${to}_${x.emotion || 'neutral'}${x.variant ? '_' + x.variant : ''}`;
     }
-    // a list here replaces the frame's (merge_tags: joins it); keys not in the dictionary drop
+    if (m && m.off === true) x.off = true;
+    // a list here replaces the frame's (merge_tags: joins it); one naming a key no dictionary has keeps the old list
     if (m && typeof m === 'object' && 'situations' in m) {
-      const ss = toTags(m.situations).map(sitKeyOf).filter(Boolean);
-      setFrameSits(x, replaceTags ? ss : [...frameSits(x), ...ss]);
+      const raw = toTags(m.situations),
+        ss = raw.map(sitKeyOf);
+      raw.filter((_, i) => !ss[i]).forEach(k => unknown.add(k));
+      if (ss.every(Boolean)) setFrameSits(x, replaceTags ? ss : [...frameSits(x), ...ss]);
     }
     touched.add(x.id);
     ni++;
@@ -1766,6 +1781,7 @@ export async function importTags(file, names = null) {
       nst++;
     }
   }
+  if (oldSits) for (const id of touched) tagsToSits(app.images.find(x => x.id === id));
   let saved = true;
   try {
     await IMGX.flush([...touched], (n, t) => say(T('Saving the image list {i}/{n}', { i: n, n: t })));
@@ -1792,6 +1808,12 @@ export async function importTags(file, names = null) {
       frames: nst ? T(', {n} {n|frame|frames} got set tags', { n: nst }) : '',
     }) +
       (nsit ? T(', {n} {n|situation|situations} added to the dictionary', { n: nsit }) : '') +
+      (unknown.size
+        ? T(', {n} unknown situation {n|key|keys} ({keys}): those pictures kept theirs', {
+            n: unknown.size,
+            keys: someNames([...unknown], 4),
+          })
+        : '') +
       (miss > 0 ? T(', {n} {n|file|files} not found', { n: miss }) : ''),
     5000,
   );
@@ -1856,22 +1878,25 @@ async function wipeAllImagesInner() {
 }
 async function saveManifest() {
   await fillHashes(setStat, T('Scanning')).catch(e => noteIgnored('save list: keep hashes', e));
-  const items = app.images.map(x => ({
-    shash: x.shash,
-    hash: x.hash,
-    file: x.file,
-    kind: x.kind,
-    set: x.set,
-    emotion: x.emotion,
-    name: x.name,
-    tags: x.tags || [],
-    situations: x.situations,
-    worlds: x.worlds || [],
-    world: x.world || 'any',
-    variant: x.variant || '',
-    off: x.off,
-    akeys: x.akeys,
-  }));
+  // a picture auto-sort excluded is never handed on
+  const items = app.images
+    .filter(x => !x.excluded)
+    .map(x => ({
+      shash: x.shash,
+      hash: x.hash,
+      file: x.file,
+      kind: x.kind,
+      set: x.set,
+      emotion: x.emotion,
+      name: x.name,
+      tags: x.tags || [],
+      situations: x.situations,
+      worlds: x.worlds || [],
+      world: x.world || 'any',
+      variant: x.variant || '',
+      off: x.off,
+      akeys: x.akeys,
+    }));
   // a cover is an id, which a copy doesn't share, so it goes by its file's hash
   const sets = Object.fromEntries(
     Object.entries(app.setMeta).map(([k, m]) => [
@@ -2072,22 +2097,26 @@ async function autoTagAll() {
         modelTier: 'quick',
         cache: false,
       });
+      // someone who may be a minor in a nude or sexual picture, whatever its kind: never shown, never exported, and
+      // named for the owner to delete
+      if (r && r.exclude === true) {
+        setFrameSits(x, []);
+        x.off = true;
+        x.excluded = true;
+        x.autoTagged = true;
+        excluded.push(x.file || x.name || x.id);
+        await IMGDOC(x.id).set(x);
+        continue;
+      }
       if (r) {
         x.kind = again || r.kind !== 'scene' ? 'char' : 'scene';
-        let looks = Array.isArray(r.tags) ? r.tags.map(t => String(t).trim()).filter(Boolean) : [];
-        if (x.kind === 'char') looks = lookTags(looks); // a situation key here would quietly become one
-        if (again) x.tags = (x.tags || []).filter(isIdTag);
+        const looks = Array.isArray(r.tags) ? r.tags.map(t => String(t).trim()).filter(Boolean) : [];
+        if (again) x.tags = (x.tags || []).filter(t => isIdTag(t) || isSystemTag(t));
         if (x.kind === 'char') {
           x.emotion = EMOS.includes(r.emotion) ? r.emotion : x.emotion || 'neutral';
           x.set = x.set || x.name;
           const ss = (Array.isArray(r.situations) ? r.situations : []).map(sitKeyOf).filter(Boolean);
           setFrameSits(x, again ? ss : [...frameSits(x), ...ss]);
-          // someone who may be a minor in a nude or sexual picture: never shown, and named for the owner to delete
-          if (r.exclude === true) {
-            setFrameSits(x, []);
-            x.off = true;
-            excluded.push(x.file || x.name || x.id);
-          }
           const p = sitKey(r.propose);
           if (p && !sitKeyOf(p)) proposed.set(p, (proposed.get(p) || 0) + 1);
         } else {

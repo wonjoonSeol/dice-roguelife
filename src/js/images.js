@@ -2,7 +2,7 @@
 import { host } from './host.js';
 import { esc, pick } from './util.js';
 import { EMO_FB, WORLD_ALIAS, WORLDS } from './data.js';
-import { frameSits, isAdultSit, sitAncestors, sitKeyOf, sitRoot, sitVer } from './situations.js';
+import { frameSits, isAdultSit, sitAncestors, sitKeyOf, sitVer } from './situations.js';
 import { SCENARIO_WORLD } from './enums.js';
 import { app } from './app.js';
 import { canonName } from './people.js';
@@ -123,6 +123,11 @@ export function openingSeq(x) {
 }
 export const isOpening = x => openingSeq(x) !== null;
 export const isGameMaster = x => tagList(x).some(t => t.toLowerCase() === 'game-master');
+// the tags the game itself reads (opening, order, game-master), kept when look tags are redone
+export const isSystemTag = t => {
+  const s = String(t).trim();
+  return OPENING_RE.test(s) || ORDER_RE.test(s) || s.toLowerCase() === 'game-master';
+};
 const orderOf = x => {
   const m = tagList(x)
     .map(t => ORDER_RE.exec(t))
@@ -189,14 +194,18 @@ export function openingHtml(ti) {
   if (!list.length) return '';
   return `<div class="opening${one ? ' banner' : ''}">${list.map(x => `<img class="op-frame" alt="" data-big="${esc(x.id)}" loading="lazy" decoding="async" src="${imgUrl(x.id)}">`).join('')}</div>`;
 }
-export function setCover(k, imgs) {
+// The cover the player chose, else a neutral, smiling or first frame that isn't adult. play: a game screen, where a
+// set with only adult frames has none; the image tab still shows one.
+export function setCover(k, imgs, play = false) {
   imgs = imgs || charSetsAll()[k] || [];
   const c = (app.setMeta[k] || {}).cover;
+  const safe = imgs.filter(x => !adultFrame(x));
   return (
     (c && imgs.find(x => x.id === c)) ||
-    imgs.find(x => x.emotion === 'neutral') ||
-    imgs.find(x => x.emotion === 'smile') ||
-    imgs[0]
+    safe.find(x => x.emotion === 'neutral') ||
+    safe.find(x => x.emotion === 'smile') ||
+    safe[0] ||
+    (play ? null : imgs[0])
   );
 }
 export function charSetsAll() {
@@ -289,10 +298,10 @@ export function setSituations(k) {
   }
   return (sitMemo.bySet[k] = [...out]);
 }
-// a named situation counts for a set with a picture anywhere in its family (the same root)
+// a named situation counts for a set with a picture for it or for a broader one above it, never a narrower one
 const situationIn = (k, situation) => {
   const s = sitKeyOf(situation);
-  return s && setSituations(k).some(x => sitRoot(x) === sitRoot(s)) ? s : '';
+  return s && [s, ...sitAncestors(s)].some(c => setSituations(k).includes(c)) ? s : '';
 };
 export const hasSituation = (k, situation) => !!situationIn(k, situation);
 // the feeling, its fallbacks one after another, then neutral; with none of them, the whole list
@@ -305,20 +314,15 @@ function nearestEmotion(list, emo) {
   }
   return list;
 }
-// Built for sets of one to three pictures (ARCHITECTURE.md, 상황 그림): the named situation's frames, then each parent's,
-// then any in its family; else the plain frames (no situation), else the frames that aren't adult. An adult frame
-// shows only when an adult situation is named.
+// Built for sets of one to three pictures (ARCHITECTURE.md, 상황 그림): the named situation's frames, then each parent's
+// own; else the plain frames (no situation), else the frames that aren't adult. An adult frame shows only when an
+// adult situation is named.
 export function pickEmotion(k, emo, look, situation) {
   const imgs = charSets()[k];
   if (!imgs || !imgs.length) return null;
   const s = situationIn(k, situation);
   const ok = x => !adultFrame(x) || (s && isAdultSit(s));
-  const named = s
-    ? [
-        ...[s, ...sitAncestors(s)].map(c => imgs.filter(x => ok(x) && frameSits(x).includes(c))),
-        imgs.filter(x => ok(x) && frameSits(x).some(c => sitRoot(c) === sitRoot(s))),
-      ]
-    : [];
+  const named = s ? [s, ...sitAncestors(s)].map(c => imgs.filter(x => ok(x) && frameSits(x).includes(c))) : [];
   const pool = [...named, imgs.filter(x => !frameSits(x).length), imgs.filter(x => !adultFrame(x))].find(l => l.length);
   if (!pool) return null;
   let c = nearestEmotion(pool, emo);

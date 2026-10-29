@@ -150,19 +150,27 @@ export function sitKeyOf(v) {
   if (d[k]) return k;
   return Object.keys(d).find(x => [d[x].label, d[x].label_ja].some(l => l && sitKey(l) === k)) || '';
 }
-// A frame's situations: its own list plus any tag that is a dictionary key, so packs tagged hug or battle still work.
+// a frame's situations: its own list, the keys still in the dictionary
 export function frameSits(x) {
   const d = sitDict();
   const own = Array.isArray(x && x.situations) ? x.situations : [];
-  return [...new Set([...own, ...((x && x.tags) || [])].map(sitKey))].filter(k => d[k]);
+  return [...new Set(own.map(sitKey))].filter(k => d[k]);
 }
-// a frame's situations become this list, held in its own field; a tag that is a dictionary key moves out of its tags
 export function setFrameSits(x, list) {
-  const d = sitDict();
   const keep = [...new Set(list.map(sitKey).filter(Boolean))];
-  x.tags = (x.tags || []).filter(t => !d[sitKey(t)]);
   if (keep.length) x.situations = keep;
   else delete x.situations;
 }
-// tags with the dictionary's keys taken out: what a frame's looks are
-export const lookTags = tags => (tags || []).filter(t => !sitDict()[sitKey(t)]);
+// The tag words v2.17.1 read as situations ('formal' was a look then and stays one). library.js moves them into a
+// frame's situations once per library, and importTags does the same for a pack from before situations.
+const OLD_SIT_TAGS = ['battle', 'injured', 'eating', 'sleep', 'bath', 'hug', 'kiss', 'nsfw'];
+// true when the frame changed
+export function tagsToSits(x) {
+  if (!x || x.kind !== 'char') return false;
+  const d = sitDict();
+  const old = (x.tags || []).filter(t => OLD_SIT_TAGS.includes(sitKey(t)) && d[sitKey(t)]);
+  if (!old.length) return false;
+  x.tags = x.tags.filter(t => !old.includes(t));
+  setFrameSits(x, [...(x.situations || []), ...old]);
+  return true;
+}

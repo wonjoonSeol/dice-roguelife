@@ -64,7 +64,7 @@ function scorer(p) {
     look: p.clues,
   });
 }
-const faceOf = (p, k) => setCover(k, p.sets[k] || []);
+const faceOf = (p, k) => setCover(k, p.sets[k] || [], true); // null for a set with only adult pictures
 const tagsOf = k => [...new Set((charSetsAll()[k] || []).flatMap(x => x.tags || []))];
 function hitsOf(p, k) {
   const m = app.setMeta[k] || {};
@@ -174,7 +174,7 @@ function drawGrid(p) {
         const o = owner(k);
         const rt = retired(k);
         const hits = hitsOf(p, k).length;
-        return `<button type="button" data-pick="${esc(k)}" ${rt ? `disabled title="${T('The face of someone who died in this life; it cannot be used again')}"` : ''} class="fp-cell"><img src="${imgUrl(f.id)}" loading="lazy" alt="" class="fp-thumb${o ? ' taken' : ''}">${o ? `<span class="fp-badge">${rt ? '✝ ' : ''}${esc(o)}</span>` : ''}<span class="fp-label">${esc(m.charName || k)}${hits ? ` <b class="fp-hits">✓${hits}</b>` : ''}</span></button>`;
+        return `<button type="button" data-pick="${esc(k)}" ${rt ? `disabled title="${T('The face of someone who died in this life; it cannot be used again')}"` : ''} class="fp-cell">${f ? `<img src="${imgUrl(f.id)}" loading="lazy" alt="" class="fp-thumb${o ? ' taken' : ''}">` : '<span class="fp-thumb"></span>'}${o ? `<span class="fp-badge">${rt ? '✝ ' : ''}${esc(o)}</span>` : ''}<span class="fp-label">${esc(m.charName || k)}${hits ? ` <b class="fp-hits">✓${hits}</b>` : ''}</span></button>`;
       })
       .join('') || `<p class="muted empty">${T('No matching sets.')}</p>`;
   $('#castGrid')
