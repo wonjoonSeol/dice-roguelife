@@ -9,6 +9,7 @@ import { rosterField } from './reply-words.js';
 // who a person is, for the narrator: a set card's optional profile (set.profile) or a roster entry's. Field -> longest
 // kept text and the set card editor's placeholder
 export const PROFILE = {
+  epithet: { max: 30, label: N_('Epithet (e.g. Plum Blossom Sword)') },
   position: { max: 40, label: N_('Position (e.g. sect elder)') },
   power: { max: 30, label: N_('Power (e.g. peak realm)') },
   looks: { max: 80, label: N_('Looks (e.g. silver hair, scar)') },
@@ -164,7 +165,9 @@ export function parseRoster(text, me = '') {
       else if (p.field === 'gender') {
         const g = normGender(v);
         if (g === 'female' || g === 'male') cur.gender = g;
-      } else if (p.field === 'aliases') {
+      } else if (p.field === 'aliases' || p.field === 'epithet') {
+        // an epithet is also told to the narrator (profile.epithet); both are names the person answers to
+        if (p.field === 'epithet') cur.profile.epithet = join(cur.profile.epithet, v);
         for (const a of v.split(/[,，、]/).map(x => x.trim())) {
           const n = normName(a);
           if (a.length < 2 || a.length > LIMITS.text.name || n === normName(cur.name)) continue;

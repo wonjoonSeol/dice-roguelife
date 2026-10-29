@@ -6,7 +6,7 @@ import { cmdName, EMO_FB, moneyText, normEmo, STAT_LABEL } from './data.js';
 import { withWeekday } from './calendar.js';
 import { platform } from './db.js';
 import { app, exclusive, waitingForReply } from './app.js';
-import { critOf, isScenario, statusVisible, TITLES_MAX, titlesOn } from './rules.js';
+import { adminOn, critOf, statusVisible, TITLES_MAX, titlesOn } from './rules.js';
 import {
   isCheckLine,
   isPivotal,
@@ -44,7 +44,7 @@ export function showLiveReply(turn, f) {
   const slot = $('#liveScene');
   if (slot && turn.preview) slot.outerHTML = liveSceneHtml(turn);
   const ad = $('#liveAdmin');
-  if (ad && f.admin && !isScenario()) {
+  if (ad && f.admin && adminOn()) {
     ad.classList.remove('hidden');
     ad.lastChild.textContent = f.admin;
   }
@@ -459,7 +459,7 @@ function renderTurnInner(t, isLast) {
     ? `<details class="objection"${isLast ? ' open' : ''}><summary>${T('⚖ Objection upheld: {fact}', { fact: esc(t.objection.fact || '') })}</summary>${t.objection.q ? `<div class="oq">${T('Question: {q}', { q: esc(t.objection.q) })}</div>` : ''}${t.objection.text ? `<div class="narr oj">${narrHtml(t.objection.text)}</div>` : ''}</details>`
     : '';
   return `<div class="turn"><div class="ai">${img}<div class="body">${head}${obj}${er}
-    ${o.admin ? adminLine(o) : ''}
+    ${o.admin && adminOn() ? adminLine(o) : ''}
     ${o.narration ? `<div class="narr">${NW.html}</div>` : o.widget ? '' : `<p class="muted empty-reply">${T('(Empty reply) Press Rewrite below')}</p>`}
     ${o.lang_note ? `<p class="langnote">${esc(o.lang_note)}</p>` : ''}
     ${(() => {

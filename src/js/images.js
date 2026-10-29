@@ -294,12 +294,18 @@ const situationIn = (k, situation) => {
   return s && frameTags(k).includes(s) ? s : '';
 };
 export const hasSituation = (k, situation) => !!situationIn(k, situation);
-// situation: one of the set's frame tags the narrator named; only its frames are used, chosen by the feeling as usual
+// situation: one of the set's frame tags the narrator named; only its frames are used, chosen by the feeling as usual.
+// With none named, a situation's frames (fighting, hug, nsfw) stay out unless the set has nothing else.
 export function pickEmotion(k, emo, look, situation) {
   let imgs = charSets()[k];
   if (!imgs || !imgs.length) return null;
   const s = situationIn(k, situation);
   if (s) imgs = imgs.filter(x => lowTags(x).includes(s));
+  else {
+    const special = frameTags(k);
+    const plain = imgs.filter(x => !lowTags(x).some(t => special.includes(t)));
+    if (plain.length) imgs = plain;
+  }
   const by = e => imgs.filter(x => (x.emotion || 'neutral') === e);
   let c = by(emo);
   if (!c.length && EMO_FB[emo]) c = by(EMO_FB[emo]);

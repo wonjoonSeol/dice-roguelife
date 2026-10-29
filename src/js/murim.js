@@ -63,6 +63,7 @@ const yearsText = n => {
 // The add-on a murim life gets (world-ext.js): realms as its ladder, inner energy and arts as its own state, and the
 // extras it turns on
 export const MURIM = {
+  name: N_('Murim add-on (tracks realm, standing and bonds)'), // a scenario's extra (enums.js ADDON)
   ladder: {
     label: N_('Realm'),
     next: N_('Next realm'),

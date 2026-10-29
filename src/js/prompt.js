@@ -2,15 +2,27 @@
 import PR_DEFAULT from '../../prompts.json' with { type: 'json' };
 import { kb, stripMarks, utf8Bytes } from './util.js';
 import { askOf, cmdIs, moneyText, powerGrade } from './data.js';
-import { GENDER_LABEL, SCENARIO_WORLD, SKILL_SRC, STANCE_LABEL, STYLE } from './enums.js';
+import { ADDON, GENDER_LABEL, SCENARIO_WORLD, SKILL_SRC, STANCE_LABEL, STYLE } from './enums.js';
 import { LIMITS } from './limits.js';
 import { withWeekday } from './calendar.js';
 import { platform, sget } from './db.js';
 import { app } from './app.js';
 import { promptLang, setting, storyLang } from './settings.js';
-import { N_, T, tIn } from './i18n.js';
+import { N_, T, Tc, tIn } from './i18n.js';
 import { logErr } from './diag.js';
-import { growthLevel, isScenario, itemBonus, lifeDiff, rollGrade, rule, statusVisible, titlesOn } from './rules.js';
+import {
+  ADMIN_OFF,
+  adminOn,
+  addonOn,
+  growthLevel,
+  isScenario,
+  itemBonus,
+  lifeDiff,
+  rollGrade,
+  rule,
+  statusVisible,
+  titlesOn,
+} from './rules.js';
 import { stripOdds } from './reply-words.js';
 import { activeRel, bondOf, BONDS, canonName, lastStoryReply } from './people.js';
 import { charSets, fitsWorld, frameTags, genderOf } from './images.js';
@@ -122,9 +134,11 @@ export const ADMIN_PERSONAS = () => {
       text: (promptLang() === 'en' && en[k] && en[k].text) || ko[k].text,
     };
   out.custom = { name: T('Write your own'), text: '' };
+  out[ADMIN_OFF] = { name: Tc('persona', 'Off'), text: '' };
   return out;
 };
 function adminBlock() {
+  if (!adminOn()) return '';
   const AP = ADMIN_PERSONAS();
   const k = setting('adminPersona');
   if (k === 'custom') return app.settings.adminCustom ? `[ADMIN] ${app.settings.adminCustom}` : '';
@@ -184,13 +198,19 @@ const PROMPT_ORDER = [
   'roll',
   'input',
 ];
-// The Dice Roguelife framing: ADMIN, cheating, growth pace, outside knowledge from past lives, the world and its
-// difficulty, arrival, constellations, past lives, the gambler's fate and daily luck. A scenario save sends none of
-// it; its stats, gear, skills and titles go in neutral words (scenarioBlocks, personaBlock), and the world add-on is
-// empty there (world-ext.js extOf).
-const ROGUELIKE_ONLY = ['adminp', 'cheat', 'growth', 'know', 'world', 'entry', 'sponsor', 'past', 'fate', 'luck'];
-// the prompts.json entry a save reads: a scenario save's own version where it has one
-export const prFor = k => pr(isScenario() ? SCENARIO_KEYS[k] || k : k);
+// The Dice Roguelife framing a scenario save never sends: cheating, outside knowledge from past lives, the world and
+// its difficulty, arrival, constellations and past lives. ADMIN, growth pace, fate and luck, widgets and the world
+// add-on come only with their extras (state.addons); stats, gear, skills and titles go in neutral words
+// (scenarioBlocks, personaBlock).
+const ROGUELIKE_ONLY = ['cheat', 'know', 'world', 'entry', 'sponsor', 'past'];
+// the prompts.json entry a save reads: a scenario save's own version where it has one, else one without ADMIN when
+// ADMIN is off (adminOff lists what to cut from each entry)
+export function prFor(k) {
+  if (isScenario()) return pr(SCENARIO_KEYS[k] || k);
+  const t = pr(k),
+    cuts = !adminOn() && (pr('adminOff') || {})[k];
+  return cuts ? cuts.reduce((s, [a, b]) => s.split(a).join(b), t) : t;
+}
 const SCENARIO_KEYS = {
   rules: 'scenarioRules',
   styles: 'scenarioStyles',
@@ -199,13 +219,16 @@ const SCENARIO_KEYS = {
   widgetsIdle: 'scenarioWidgetsIdle',
   cmdJudge: 'scenarioCmdJudge',
   cmdSkills: 'scenarioCmdSkills',
+  growth: 'scenarioGrowth',
+  fateHead: 'scenarioFateHead',
+  fateDoom: 'scenarioFateDoom',
 };
 // recent turns for the prompt: older player turns are trimmed (the action survives, the long deliberation does not),
 // and only the last three remarks ADMIN actually made are kept
 const recentBlock = str => (str ? `${pl('[Recent]')}\n${str}` : '');
 function recentForPrompt(recent) {
   const aiIdx = recent.map((t, i) => (t.kind === 'ai' && t.out && t.out.admin ? i : -1)).filter(i => i >= 0);
-  const keepAdmin = new Set(aiIdx.slice(-3)); // the last three remarks ADMIN actually made
+  const keepAdmin = new Set(adminOn() ? aiIdx.slice(-3) : []); // the last three remarks ADMIN actually made
   const recentStr = recent
     .map((t, i) =>
       i === recent.length - 1 ? turnText(t, false, !keepAdmin.has(i)) : turnText(t, true, !keepAdmin.has(i)),
@@ -293,6 +316,11 @@ function extBlock() {
     .filter(Boolean)
     .join('\n');
 }
+// a scenario add-on whose start was left to the story: the narrator names it once (apply.js applyWorldExt)
+const ladderStart = () => {
+  const L = worldExt().ladder;
+  return L && app.state.ladderPending ? fillTemplate(pr('scenarioExtStart'), { label: pl(L.label) }) : '';
+};
 const bondMark = n => (worldExt().bonds && bondOf(n) ? bondOf(n).e : '');
 function relationsBlock() {
   return Object.keys(app.state.relations).length
@@ -313,6 +341,8 @@ function relationsBlock() {
 }
 // the short text after a name in the named block
 const shortOf = p => [p.position, p.power].filter(Boolean).join(' ').slice(0, 16).trim();
+// an epithet, after the gender in that block
+const epithetOf = p => (p && p.epithet ? ', ' + p.epithet : '');
 // the roster's people, each with the set card their names point to, and each card's person (the first to claim it),
 // once per prompt, for the named block and the profiles
 function rosterCards(ix) {
@@ -348,6 +378,7 @@ function namedBlock(hay, turn, sets, own) {
       name: e.name,
       roster: 1,
       g: sex(e.gender || (k && genderOf(k))),
+      epithet: epithetOf(e.profile),
       short: shortOf(e.profile),
       hit: mentioned(e, ctx) ? 1 : 0,
     });
@@ -374,6 +405,7 @@ function namedBlock(hay, turn, sets, own) {
     const short = shortOf(cardProfile(k) || {}) || (segs.find(t => t.length >= 3) || segs[0] || '').slice(0, 12).trim();
     g.members.push({
       name: m.charName || '#' + k,
+      epithet: epithetOf(cardProfile(k)),
       open: !m.charName,
       roster: 0,
       g: sex(m.gender),
@@ -402,7 +434,7 @@ function namedBlock(hay, turn, sets, own) {
       .map(([x]) => x);
     const names = [];
     for (const x of ms.slice(0, 6)) {
-      const t = `${x.name}(${x.g}${x.short ? ', ' + x.short : ''})`;
+      const t = `${x.name}(${x.g}${x.epithet || ''}${x.short ? ', ' + x.short : ''})`;
       if (size + bytes(t) + bytes(g.name) + 6 > 500) break;
       names.push(t);
       size += bytes(t) + 2;
@@ -455,7 +487,8 @@ function profilesBlock(people, own) {
     const p = r && Object.keys(r.profile).length ? r.profile : card;
     if (!p || !Object.keys(p).length) continue; // a name and a faction alone are no profile
     const faction = r && r.faction && !String(p.position || '').includes(r.faction) ? r.faction : '';
-    const head = [[faction, p.position].filter(Boolean).join(' '), p.power].filter(Boolean).join(', ');
+    const epithet = p.epithet && pl('epithet {name}', { name: p.epithet }); // first: what the story calls them
+    const head = [epithet, [faction, p.position].filter(Boolean).join(' '), p.power].filter(Boolean).join(', ');
     const body = [p.looks, p.traits, p.speech && pl('speech: {s}', { s: p.speech }), p.signature, p.ties];
     if (p.secret) body.push(pl('secret: {s}', { s: p.secret }));
     lines.push(`${n}${head ? `(${head})` : ''}: ${body.filter(Boolean).join('; ')}`);
@@ -479,7 +512,7 @@ function widgetsBlock(cmd) {
   const W = prFor('widgets') || {};
   if (cmdIs(cmd, 'ask')) return '';
   if (cmd && W[cmd.type]) return fillTemplate(pr('widgetsCmd'), { schema: W[cmd.type] });
-  return prFor('widgetsIdle');
+  return isScenario() && !addonOn(ADDON.WIDGETS) ? '' : prFor('widgetsIdle');
 }
 function cmdBlock(cmd) {
   if (!cmd) return '';
@@ -634,10 +667,10 @@ export function buildPrompt(text, cmd, turn = {}) {
       },
     ),
     me: meBlock(),
-    cheat: pr('cheat'), // always on: asserting things you do not have is a lie inside the fiction
+    cheat: prFor('cheat'), // always on: asserting things you do not have is a lie inside the fiction
     growth: (() => {
       const k = growthLevel().key;
-      return k ? (pr('growth') || {})[k] || '' : '';
+      return k ? (prFor('growth') || {})[k] || '' : '';
     })(),
     know: rule('knowledgeGuard') !== false ? pr('knowledge') : '', // the player always brings knowledge from outside this world (their own, a past life, the character's origin); the rule is about the process, not the source
     profile: l.profile
@@ -652,7 +685,7 @@ export function buildPrompt(text, cmd, turn = {}) {
           ? fillTemplate(pr('entryTransfer'), { from: l.world.from || pl('modern-day Earth') })
           : '',
     sponsor: l.sponsor
-      ? fillTemplate(app.state.channelOpen ? pr('sponsorOpen') : pr('sponsorClosed'), {
+      ? fillTemplate(app.state.channelOpen ? prFor('sponsorOpen') : prFor('sponsorClosed'), {
           stance: plLabel(STANCE_LABEL, l.sponsor.stance),
         })
       : '',
@@ -728,7 +761,7 @@ export function buildPrompt(text, cmd, turn = {}) {
           .map(c => '- ' + c.text)
           .join('\n')}`
       : '',
-    fate: fate ? pr('fateHead') + (fate === 'jackpot' ? pr('fateJackpot') : pr('fateDoom')) : '',
+    fate: fate ? prFor('fateHead') + (fate === 'jackpot' ? pr('fateJackpot') : prFor('fateDoom')) : '',
     luck: luck === 'bad' ? pr('luckBad') || '' : luck === 'good' ? pr('luckGood') || '' : '',
     nodice: rule('dice') === false ? pr('noDice') || '' : '',
     jcore: roll || (cmd && cmd.type === 'judge') ? pr('judgeCore') || '' : '',
@@ -742,10 +775,12 @@ export function buildPrompt(text, cmd, turn = {}) {
     P.scenario = scenarioBlock(scenarioNote());
     P.me = personaBlock(l);
     P.nodice = rule('dice') === false ? '' : pr('scenarioDice'); // the odds on choices the roguelike's rules ask for
+    P.adminp = P.adminp && [P.adminp, pr('scenarioAdmin')].join('\n'); // the reply fields its rules leave out
+    if (P.ext) P.ext = [pr('scenarioExt'), P.ext, ladderStart()].filter(Boolean).join('\n');
   }
   const LEN = { short: pr('lenShort'), normal: '', long: pr('lenLong') }[setting('len')] || '';
   const tip = app.settings.langTip ? prLang('tip') : '';
-  const extra = prLang(scen ? 'scenarioLang' : 'lang') + (tip ? pl('\n[Extra output field] ') + tip : '');
+  const extra = prLang(scen || !adminOn() ? 'scenarioLang' : 'lang') + (tip ? pl('\n[Extra output field] ') + tip : '');
   const style = styleBlock(); // after the language block, whose plain prose it replaces
   const base = prFor('rules') || '';
   const rulesWith = st => withPlayerSettings(base, [LEN, extra, st].filter(Boolean).join('\n'));
@@ -799,6 +834,7 @@ const FATAL = [
   'prompt_too_large',
 ];
 export let promptStats = []; // estimated tokens of the last prompts, for the settings tab
+export let lastPrompt = ''; // the last narrator prompt as sent, in memory only, for the settings tab
 // one id per send: a retry of the same send reuses it, so an answer that finished while the page was away replays at no cost; anything else (a new send, a rewrite, a branch) gets a new id and never sees an old answer
 const REPLAY = { gcTime: 3600000 };
 const STALE_REQ = new Set(); // request ids whose cached answer was unusable: the next try asks for a fresh one
@@ -842,6 +878,7 @@ export async function callNarrator(text, cmd, turn) {
   if (app.state.style === STYLE.NOTE && !styleNote())
     throw Object.assign(new Error(T(STYLE_GONE)), { code: 'style_note_gone', shown: true });
   const prompt = buildPrompt(text, cmd, turn) + (req ? `\n(req ${req})` : '');
+  lastPrompt = prompt;
   const cacheOpt = () => (!req ? false : STALE_REQ.has(req) ? Object.assign({ refresh: true }, REPLAY) : REPLAY);
   const stale = () => {
     if (req) STALE_REQ.add(req);

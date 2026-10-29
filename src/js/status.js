@@ -33,7 +33,7 @@ export function renderStrip() {
   el.classList.remove('hidden');
   if (isScenario()) {
     // no grade, numbers or condition: the scenario keeps its own
-    el.innerHTML = `<div class="who">${esc(l.name)}<span class="meta">${T('{scenario}, turn {turn}', { scenario: esc(scenarioName()), turn: turnNo })}</span></div>`;
+    el.innerHTML = `<div class="who">${esc(l.name)}${X.ladder ? `<span class="realm">${T(X.ladder.steps[app.state.ladder])}</span>` : ''}<span class="meta">${T('{scenario}, turn {turn}', { scenario: esc(scenarioName()), turn: turnNo })}</span></div>`;
     return;
   }
   const meta = T('Age {age}, {world}, life {life}, turn {turn}', {
@@ -118,7 +118,7 @@ function scenarioStatus() {
     <div class="sw-head"><div><div class="kv"><span>${T('Name')}</span><span>${esc(l.name)}</span></div>
       <div class="kv"><span>${T('Scenario')}</span><span>${esc(scenarioName())}</span></div>
       ${place ? `<div class="kv"><span>${T('Place')}</span><span>${esc(place)}</span></div>` : ''}</div></div>
-    ${sec('STATS', stats)}${sec('SKILLS', skills && `<div class="sw-scroll">${skills}</div>`)}${sec('Inventory', items && `<div class="sw-scroll">${items}</div>`)}${sec('QUESTS', quests && `<div class="sw-scroll">${quests}</div>`)}${sec('LEDGER', ledger && `<dl class="sw-kv sw-kv-loose">${ledger}</dl>`)}${sec('TITLES', titles && `<div class="sw-chips">${titles}</div>`)}${sec('NOW', st.stateNote && `<p class="sw-state">${esc(st.stateNote)}</p>`)}
+    ${extSection(worldExt())}${sec('STATS', stats)}${sec('SKILLS', skills && `<div class="sw-scroll">${skills}</div>`)}${sec('Inventory', items && `<div class="sw-scroll">${items}</div>`)}${sec('QUESTS', quests && `<div class="sw-scroll">${quests}</div>`)}${sec('LEDGER', ledger && `<dl class="sw-kv sw-kv-loose">${ledger}</dl>`)}${sec('TITLES', titles && `<div class="sw-chips">${titles}</div>`)}${sec('NOW', st.stateNote && `<p class="sw-state">${esc(st.stateNote)}</p>`)}
   </div><div class="row sw-actions"><button class="btn" data-close>${T('Close')}</button></div>`,
     { center: true, wide: true },
   );

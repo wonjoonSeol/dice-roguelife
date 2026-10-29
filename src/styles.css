@@ -4490,3 +4490,24 @@ textarea.mem-edit {
 #log [data-big] {
   cursor: zoom-in;
 }
+
+/* a setting that only the dice roguelike reads, not scenario games */
+.only-note {
+  font-size: 0.85em;
+  margin-left: 4px;
+}
+
+/* the last prompt, as sent */
+.prompt-view {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font:
+    12px/1.5 ui-monospace,
+    Menlo,
+    monospace;
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--panel2);
+  padding: 10px;
+  border-radius: 8px;
+}

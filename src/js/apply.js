@@ -579,6 +579,16 @@ function applyClock(ctx) {
 function applyWorldExt(ctx) {
   const { reply, notes, events, ext } = ctx;
   const L = ext.ladder;
+  // a scenario that left its start to the story: the step it names, once (in the prompt's language or English)
+  if (L && app.state.ladderPending && typeof reply.ladder === 'string') {
+    const want = normName(reply.ladder);
+    const i = L.steps.findIndex(s => [s, tIn(promptLang(), s)].some(x => normName(x) === want));
+    if (i >= 0) {
+      app.state.ladder = i;
+      delete app.state.ladderPending;
+      notes.push(`${T(L.label)}: ${T(L.steps[i])}`);
+    }
+  }
   if (L && reply.ladder_up === true && app.state.ladder < L.steps.length - 1) {
     app.state.ladder++;
     notes.push(T(L.up, { realm: T(L.steps[app.state.ladder]) }));

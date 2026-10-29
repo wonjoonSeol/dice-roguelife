@@ -584,6 +584,23 @@ test('roster', async ({ game }) => {
     block(hp, NAMED).includes('설화(여, noble lady)') && !block(hp, NAMED).includes('남궁세가'),
   );
   check(errs, 'an entry with only a faction, and no card, sends no profile', !block(hp, PROFILES).includes('박과장'));
+  // an epithet (별호) is a name the person answers to, and the narrator is told it, first in their profile
+  await pg.evaluate(() =>
+    DR.setRoster(
+      DR.app.state,
+      'hunter',
+      '이름: 원비령 / 별호: 낙안검후 / 직책: 무림맹 객장 / 실력: 초절정 / 성격: 냉정함',
+    ),
+  );
+  await turn(pg, '낙안검후에게 인사한다', {});
+  const ep = await pg.evaluate(() => ({ p: window.__lastPrompt, who: (DR.rosterFor('낙안검후') || {}).name }));
+  check(errs, 'the epithet names the person', ep.who === '원비령');
+  check(
+    errs,
+    'the epithet heads the profile, and follows the name in the named list',
+    block(ep.p, PROFILES).includes('원비령(별호 낙안검후, 무림맹 객장, 초절정): 냉정함') &&
+      block(ep.p, NAMED).includes('원비령(?, 낙안검후'),
+  );
   await pg.evaluate('DR.startNewLifeForm({});0');
   await pg.waitForTimeout(300);
   await begin(pg, {

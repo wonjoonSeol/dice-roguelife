@@ -2,12 +2,12 @@
 import { clone, noteIgnored, pick, rnd, shortWhat, toast, uid } from './util.js';
 import { isPivotal, matchOdds, mentionsStars, stripOdds } from './reply-words.js';
 import { askOf, cmdIs, normEmo } from './data.js';
-import { ENTRY_LABEL, STANCE_LABEL } from './enums.js';
+import { ADDON, ENTRY_LABEL, STANCE_LABEL } from './enums.js';
 import { T } from './i18n.js';
 import { platform } from './db.js';
 import { NEW_SAVES, turnStore } from './turn-store.js';
 import { app, currentRun, exclusive } from './app.js';
-import { critOf, isScenario, rollGrade, rule } from './rules.js';
+import { adminOn, addonOn, critOf, isScenario, rollGrade, rule } from './rules.js';
 import { aliasOut, lastStoryReply } from './people.js';
 import { snapOf } from './roster.js';
 import { cueDeath, cueDoom, cueFanfare, cueItem, cueQuest, cueRealm, cueReveal, cueSkill } from './sound.js';
@@ -20,7 +20,7 @@ import { openStatus, renderStrip } from './status.js';
 import { adminFace, countInputHint, renderLog, showLiveReply } from './log.js';
 import { fitInput, input, offerInput, parseCmd, saveDraft, setSendMode } from './composer.js';
 import { applyOut } from './apply.js';
-import { callNarrator, fillTemplate, peekReply, pl, plLabel, pr, talentVars } from './prompt.js';
+import { callNarrator, fillTemplate, peekReply, pl, plLabel, pr, prFor, talentVars } from './prompt.js';
 import { applyErratum, upholdObjection } from './reroll.js';
 import { maybeSummarize } from './summaries.js';
 import { extMask } from './world-ext.js';
@@ -67,7 +67,7 @@ export let showDice = function showDice(r) {
     const good = fx.filter(x => (r.ok ? okRe : badRe).test(key(x)));
     const neutral = fx.filter(x => !okRe.test(key(x)) && !badRe.test(key(x)));
     const pic = good.length ? pick(good) : neutral.length ? pick(neutral) : fx.length ? pick(fx) : null; // name or tags: dice_success / dice_high / dice20 win, dice_fail / dice_low / dice1 lose
-    const face = !pic ? adminFace(r.ok ? 'joy' : 'smirk') : null;
+    const face = !pic && adminOn() ? adminFace(r.ok ? 'joy' : 'smirk') : null;
     const label = { critSuccess: 'CRITICAL SUCCESS', success: 'SUCCESS', fail: 'FAIL', critFail: 'CRITICAL FAIL' }[
       rollGrade(r)
     ];
@@ -150,7 +150,9 @@ async function sendInner(text) {
     fate = null;
   if (!cmd) {
     const keep = app.state.rollMemo && app.state.rollMemo.at === app.state.next && 'luck' in app.state.rollMemo;
-    luck = rule('dice') === false || isScenario() ? null : keep ? app.state.rollMemo.luck : rollLuck();
+    // a scenario's luck comes with its luck extra, dice or not
+    const noLuck = isScenario() ? !addonOn(ADDON.LUCK) : rule('dice') === false;
+    luck = noLuck ? null : keep ? app.state.rollMemo.luck : rollLuck();
     fate = keep && 'fate' in app.state.rollMemo ? app.state.rollMemo.fate : rollFate(null, false);
     const mr = makeRoll(text);
     text = mr.text;
@@ -202,7 +204,11 @@ export function lifeExtra(l) {
   if (l.entry && l.entry !== 'native') x.push(pl(', arrival: {entry}', { entry: plLabel(ENTRY_LABEL, l.entry) }));
   if (l.sponsor)
     x.push(
-      pl(', has constellations (stance toward ADMIN: {stance})', { stance: plLabel(STANCE_LABEL, l.sponsor.stance) }),
+      adminOn()
+        ? pl(', has constellations (stance toward ADMIN: {stance})', {
+            stance: plLabel(STANCE_LABEL, l.sponsor.stance),
+          })
+        : pl(', has constellations'),
     );
   return x.join('');
 }
@@ -214,7 +220,7 @@ export function introPrompt(st, opening = '') {
     return fillTemplate(pr('scenarioOpening'), { first });
   }
   const l = st.life;
-  return fillTemplate(pr('intro'), {
+  return fillTemplate(prFor('intro'), {
     opening,
     world: l.world.name,
     race: l.race,
@@ -275,7 +281,7 @@ export async function runTurn(text, cmd, opts = {}) {
     head: askOf(cmd) ? askOf(cmd).head : null, // the live box heading (English; log.js shows it with T)
     preview: null, // the banner and face picked while the reply streamed (once per reply)
     previewNpc: '', // whose face that is
-    opening: intro ? openingFor(app.state.life.world.id, isScenario()) : null, // the frames or banner above a life's first reply
+    opening: intro ? openingFor(app.state.life.world.id, !adminOn()) : null, // the frames or banner above a life's first reply
     abort: new AbortController(), // the stop button
   };
   turn.onText = streamedReply(turn, cmd);
@@ -443,6 +449,7 @@ async function objectionHandled(out, cmd, text) {
 // browsing ones change nothing in the story.
 function maskReply(out, cmd, turn) {
   if (isScenario()) scenarioMask(out);
+  if (!adminOn()) out.admin = ''; // ⚙ turned ADMIN off, or a scenario without its ADMIN extra
   if (!cmd) return;
   if (cmdIs(cmd, 'ask')) {
     out.widget = null;
@@ -478,19 +485,15 @@ function maskReply(out, cmd, turn) {
   }
 }
 // what a scenario reply may not do: the roguelike's own events (a windfall, a constellation channel, an awakening,
-// a new race), ADMIN, and death, which would offer a regression
+// a new race) and death, which would offer a regression
 const SCENARIO_OFF = {
   windfall: false,
   channel_open: false,
   status_unlock: false,
   race: null,
-  admin: '',
   dead: false,
 };
-function scenarioMask(out) {
-  Object.assign(out, clone(SCENARIO_OFF));
-  extMask(out);
-}
+const scenarioMask = out => Object.assign(out, SCENARIO_OFF);
 // A free roll gets its chance from the narrator's check and is written onto the player's line; a critical result
 // (either kind of roll) plays the dice reveal.
 async function settleDice(turn, out) {

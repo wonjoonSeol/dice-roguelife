@@ -2,6 +2,7 @@
 import { $, clone, esc, noteIgnored, nowIso, pick, rnd, toast, uid } from './util.js';
 import { LIMITS } from './limits.js';
 import {
+  ADMIN_TALENT,
   BASE,
   cmdName,
   CMDS,
@@ -29,6 +30,9 @@ import {
   GENDER,
   GENDER_LABEL,
   GENDERS,
+  ADDON,
+  ADDON_LABEL,
+  ADDONS,
   MODE,
   MODE_LABEL,
   MODES,
@@ -43,7 +47,7 @@ import { isPrivileged, platform } from './db.js';
 import { NEW_SAVES, turnStore } from './turn-store.js';
 import { app, exclusive, lastSaveCard } from './app.js';
 import { saveSettings, setting, storyLang } from './settings.js';
-import { snapshotRules } from './rules.js';
+import { adminOn, snapshotRules } from './rules.js';
 import { showTab } from './shell.js';
 import { cueBlip, cueReveal } from './sound.js';
 import { ensureSample } from './boot.js';
@@ -52,7 +56,7 @@ import { leaveOpenSave, pushTurn, showPlay } from './persistence.js';
 import { introPrompt, runTurn } from './turn.js';
 import { fillTemplate, normalize, pr, talentVars } from './prompt.js';
 import { chooseUiLang } from './settings-sheet.js';
-import { extStart } from './world-ext.js';
+import { extStart, WORLD_EXT } from './world-ext.js';
 import { parseRoster, rosterTextOf, setRoster, snapOf } from './roster.js';
 import { bindRosterEditor, joinRoster, openImport, rosterEditorHtml } from './roster-view.js';
 import { lastNoteIds, noteById } from './notes.js';
@@ -80,8 +84,32 @@ const startStyle = inherit => {
 // a new game opens in the last save's mode; a regression goes on as a roguelike
 const startPlay = inherit =>
   !inherit && (lastSaveCard() || {}).mode === MODE.SCENARIO ? MODE.SCENARIO : MODE.ROGUELIKE;
-// the dice box keeps each mode's answer: the settings' for the roguelike, off for a scenario
-let diceFor = {};
+// A scenario's extras (enums.js ADDON), ticked on the form (sc) and in the Memory tab (mem); the world add-on only for
+// a world that has one (X), named by it
+export const addonRowsHtml = (pre, on, X) =>
+  ADDONS.filter(k => k !== ADDON.EXT || X)
+    .map(
+      k =>
+        `<label class="row opt"><input type="checkbox" id="${pre}Addon-${k}" data-addon="${k}"${on[k] ? ' checked' : ''}> ${esc(T(k === ADDON.EXT ? X.name : ADDON_LABEL[k]))}</label>`,
+    )
+    .join('');
+// the form's ticks start from the last scenario save's
+const startAddons = () => ({ ...((lastSaveCard() || {}).addons || {}) });
+const formAddons = () =>
+  Object.fromEntries([...document.querySelectorAll('#scAddons [data-addon]')].map(c => [c.dataset.addon, c.checked]));
+// the extras for the picked world: its add-on starts ticked, with a choice of where on its ladder the story starts
+function syncAddons(worldId) {
+  const box = $('#scAddons');
+  if (!box) return;
+  const X = WORLD_EXT[worldId] || null;
+  const on = { ...startAddons(), ...formAddons() };
+  if (X && !$('#scAddon-ext')) on.ext = true;
+  box.innerHTML =
+    addonRowsHtml('sc', on, X) +
+    (X && X.ladder
+      ? `<div class="row ext-start"><label for="scExtStart">${T('Starting {label}', { label: T(X.ladder.label) })}</label><select id="scExtStart"><option value="">${T('Let the story decide')}</option>${X.ladder.steps.map((st, i) => `<option value="${i}">${esc(T(st))}</option>`).join('')}</select></div>`
+      : '');
+}
 // chips with data-sty, for the form and the Memory tab
 export const styleChips = (cur, off) =>
   STYLES.map(
@@ -141,13 +169,16 @@ export function startNewLifeForm(inherit) {
   const log = $('#log');
   // the form's choices; play is the game mode, scWorld a scenario's picture world
   const sel = { world: 'random', gender: GENDER.MALE, mode: 'gacha', play: startPlay(inherit), scWorld: 'none' };
-  diceFor = { [MODE.ROGUELIKE]: app.settings.dice !== false, [MODE.SCENARIO]: false };
   log.innerHTML = newLifeHtml(inherit, sel.play);
   bindChoice(log, '#playseg', 'pm', v => {
-    showMode(sel.play, v);
     sel.play = v;
+    showMode(v);
   });
-  bindChoice(log, '#scwseg', 'scw', v => (sel.scWorld = v));
+  bindChoice(log, '#scwseg', 'scw', v => {
+    sel.scWorld = v;
+    syncAddons(v);
+  });
+  syncAddons(sel.scWorld);
   bindChoice(log, '#gseg', 'g', v => (sel.gender = v));
   bindChoice(log, '#wseg', 'w', v => (sel.world = v));
   bindChoice(log, '#spseg', 'sp', v => (sel.sponsor = v));
@@ -169,13 +200,8 @@ export function startNewLifeForm(inherit) {
   $('#rollBtn').onclick = () => rollFromForm(inherit, sel);
   if ($('#scStart')) $('#scStart').onclick = () => startScenario(sel);
 }
-// the form shows one mode's parts (the .sc class), and the dice box each mode's answer
-function showMode(from, to) {
-  const dm = $('#diceMode');
-  if (dm && from !== to) {
-    diceFor[from] = dm.checked;
-    dm.checked = diceFor[to];
-  }
+// the form shows one mode's parts (the .sc class)
+function showMode(to) {
   $('#log .newlife').classList.toggle('sc', to === MODE.SCENARIO);
   if (to === MODE.SCENARIO) syncScenarioCast();
 }
@@ -285,11 +311,11 @@ function newLifeHtml(inherit, play) {
     ${
       inherit
         ? ''
-        : `<div class="field dm"><label class="row dm-head"><input type="checkbox" id="diceMode" ${diceFor[play] ? 'checked' : ''}> ${T('🎲 Roll the dice every turn')} <span class="dm-tag rl-only">${T('2d100 (choices, daily luck)')}</span><span class="dm-tag sc-only">${T('d100 (choices)')}</span></label>
+        : `<div class="field dm rl-only"><label class="row dm-head"><input type="checkbox" id="diceMode" ${app.settings.dice !== false ? 'checked' : ''}> ${T('🎲 Roll the dice every turn')} <span class="dm-tag">${T('2d100 (choices, daily luck)')}</span></label>
       <div class="dm-desc">
         <p>${T('<b>On:</b> <span class="dm-up">harder ↑ more thrilling ↑</span>')}</p>
         <p class="li">${T('- <b>Choice dice</b>: decide risky actions and choices that show a chance')}</p>
-        <p class="li rl-only">${T('- <b>Daily dice</b>: the occasional good or bad luck, whatever you do')}</p>
+        <p class="li">${T('- <b>Daily dice</b>: the occasional good or bad luck, whatever you do')}</p>
         <p class="li">${T("- The code rolls them, not the AI, so results don't lean either way")}</p>
         <p class="gap">${T('<b>Off:</b> relaxed, the way you want it')}</p>
         <p class="li">${T('- The story goes by what is plausible, no dice')}</p>
@@ -328,6 +354,7 @@ function scenarioHtml() {
   return `<div class="field sc-only"><label>${T('Scenario: a note from your library')}</label>${scenarioPickerHtml((lastSaveCard() || {}).scenarioId || null)}</div>
     <div class="field sc-only"><label for="scFirst">${T('First scene (optional)')}</label><textarea id="scFirst" rows="4" maxlength="${LIMITS.userNotes}" placeholder="${esc(T('e.g. The rain has not stopped for three days. You push open the door of the bookshop at the end of the alley.'))}"></textarea><label class="row opt"><input type="checkbox" id="scVerbatim"> ${T('Show this text as the first message, as it is')}</label><p class="muted field-note">${T('Unticked, the narrator writes the opening from the scenario, starting from this situation when there is one.')}</p></div>
     <div class="field sc-only"><label>${T('World of the pictures (optional)')}</label><div class="seg" id="scwseg"><button type="button" data-scw="none" aria-pressed="true">${T('None')}</button>${WORLDS.map(w => `<button type="button" data-scw="${w.id}" aria-pressed="false">${T(w.name)}</button>`).join('')}</div><p class="muted field-note">${T('It only decides which pictures fit. None means any picture.')}</p></div>
+    <div class="field sc-only"><label>${T('Extras')}</label><div id="scAddons" class="addons"></div><p class="muted field-note">${T('Each extra brings in only its own part of the game. You can change them later in the Memory tab.')}</p></div>
     <details class="roster-box sc-only" id="scRoster"><summary>${T('Characters for this story (optional)')}</summary>${rosterEditorHtml('')}<p class="muted field-note">${T('Kept in this save. Each turn the narrator gets the names of a few people not met yet, and the full details only of the few the story is on right now, so a long list costs no more.')}</p></details>`;
 }
 // the free setup's talent rows: add up to TALENT_MAX, remove any
@@ -661,7 +688,7 @@ export let rollLife = function rollLife(name, gender, worldChoice, free, aff) {
         .reverse()
         .map(pool)
         .find(l => l.length),
-    talents = t => TALENTS[t].filter(x => inPool(table, x[0]));
+    talents = t => TALENTS[t].filter(x => inPool(table, x[0]) && (x[0] !== ADMIN_TALENT || adminOn()));
   const kw = aff ? [...aff.keywords, ...aff.races] : [];
   let ot = rollTier(),
     tt = rollTier();
@@ -938,14 +965,21 @@ async function startScenario(sel) {
   rememberFormDefaults(life, true);
   const first = ($('#scFirst').value || '').trim();
   const verbatim = !!first && $('#scVerbatim').checked;
-  const dm = $('#diceMode');
+  const X = table && WORLD_EXT[table.id];
+  const addons = { ...Object.fromEntries(ADDONS.map(k => [k, false])), ...formAddons() };
+  addons.ext = !!X && addons.ext;
+  const pickStep = $('#scExtStart') ? $('#scExtStart').value : '';
+  const step = addons.ext && X.ladder && pickStep !== '' ? Number(pickStep) : null;
   const b = BASE.C;
   app.state = {
     v: 1,
     goldV: 2,
-    rules: { ...snapshotRules(), dice: !!(dm && dm.checked), gambler: false },
+    rules: snapshotRules(), // dice and the gambler's fate come from the extras (rules.js rule)
     lang,
     mode: MODE.SCENARIO,
+    addons,
+    ...(addons.ext ? extStart(life.world.id, null, step) : {}),
+    ...(addons.ext && X.ladder && step == null ? { ladderPending: true } : {}),
     scenarioId: note.id,
     scenarioName: note.name,
     firstScene: first,

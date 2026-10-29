@@ -7,7 +7,8 @@ const CHECK = String.raw`(()=>{const p=DR.buildPrompt('간다',null);const at=s=
   return {ko:at(DR.prompts.lang.ko),lang:at(DR.prompts.lang.en),len:at(DR.pr('lenLong')),tip:at(DR.prompts.tip.en),
   style:at(DR.pr('styles').jinyong),rules,bytes:new Blob([p]).size}})()`;
 // every prompt the page sends, in order
-const RECORD = `async(p)=>{(window.__p=window.__p||[]).push(p);return (${ANSWER})()}`;
+// window.__more: fields added to the answer
+const RECORD = `async(p)=>{(window.__p=window.__p||[]).push(p);return Object.assign(await (${ANSWER})(),window.__more||{})}`;
 
 test('prompt settings', async ({ game }) => {
   const { pg, errs } = await game(claudeMock(RECORD), { size: [420, 900] });
@@ -155,7 +156,7 @@ test('scenario mode', async ({ game }) => {
       items: [{ name: '우산', qty: 1, grade: 'C' }],
       skills: [{ name: '제본', grade: 'C', desc: '책을 묶는다', lv: 2 }],
     });
-    DR.app.state.rules.dice = true;
+    DR.app.state.addons = { ...DR.app.state.addons, dice: true };
     return n.id;
   }, STYLE_TEXT);
   await pg.evaluate(() => DR.send('창밖을 본다'));
@@ -183,6 +184,67 @@ test('scenario mode', async ({ game }) => {
     const hit = p.match(ROGUELIKE_WORDS);
     check(errs, `the ${what} prompt has nothing of Dice Roguelife (${hit && hit[0]})`, !hit);
   }
+  // the ADMIN extra: off, the reply's admin line is dropped; on, the persona and its output fields go and the line shows
+  const adminTurn = async (on, text) => {
+    await pg.evaluate(on => {
+      DR.app.state.addons = { ...DR.app.state.addons, admin: on };
+      window.__more = { admin: 'ADMIN-SAYS', admin_emotion: 'smile' };
+    }, on);
+    await pg.evaluate(t => DR.send(t), text);
+    await pg.waitForFunction(t => DR.isIdle() && DR.app.turns.at(-2)?.text === t, text, { timeout: 15000 });
+    return pg.evaluate(() => ({
+      p: window.__p.at(-1),
+      line: [...document.querySelectorAll('#log .admin')].some(e => e.textContent.includes('ADMIN-SAYS')),
+    }));
+  };
+  const admOff = await adminTurn(false, '책을 덮는다');
+  const admOn = await adminTurn(true, '책을 편다');
+  const persona = await pg.evaluate(() => DR.ADMIN_PERSONAS().star.text);
+  check(errs, 'ADMIN extra off: no ADMIN block, no admin line', !admOff.p.includes('[ADMIN') && !admOff.line);
+  check(
+    errs,
+    'ADMIN extra on: the persona and its fields go, and the admin line shows',
+    admOn.p.includes(persona) && admOn.p.includes('[ADMIN 출력]') && admOn.line,
+  );
+  // a 동양 무협 scenario with its add-on: its blocks go and a realm step is applied; untick it and neither happens
+  await pg.click('[data-tab="saves"]');
+  await pg.click('#newGame');
+  await pg.fill('#nm', '진무');
+  await pg.check(`#scNote-${id}`);
+  await pg.click('[data-scw="murim"]');
+  check(errs, 'the murim chip ticks its add-on', await pg.isChecked('#scAddon-ext'));
+  await pg.uncheck('#scAddon-admin'); // the form starts from the last scenario save's extras
+  await pg.selectOption('#scExtStart', '2');
+  await pg.fill('#scFirst', FIRST);
+  await pg.check('#scVerbatim');
+  await pg.click('#scStart');
+  await pg.waitForFunction("DR.app.turns.length>=2&&DR.isIdle()&&DR.app.state.life.world.id==='murim'", null, {
+    timeout: 15000,
+  });
+  const extTurn = async (on, text) => {
+    await pg.evaluate(on => {
+      DR.app.state.addons = { ...DR.app.state.addons, ext: on };
+      window.__more = { ladder_up: true };
+    }, on);
+    await pg.evaluate(t => DR.send(t), text);
+    await pg.waitForFunction(t => DR.isIdle() && DR.app.turns.at(-2)?.text === t, text, { timeout: 15000 });
+    return pg.evaluate(() => ({ p: window.__p.at(-1), ladder: DR.app.state.ladder, head: DR.pr('scenarioExt') }));
+  };
+  const extOn = await extTurn(true, '검을 뽑는다');
+  const extOff = await extTurn(false, '검을 넣는다');
+  check(
+    errs,
+    `add-on on: its blocks go and ladder_up lifts the chosen start (${extOn.ladder})`,
+    extOn.p.includes(extOn.head) && extOn.p.includes('\n[경지]') && extOn.ladder === 3,
+  );
+  check(
+    errs,
+    `add-on off: neither (${extOff.ladder})`,
+    !extOff.p.includes(extOff.head) && !extOff.p.includes('\n[경지]') && extOff.ladder === 3,
+  );
+  const extHit = extOn.p.match(ROGUELIKE_WORDS);
+  check(errs, `the add-on prompt has nothing of Dice Roguelife (${extHit && extHit[0]})`, !extHit);
+  await pg.evaluate(() => (window.__more = null));
   // a roguelike game after it still gets the roguelike's rules and ADMIN
   await pg.click('[data-tab="saves"]');
   await pg.click('#newGame');
@@ -200,5 +262,18 @@ test('scenario mode', async ({ game }) => {
     };
   });
   check(errs, 'a roguelike save keeps the roguelike rules and ADMIN', rl.base && rl.admin && !rl.scen);
+  // ⚙ ADMIN off: nothing of ADMIN in a roguelike prompt, and no admin line
+  await pg.evaluate(() => {
+    DR.app.settings.adminPersona = 'off';
+    window.__more = { admin: 'ADMIN-SAYS' };
+  });
+  await pg.evaluate(() => DR.send('둘러본다'));
+  await pg.waitForFunction(() => DR.isIdle() && DR.app.turns.at(-2)?.text === '둘러본다', null, { timeout: 15000 });
+  const off = await pg.evaluate(() => ({
+    p: window.__p.at(-1),
+    line: !!document.querySelector('#log .admin'),
+  }));
+  check(errs, 'ADMIN off: no ADMIN in the roguelike prompt', !/ADMIN|\badmin\b/.test(off.p));
+  check(errs, 'ADMIN off: no admin line', !off.line);
   expect(errs).toEqual([]);
 });

@@ -18,7 +18,7 @@ import { redrawNewLifeForm } from './new-life.js';
 import { redrawNoSample } from './boot.js';
 import { applyEnterHint, enterPref, setEnterPref, syncEnterTog } from './composer.js';
 import { openUpdateSheet } from './update.js';
-import { ADMIN_PERSONAS, promptStats, recentBudget, recentLine } from './prompt.js';
+import { ADMIN_PERSONAS, lastPrompt, promptStats, recentBudget, recentLine } from './prompt.js';
 
 let lastTierCheck = null; // what the platform actually served for the tier we asked (a plan may substitute a cheaper one)
 
@@ -72,12 +72,12 @@ function settingsHtml() {
     ]
       .map(([go, label]) => `<button class="btn" data-go="${go}">${T(label)}</button>`)
       .join('')}</div>
-    <div class="field settings-field"><label for="adminSel">${T('ADMIN persona')}</label><select id="adminSel">${Object.entries(
+    <div class="field settings-field"><label for="adminSel">${T('ADMIN persona')} <span class="muted only-note">${T('In a scenario, an extra')}</span></label><select id="adminSel">${Object.entries(
       ADMIN_PERSONAS(),
     )
       .map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`)
       .join('')}</select></div>
-    <div class="field admin-custom hidden" id="adminCustomBox"><label for="adminCustom">${T('ADMIN description (write your own)')}</label><textarea id="adminCustom" rows="4" maxlength="600" placeholder="${esc(T("e.g. ADMIN is a retired demon king who calls the player 'successor candidate'..."))}">${esc(app.settings.adminCustom || '')}</textarea></div>
+    <div class="field admin-custom hidden" id="adminCustomBox"><label for="adminCustom">${T('ADMIN description (write your own)')} <span class="muted only-note">${T('In a scenario, an extra')}</span></label><textarea id="adminCustom" rows="4" maxlength="600" placeholder="${esc(T("e.g. ADMIN is a retired demon king who calls the player 'successor candidate'..."))}">${esc(app.settings.adminCustom || '')}</textarea></div>
     <div class="field settings-field"><label for="enterSel">${T('Enter key (saved in this browser only)')}</label><select id="enterSel">${options(
       [
         ['auto', N_('Auto (sends on PC, new line on phones)')],
@@ -87,7 +87,7 @@ function settingsHtml() {
     )}</select></div>
     <label class="row opt settings-opt after-field"><input type="checkbox" id="knowGuard"> ${T("Limit outside knowledge: knowledge from the real world, a past life or the character's home world never turns into power or money in one go; it hits walls while you are weak and opens up as you grow")}</label>
     <label class="row opt settings-opt after-field"><input type="checkbox" id="gambler"> ${T("Gambler's Stone: any turn can roll a jackpot (sure success + a big reward) or a doom (sure failure + a big penalty)")}</label>
-    <div class="field gambler-odds"><label for="gamblerP">${T('Chance of a jackpot, and of a doom')}</label><select id="gamblerP">${options(
+    <div class="field gambler-odds"><label for="gamblerP">${T('Chance of a jackpot, and of a doom')} <span class="muted only-note">${T('In a scenario, an extra')}</span></label><select id="gamblerP">${options(
       [
         ['0.1', N_('10% each (20% together)')],
         ['0.15', N_('15% each (30% together)')],
@@ -110,7 +110,7 @@ function settingsHtml() {
         ['never', N_('Hidden: no numbers even after awakening, story only')],
       ],
     )}</select></div>
-    <div class="field settings-field"><label for="growthSel">${T('Growth pace (how generous stat growth is)')}</label><select id="growthSel">${options(
+    <div class="field settings-field"><label for="growthSel">${T('Growth pace (how generous stat growth is)')} <span class="muted only-note">${T('In a scenario, an extra')}</span></label><select id="growthSel">${options(
       [
         ['auto', N_("Auto: by the world's difficulty and ADMIN's personality")],
         ['stingy', N_('Stingy: only at big moments, 8-turn cooldown per stat')],
@@ -509,4 +509,22 @@ function notePromptSize(q) {
       )
     : T('Prompt size: no turns yet in this session');
   q('growthSel').closest('.field').after(el);
+  if (!lastPrompt) return;
+  const b = document.createElement('button');
+  b.className = 'btn ghost chip-sm';
+  b.textContent = T('View the last prompt');
+  b.onclick = showLastPrompt;
+  el.after(b);
+}
+// exactly what the narrator was last sent, to read or copy
+function showLastPrompt() {
+  openSheet(
+    `<h3 class="sheet-title">${T('The last prompt sent to the narrator')}</h3><p class="muted">${T('{n} characters. It is kept only until this page reloads.', { n: lastPrompt.length.toLocaleString(locale()) })}</p><pre class="prompt-view">${esc(lastPrompt)}</pre><div class="row actions"><button class="btn" id="copyPrompt">${T('Copy')}</button><button class="btn ghost" data-close>${T('Close')}</button></div>`,
+    { wide: true },
+  );
+  $('#copyPrompt').onclick = () =>
+    navigator.clipboard.writeText(lastPrompt).then(
+      () => toast(T('Copied')),
+      e => toast(T('Save failed: {err}', { err: e.message })),
+    );
 }

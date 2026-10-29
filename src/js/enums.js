@@ -28,6 +28,24 @@ export const NOTE_TYPE_LABEL = Object.freeze({
   style: N_('Prose style'),
   cast: N_('Cast'),
 });
+// A scenario save's extras (state.addons): the game's own systems it takes on, each one bringing only its own prompt
+// blocks and reply fields. ext is the world add-on of its world chip (world-ext.js), named by the add-on itself
+export const ADDON = Object.freeze({
+  ADMIN: 'admin',
+  EXT: 'ext',
+  DICE: 'dice',
+  LUCK: 'luck',
+  WIDGETS: 'widgets',
+  GROWTH: 'growth',
+});
+export const ADDONS = Object.freeze(Object.values(ADDON));
+export const ADDON_LABEL = Object.freeze({
+  admin: N_('ADMIN (constellation) commentary'),
+  dice: N_('🎲 Dice checks: risky choices show a chance and a d100 decides'),
+  luck: N_('Luck events: jackpot, doom and daily luck'),
+  widgets: N_('Widgets on their own: news or a board after a big event'),
+  growth: N_('Growth pace from the ⚙ settings'),
+});
 // the world id of a scenario save that picked no world: every picture fits it, and its character list is kept under it
 export const SCENARIO_WORLD = 'scenario';
 

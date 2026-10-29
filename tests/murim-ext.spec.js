@@ -207,10 +207,13 @@ async function murimChecks(pg, errs) {
   const i2 = await last(pg);
   await turn(pg, '웃는다', { speaker: '백리운', speaker_gender: 'male', emotion: 'joy', situation: 'meditation' });
   const i3 = await last(pg);
+  await turn(pg, '미소 짓는다', { speaker: '백리운', speaker_gender: 'male', emotion: 'smile' });
+  const i4 = await last(pg);
   check(errs, 'situation Fighting (streamed, any case) picks the fighting frame', i1.char === 'm3');
   check(errs, "the person's frame tags reach the prompt", tp.includes('[그림 태그] 백리운: fighting, hug'));
   check(errs, 'situation hug picks the hug frame over the joy emotion', i2.char === 'm4');
   check(errs, 'a situation the set has no frame for is ignored (joy frame)', i3.char === 'm2');
+  check(errs, 'with no situation named, a smile never shows the hug frame', i4.char !== 'm4');
 
   // a passer-by never gets an open role's face by chance
   await turn(pg, '주문한다', {

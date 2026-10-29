@@ -19,10 +19,10 @@ import { sampleError } from './turn.js';
 
 // a paste box, a file to read in, and what the list holds
 const ROSTER_HELP = N_(
-  'Every detail is key: value. Name: starts a person, and the lines under it are theirs until a blank line; or put a person on one line split by /. A # heading is the affiliation of the people under it. Keys: Name, Aliases, Affiliation, Gender, Position, Power, Looks, Personality, Speech, Signature, Ties, Secret. Any other key is kept too.',
+  'Every detail is key: value. Name: starts a person, and the lines under it are theirs until a blank line; or put a person on one line split by /. A # heading is the affiliation of the people under it. Keys: Name, Epithet, Aliases, Affiliation, Gender, Position, Power, Looks, Personality, Speech, Signature, Ties, Secret. Any other key is kept too.',
 );
 export const ROSTER_EXAMPLE = N_(
-  "# Mount Hua Sect\nName: Baek Ri-un\nAliases: Ri-un, Plum Sword\nPosition: first disciple\nPower: first-rate\nPersonality: quiet, stubborn\nSpeech: curt\nSecret: the sect leader's hidden son\n\nName: Seol-hwa / Position: third disciple / Speech: 'Hmph.'",
+  "# Mount Hua Sect\nName: Baek Ri-un\nEpithet: Plum Sword\nAliases: Ri-un\nPosition: first disciple\nPower: first-rate\nPersonality: quiet, stubborn\nSpeech: curt\nSecret: the sect leader's hidden son\n\nName: Seol-hwa / Position: third disciple / Speech: 'Hmph.'",
 );
 const ROSTER_NOTE = {
   unlabeled: N_('Line {line} skipped, a part has no key (key: value): {text}'),

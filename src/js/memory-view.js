@@ -13,8 +13,10 @@ import { seenSpan } from './reroll.js';
 import { bindOnePicker, oneInForm, renderNoteLibrary } from './notes-view.js';
 import { isScenario } from './rules.js';
 import { noteById, scenarioName, scenarioNote } from './notes.js';
-import { STYLE } from './enums.js';
-import { bindChoice, styleChips, styleNoteHtml } from './new-life.js';
+import { ADDON, STYLE } from './enums.js';
+import { addonRowsHtml, bindChoice, styleChips, styleNoteHtml } from './new-life.js';
+import { extFill, WORLD_EXT, worldExt } from './world-ext.js';
+import { renderStrip } from './status.js';
 
 export function renderMemory() {
   const box = $('#memBox');
@@ -27,7 +29,7 @@ export function renderMemory() {
   const styleOpen = !!app.currentSave && !$('#log .newlife'); // a new life's screen picks it while it is up
   const scen = isScenario();
   box.innerHTML = `<h3 class="view-title">${T('Memory')}</h3><p class="muted mem-intro">${T('This applies to this save slot only. It never mixes with other saves or other chats.')}</p>
-   ${scen ? `<div class="field"><label>${T('Scenario')}</label><p class="lore mem-profile">${esc(scenarioName())}${scenarioNote() ? '' : ` <span class="muted">${T('(not in your note library)')}</span>`}</p></div>` : ''}
+   ${scen ? `<div class="field"><label>${T('Scenario')}</label><p class="lore mem-profile">${esc(scenarioName())}${scenarioNote() ? '' : ` <span class="muted">${T('(not in your note library)')}</span>`}</p></div><div class="field mem-addons"><label>${T('Extras')}</label>${addonRowsHtml('mem', app.state.addons || {}, WORLD_EXT[app.state.life.world.id])}<p class="muted field-note">${T('Each extra brings in only its own part of the game, from the next reply on.')}</p></div>` : ''}
    <div class="field"><label>${T('Character profile (fixed for this life; you can change it on the new game screen of your next life)')}</label><p class="lore mem-profile">${app.state.life.profile ? esc(app.state.life.profile) : none}</p></div>
    <div class="field"><label>${T('Prose style')}</label><div class="seg" id="memStyle">${styleChips(app.state.style, !styleOpen)}</div>${styleOpen ? styleNoteHtml('msty', app.state.style, app.state.styleNoteId) : ''}<p class="muted field-note">${styleOpen ? T('How the narrator writes this save, from the next reply on.') : T('Pick it on the new life screen.')}</p></div>
    <div class="field"><label for="notes">${T('Notes: sent to Claude every turn')}</label><textarea id="notes" rows="5" maxlength="${LIMITS.userNotes}" placeholder="${T('e.g. Make ADMIN more cynical. Keep fight scenes short. There is no magic in this world. My childhood friend Seoyun lives next door.')}">${esc(app.state.userNotes)}</textarea>
@@ -105,6 +107,21 @@ export function renderMemory() {
     toast(T('Pick a note for the prose style'));
   });
   bindOnePicker('msty', id => noteById(id) && setStyle(STYLE.NOTE, id));
+  box.querySelectorAll('.mem-addons [data-addon]').forEach(
+    c =>
+      (c.onchange = async () => {
+        const k = c.dataset.addon;
+        app.state.addons = { ...app.state.addons, [k]: c.checked };
+        // an add-on ticked mid-story starts its state, and the narrator names where on its ladder the story is
+        if (k === ADDON.EXT && c.checked && app.state.ladder == null) {
+          extFill(app.state);
+          if (worldExt().ladder) app.state.ladderPending = true;
+        }
+        await persist();
+        renderStrip();
+        toast(T('Saved'));
+      }),
+  );
   $('#notes').oninput = e => ($('#notesCount').textContent = e.target.value.length + '/' + LIMITS.userNotes);
   $('#saveNotes').onclick = async () => {
     app.state.userNotes = $('#notes').value.trim().slice(0, LIMITS.userNotes);
