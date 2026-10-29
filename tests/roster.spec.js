@@ -194,14 +194,14 @@ test('roster', async ({ game }) => {
     ),
   );
   const caps = await pg.evaluate(() => {
-    const many = Array.from({ length: 41 }, (_, i) => `이름: 사람${i} / 직책: 제자`).join('\n');
+    const many = Array.from({ length: 121 }, (_, i) => `이름: 사람${i} / 직책: 제자`).join('\n');
     const long = DR.parseRoster('이름: 길이 / 비밀: ' + '가'.repeat(200));
     return { many: DR.parseRoster(many), long };
   });
   check(
     errs,
-    'at most 40 people, said once',
-    caps.many.people.length === 40 &&
+    'at most 120 people, said once',
+    caps.many.people.length === 120 &&
       same(
         caps.many.notes.map(x => x.why),
         ['over'],

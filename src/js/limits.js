@@ -43,8 +43,8 @@ export const LIMITS = {
   },
   // the character list a player pastes for a world of this save (roster.js); a profile field's length is PROFILE's
   roster: {
-    text: 8000, // characters of the pasted list
-    people: 40,
+    text: 20000, // characters of the pasted list; it rides in the save's state, rewritten every turn
+    people: 120,
     aliases: 4, // other names per person
   },
   userNotes: 4000, // characters of a save's notes (the Memory tab's box) and the new game's setting box that seeds them
