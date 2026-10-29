@@ -31,7 +31,7 @@ import { setStat, statText } from './stat.js';
 import { groupSimilar, similar, visualSig } from './image-sim.js';
 import { persist } from './persistence.js';
 import { fillTemplate, pr } from './prompt.js';
-import { N_, T } from './i18n.js';
+import { N_, T, uiLang } from './i18n.js';
 import { GENDER, GENDER_LABEL } from './enums.js';
 
 let imgFilter = 'all';
@@ -730,6 +730,16 @@ function uploadItem(name, open) {
   let h = null;
   return { name, open, hash: f => (h = h || (f ? Promise.resolve(f) : open()).then(sha256Hex).catch(() => null)) };
 }
+// The fewest folders above a zip's picture that tell it from the others with its name ('' for a name only one has),
+// joined with '-' so it stays one set word: alice/smile.png -> alice_smile.png, a/x/smile.png and b/x/smile.png ->
+// a-x_smile.png and b-x_smile.png.
+function foldersOf(p, group) {
+  if (group.length < 2) return '';
+  const run = (q, d) => q.dirs.slice(-d).join('-');
+  for (let d = 1; d <= p.dirs.length; d++)
+    if (group.every(q => q === p || run(q, d).toLowerCase() !== run(p, d).toLowerCase())) return run(p, d);
+  return p.dirs.join('-');
+}
 // The batch as uploads: loose files as they are, a zip's pictures by file name, and each zip's shallowest tags.json,
 // imported once the pictures are in. Mac archive litter (__MACOSX/, ._name) and every other file stay out.
 async function expandUploads(files) {
@@ -742,7 +752,7 @@ async function expandUploads(files) {
     }
     let entries;
     try {
-      entries = await readZip(f);
+      entries = await readZip(f, uiLang() === 'ja' ? ['shift_jis', 'euc-kr'] : ['euc-kr', 'shift_jis']);
     } catch (e) {
       toast(T("Can't read {zip} ({why})", { zip: f.name, why: why(e) }), 6000);
       continue;
@@ -760,14 +770,27 @@ async function expandUploads(files) {
       else if (type) pics.push({ dirs, name, type, en });
       else if (!tags || dirs.length < tags.depth) tags = { depth: dirs.length, open: en.open };
     }
-    const uses = new Map();
-    for (const p of pics) uses.set(p.name.toLowerCase(), (uses.get(p.name.toLowerCase()) || 0) + 1);
-    for (const { dirs, name, type, en } of pics) {
-      // alice/smile.png and bob/smile.png would be one name: the folder goes in front (alice_smile.png, set alice)
-      const nm = uses.get(name.toLowerCase()) > 1 && dirs.length ? `${dirs[dirs.length - 1]}_${name}` : name;
-      items.push(uploadItem(nm, async () => new File([await en.open()], nm, { type })));
+    const same = new Map();
+    for (const p of pics) {
+      const k = p.name.toLowerCase();
+      if (same.has(k)) same.get(k).push(p);
+      else same.set(k, [p]);
     }
-    if (tags) tagFiles.push(tags);
+    // what the zip's tags.json may call each picture (its path, or its name when only one picture has it) -> its name
+    // here; null for a name several pictures share, which then matches nothing
+    const names = new Map(),
+      paths = [];
+    for (const group of same.values())
+      for (const p of group) {
+        const { dirs, name, type, en } = p;
+        const front = foldersOf(p, group);
+        const nm = front ? `${front}_${name}` : name;
+        for (const k of [name, name.replace(/\.[^.]+$/, '')]) names.set(k, group.length > 1 ? null : nm);
+        paths.push([[...dirs, name].join('/'), nm]);
+        items.push(uploadItem(nm, async () => new File([await en.open()], nm, { type })));
+      }
+    for (const [path, nm] of paths) names.set(path, nm); // a path names one picture, even one at the top
+    if (tags) tagFiles.push({ open: tags.open, names });
     if (cant.length)
       toast(
         T("{zip}: skipped {n} {n|file|files} that can't be opened ({why})", {
@@ -811,7 +834,8 @@ async function matchReplacements(items, contents) {
     const exact = all.filter(x => x.file === s.name);
     const rows = exact.length ? exact : all;
     const h = await s.hash();
-    if ((h && contents.has(h)) || (rows.length === 1 && !rows[0].hash)) s.skip = 'same';
+    if (h === null) continue; // unreadable: the upload tries it and says why it failed
+    if (contents.has(h) || (rows.length === 1 && !rows[0].hash)) s.skip = 'same';
     else if (rows.length > 1) unclear.push(s);
     else if (taken.has(rows[0].id)) s.skip = 'twice';
     else {
@@ -849,20 +873,26 @@ async function retireImages(redirect, say = () => {}) {
     if (!keys.has(keep)) keys.set(keep, keep.akeys);
     keep.akeys = next;
   }
-  const undo = [() => keys.forEach((was, keep) => (keep.akeys = was))];
+  const writeCovers = () => inParallel(covers, 8, c => SETDOC(c.k).set(c.m));
+  const kept = [...keys.keys()].map(x => x.id);
+  // per step begun: put memory back (mem), and the stored copy, where its write may have landed (store)
+  const undo = [{ mem: () => keys.forEach((was, keep) => (keep.akeys = was)) }];
   try {
     app.settings.dupMap = dm;
-    undo.push(() => (app.settings.dupMap = map0));
+    undo.push({ mem: () => (app.settings.dupMap = map0), store: saveSettings });
     await saveSettings();
     for (const c of covers) c.m.cover = final(c.was);
-    undo.push(() => covers.forEach(c => (c.m.cover = c.was)));
-    await inParallel(covers, 8, c => SETDOC(c.k).set(c.m));
-    await IMGX.flush([...keys.keys()].map(x => x.id));
+    undo.push({ mem: () => covers.forEach(c => (c.m.cover = c.was)), store: writeCovers });
+    await writeCovers();
+    undo.push({ store: () => IMGX.flush(kept) });
+    await IMGX.flush(kept);
     app.images = app.images.filter(x => !redirect.has(x.id));
-    undo.push(() => app.images.push(...olds));
+    undo.push({ mem: () => app.images.push(...olds), store: () => IMGX.flush(olds.map(x => x.id)) });
     await IMGX.dropMany(olds.map(x => x.id));
   } catch (e) {
-    for (const u of undo.reverse()) u();
+    for (const u of [...undo].reverse()) if (u.mem) u.mem();
+    // best effort, so a reload finds both pictures as well
+    for (const u of undo) if (u.store) await u.store().catch(err => logErr('images', err));
     throw e;
   }
   let n = 0;
@@ -1161,7 +1191,7 @@ async function uploadFiles(picked) {
   }
   renderImages();
   // a zip's tags.json, now that its pictures are in; this job already holds the image lock
-  for (const t of tagFiles) await importTags({ text: async () => (await t.open()).text() });
+  for (const t of tagFiles) await importTags({ text: async () => (await t.open()).text() }, t.names);
   const guessed = landed.filter(x => x.guessed);
   if (guessed.length && !failed.length)
     openSheet(
@@ -1435,7 +1465,9 @@ async function tagsToEnglish() {
   );
   renderImages();
 }
-export async function importTags(file) {
+// names: from a zip upload, what its tags.json calls each picture -> the name it was uploaded under (null: a name
+// the zip used for several pictures, which matches nothing)
+export async function importTags(file, names = null) {
   if (!file) return;
   let j;
   try {
@@ -1464,7 +1496,10 @@ export async function importTags(file) {
     for (const k of [i.file, i.name, 'bg_' + i.name, (i.file || '').replace(/\.[^.]+$/, '')])
       if (k && !byKey.has(k)) byKey.set(k, i);
   }
-  const findImg = fn => byKey.get(fn) || byKey.get(fn.replace(/\.[^.]+$/, ''));
+  const findImg = fn => {
+    const n = names && names.has(fn) ? names.get(fn) : fn;
+    return n === null ? null : byKey.get(n) || byKey.get(n.replace(/\.[^.]+$/, ''));
+  };
   const toTags = v =>
     Array.isArray(v)
       ? v.map(t => String(t).trim()).filter(Boolean)
@@ -1565,7 +1600,7 @@ export async function importTags(file) {
   for (const [fn, m] of Object.entries(j.images || {})) {
     const x = findImg(fn);
     if (!x) continue;
-    const t = toTags(m.tags || m);
+    const t = toTags(Array.isArray(m) || typeof m === 'string' ? m : m && m.tags); // an entry may be its tags alone
     if (t.length || replaceTags) x.tags = capTags(replaceTags ? t : [...(x.tags || []), ...t]);
     {
       const ws = wl(m);

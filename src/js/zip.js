@@ -73,27 +73,26 @@ export async function makeZip(files) {
 
 const zipError = code => Object.assign(new Error('zip: ' + code), { code });
 const bytes = async (blob, from, to) => new DataView(await blob.slice(from, to).arrayBuffer());
-const UTF8 = new TextDecoder(),
-  STRICT_UTF8 = new TextDecoder('utf-8', { fatal: true }),
-  CP949 = new TextDecoder('euc-kr'); // the WHATWG label for windows-949, what Korean Windows Explorer writes
-// A name without the UTF-8 flag is UTF-8 when it decodes as such, else Korean Windows' code page. macOS writes
-// decomposed (NFD) Hangul, so every name is composed to match names typed elsewhere.
-function entryName(u8, flags) {
-  let s;
-  if (flags & UTF8_NAMES) s = UTF8.decode(u8);
-  else
+const UTF8 = new TextDecoder();
+// A name without the UTF-8 flag is UTF-8 when it decodes as such, else in the first of the legacy encodings (WHATWG
+// labels, in the caller's order) it is valid in, else in the first one anyway. macOS writes decomposed (NFD) Hangul
+// and kana, so every name is composed to match names typed elsewhere.
+function entryName(u8, flags, legacy) {
+  if (flags & UTF8_NAMES) return UTF8.decode(u8).normalize('NFC');
+  for (const label of ['utf-8', ...legacy])
     try {
-      s = STRICT_UTF8.decode(u8);
+      return new TextDecoder(label, { fatal: true }).decode(u8).normalize('NFC');
     } catch {
-      s = CP949.decode(u8);
+      // not valid in this encoding: try the next
     }
-  return s.normalize('NFC');
+  return new TextDecoder(legacy[0]).decode(u8).normalize('NFC');
 }
 
 // The entries of a zip, read in slices so a pack of hundreds of MB is never in memory at once. Each has a path and
 // either open (resolves a Blob: a slice when stored, inflated when deflated) or skip, why it can't be opened:
 // 'encrypted', 'zip64' or 'method'. Throws code 'not_zip', or 'zip64' when the entry list itself needs ZIP64.
-export async function readZip(file) {
+// legacy: the encodings for a name without the UTF-8 flag (Korean Windows writes euc-kr, Japanese shift_jis).
+export async function readZip(file, legacy = ['euc-kr']) {
   const tail = await bytes(file, Math.max(0, file.size - END_LEN - 0xffff), file.size); // a comment is up to 64 KB
   let e = tail.byteLength - END_LEN;
   while (e >= 0 && tail.getUint32(e, true) !== SIG.end) e--;
@@ -113,7 +112,7 @@ export async function readZip(file) {
       usize = cd.getUint32(p + 24, true),
       nameLen = cd.getUint16(p + 28, true),
       off = cd.getUint32(p + 42, true);
-    const path = entryName(new Uint8Array(cd.buffer, cd.byteOffset + p + CENTRAL_LEN, nameLen), flags);
+    const path = entryName(new Uint8Array(cd.buffer, cd.byteOffset + p + CENTRAL_LEN, nameLen), flags, legacy);
     p += CENTRAL_LEN + nameLen + cd.getUint16(p + 30, true) + cd.getUint16(p + 32, true);
     const skip =
       flags & 1

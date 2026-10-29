@@ -62,8 +62,8 @@ const json = o => Buffer.from(JSON.stringify(o), 'utf8');
 
 // the image store, toasts kept in window.__toasts, and each question kept in window.__asked and answered from
 // window.__answers in turn
-async function setup(game) {
-  const { pg, errs } = await game(COUNTED, { size: [900, 900] });
+async function setup(game, locale) {
+  const { pg, errs } = await game(COUNTED, { size: [900, 900], ...(locale ? { locale } : {}) });
   await pg.waitForSelector('#rollBtn');
   await pg.evaluate(`(${ASSET_STORE})()`);
   await pg.evaluate(() => {
@@ -148,12 +148,17 @@ test('a picture uploaded again with other content replaces the old one, keeping 
     const t = DR.app.turns.find(u => u.i === a.turn);
     const pages = (await DR.platform.shared.collection('imgidx').get()).docs;
     const [exported] = await DR.withPicKeys([t], () => {});
+    // a turn that came with keys of its own: those come before the old picture's, which only fill what is left
+    const foreign = ['ab'.repeat(8), 'cd'.repeat(8)];
+    const [moved] = await DR.withPicKeys([{ ...t, img: { ...t.img, keys: { [a.row.id]: foreign } } }], () => {});
     return {
       x,
       n: DR.app.images.length,
       shown: [...DR.renderTurn(t, false).matchAll(/\/_blob\/([a-z0-9]+)/g)].map(m => m[1]),
       byKeys: (DR.turnImg({ char: 'zz9', keys: { zz9: a.keys } }, 'zz9') || {}).id,
       exportedKeys: exported.img.keys[a.row.id] || [],
+      movedKeys: moved.img.keys[a.row.id] || [],
+      foreign,
       dup: DR.app.settings.dupMap,
       storedDup: ((await DR.dget('settings')) || {}).dupMap || {},
       cover: DR.app.setMeta.heroine.cover,
@@ -187,6 +192,11 @@ test('a picture uploaded again with other content replaces the old one, keeping 
     errs,
     "a save exported now carries the new picture's keys and the old one's",
     same(got.exportedKeys.slice(0, 2), ownKeys(got.x)) && A.keys.every(k => got.exportedKeys.includes(k)),
+  );
+  check(
+    errs,
+    "keys a moved turn came with keep their place before the old picture's",
+    same(got.movedKeys, [...ownKeys(got.x), ...got.foreign]),
   );
   check(errs, 'the old row left the saved list', !got.listed.includes(A.row.id) && got.listed.includes(id));
   check(errs, "the old picture's file was deleted", same(got.deleted, [A.row.id]));
@@ -427,31 +437,191 @@ test('a zip goes in with its pictures from folders and its tags.json, replacing 
   expect(errs).toEqual([]);
 });
 
-// alice/smile.png and bob/smile.png are two people: as one name, the second would be skipped or replace the first
-test('a name that two folders of a zip share gets the folder in front; a name only one has stays as it is', async ({
+// a/x/smile.png and b/x/smile.png are two people: as one name, the second would be skipped or replace the first.
+// The zip's tags.json still finds them, by path, and a name it used twice matches nothing (not the library's smile).
+test('same names in a zip get the folders that tell them apart, and its tags.json still finds them', async ({
   game,
 }) => {
   const { pg, errs } = await setup(game);
-  const [a, b, c] = await pg.evaluate(`(${DRAW})([['smile.png',15],['smile.png',195],['female1_smile.webp',100]])`);
+  const [lib, ax, bx, al, c] = await pg.evaluate(
+    `(${DRAW})([['bg_smile.png',300,120,70],['smile.png',15],['smile.png',195],['smile.png',255],['female1_smile.webp',100]])`,
+  );
+  await upload(pg, [lib]);
+  await pg.evaluate(async () => {
+    const x = DR.app.images[0]; // a background named smile, nothing to do with the zip
+    x.tags = ['mine'];
+    await DR.IMGDOC(x.id).set(x);
+  });
+  const tags = {
+    images: {
+      'pack/a/x/smile.png': { tags: ['from path'] },
+      'smile.png': { tags: ['which one'] },
+      'female1_smile.webp': { tags: ['by its own name'] },
+    },
+  };
   const zip = zipOf([
-    ['pack/alice/smile.png', bytes(a), { deflate: true }],
-    ['pack/bob/SMILE.png', bytes(b)],
+    ['pack/a/x/smile.png', bytes(ax), { deflate: true }],
+    ['pack/b/x/SMILE.png', bytes(bx)],
+    ['pack/alice/smile.png', bytes(al)],
     ['CommonPack/tagged/female1_smile.webp', bytes(c)],
+    ['tags.json', json(tags)],
   ]);
-  await upload(pg, [['people.zip', zip.toString('base64')]]);
+  await upload(pg, [['people.zip', zip.toString('base64')]], [true]);
   const got = await pg.evaluate(() => ({
-    rows: Object.fromEntries(DR.app.images.map(x => [x.file, { set: x.set, emotion: x.emotion }])),
+    rows: Object.fromEntries(DR.app.images.map(x => [x.file, { set: x.set, emotion: x.emotion, tags: x.tags }])),
     toasts: window.__toasts,
     model: window.__model,
   }));
   check(
     errs,
-    'each person kept their picture, under their folder',
-    same(Object.keys(got.rows).sort(), ['alice_smile.png', 'bob_SMILE.png', 'female1_smile.webp']),
+    'each kept their picture, under the folders that tell them apart',
+    same(Object.keys(got.rows).sort(), [
+      'a-x_smile.png',
+      'alice_smile.png',
+      'b-x_SMILE.png',
+      'bg_smile.png',
+      'female1_smile.webp',
+    ]),
   );
-  check(errs, 'the folder is the set', same(got.rows['alice_smile.png'], { set: 'alice', emotion: 'smile' }));
-  check(errs, 'for both', got.rows['bob_SMILE.png'].set === 'bob');
+  check(errs, 'the folders are the set', same(got.rows['a-x_smile.png'].set, 'a-x'));
+  check(errs, 'one folder when that is enough', same(got.rows['alice_smile.png'].set, 'alice'));
   check(errs, 'nothing was skipped', !toastHas(got, '건너뛰었어요'));
+  check(errs, "tags.json's path finds the renamed picture", same(got.rows['a-x_smile.png'].tags, ['from path']));
+  check(errs, 'a unique name finds its picture', same(got.rows['female1_smile.webp'].tags, ['by its own name']));
+  check(
+    errs,
+    "a name the zip used three times doesn't reach the library",
+    same(got.rows['bg_smile.png'].tags, ['mine']),
+  );
+  check(errs, 'nor any of the three', !Object.values(got.rows).some(r => r.tags.includes('which one')));
+  check(errs, 'no model was called', got.model === 0);
+  expect(errs).toEqual([]);
+});
+
+// Japanese Windows writes names in Shift_JIS, whose kana bytes also pass as EUC-KR: the screen language decides
+test("a zip's Shift_JIS names are read first as Japanese on a Japanese screen", async ({ game }) => {
+  const { pg, errs } = await setup(game, 'ja-JP');
+  const [port] = await pg.evaluate(`(${DRAW})([['port.png',40,120,70]])`);
+  const sjis = Buffer.concat([
+    Buffer.from('bg_'),
+    Buffer.from([0x82, 0xdd, 0x82, 0xc8, 0x82, 0xc6]),
+    Buffer.from('_day.png'),
+  ]); // みなと
+  const zip = zipOf([
+    [sjis, bytes(port), { utf8: false }],
+    ['tags.json', json({ backgrounds: { 'bg_みなと_day.png': { tags: ['port'] } } })],
+  ]);
+  await upload(pg, [['minato.zip', zip.toString('base64')]], [true]);
+  const got = await pg.evaluate(() => ({
+    rows: Object.fromEntries(DR.app.images.map(x => [x.file, x.tags])),
+    model: window.__model,
+  }));
+  check(errs, 'the name is read as Japanese', same(got.rows['bg_みなと_day.png'], ['port']));
+  check(errs, 'no model was called', got.model === 0);
+  expect(errs).toEqual([]);
+});
+
+// a damaged entry has no content to compare, so it is not offered as a replacement: it fails, saying why
+test('a damaged zip entry under a name the library has fails without a question', async ({ game }) => {
+  const { pg, errs } = await setup(game);
+  const [A0] = await pg.evaluate(`(${DRAW})([['bg_harbor_day.png',10,120,70]])`);
+  await upload(pg, [A0]);
+  const before = await pg.evaluate(() => JSON.stringify(DR.app.images));
+  const zip = zipOf([['bg_harbor_day.png', Buffer.from('this is not deflated data'), { method: 8 }]]);
+  await upload(pg, [['broken.zip', zip.toString('base64')]], [true]);
+  const got = await pg.evaluate(() => ({
+    now: JSON.stringify(DR.app.images),
+    asked: window.__asked.length,
+    failed: (document.querySelector('.upl-failed') || {}).textContent || '',
+    model: window.__model,
+  }));
+  check(errs, 'no question', got.asked === 0);
+  check(errs, 'the library is as it was', got.now === before);
+  check(errs, 'it is listed as failed, saying why', /bg_harbor_day\.png.*손상/.test(got.failed));
+  check(errs, 'no model was called', got.model === 0);
+  expect(errs).toEqual([]);
+});
+
+// the entries of a tags.json image: an object with tags (maybe none), or the tags alone, as a list or a string
+test('tags.json images without tags clear them when replacing and keep them when merging', async ({ game }) => {
+  const { pg, errs } = await setup(game);
+  const pics = await pg.evaluate(
+    `(${DRAW})([['zed_smile.png',10],['zed_anger.png',60],['zed_joy.png',110],['zed_shy.png',160]])`,
+  );
+  await upload(pg, pics);
+  const images = {
+    'zed_smile.png': { emotion: 'smile' },
+    'zed_anger.png': { tags: '' },
+    'zed_joy.png': ['red', 'blue'],
+    'zed_shy.png': 'green, gold',
+  };
+  const run = merge =>
+    pg.evaluate(
+      async ([j, merge]) => {
+        for (const x of DR.app.images) x.tags = ['old'];
+        window.__answers = [true];
+        await DR.importTags({ text: async () => JSON.stringify({ ...j, ...(merge ? { merge_tags: true } : {}) }) });
+        return Object.fromEntries(DR.app.images.map(x => [x.file, x.tags]));
+      },
+      [{ images }, merge],
+    );
+  const replaced = await run(false);
+  const merged = await run(true);
+  check(
+    errs,
+    'replace: none is none, a list or a string is the tags',
+    same(replaced, {
+      'zed_smile.png': [],
+      'zed_anger.png': [],
+      'zed_joy.png': ['red', 'blue'],
+      'zed_shy.png': ['green', 'gold'],
+    }),
+  );
+  check(
+    errs,
+    'merge: the old tags stay',
+    same(merged, {
+      'zed_smile.png': ['old'],
+      'zed_anger.png': ['old'],
+      'zed_joy.png': ['old', 'red', 'blue'],
+      'zed_shy.png': ['old', 'green', 'gold'],
+    }),
+  );
+  check(errs, 'no model was called', (await pg.evaluate('window.__model')) === 0);
+  expect(errs).toEqual([]);
+});
+
+// a step that fails after some writes landed puts the stored copies back too, so a reload also finds both pictures
+test('a failed step after the cover was written puts the stored redirect and cover back', async ({ game }) => {
+  const { pg, errs } = await setup(game);
+  const [A0, A1] = await pg.evaluate(`(${DRAW})([['aria_smile.png',10],['aria_smile.png',220]])`);
+  await upload(pg, [A0]);
+  const oldId = await pg.evaluate(async () => {
+    const x = DR.app.images[0];
+    DR.app.setMeta.aria = { cover: x.id };
+    await DR.SETDOC('aria').set(DR.app.setMeta.aria);
+    DR.app.settings.dupMap = { ghost: x.id };
+    await DR.saveSettings();
+    DR.IMGX.dropMany = async () => {
+      throw Object.assign(new Error('full'), { code: 'quota_exceeded' });
+    };
+    return x.id;
+  });
+  await upload(pg, [A1], [true]);
+  const got = await pg.evaluate(async () => ({
+    ids: DR.app.images.map(x => x.id),
+    storedDup: ((await DR.dget('settings')) || {}).dupMap || {},
+    storedCover: (await DR.platform.shared.doc('sets/aria').get()).data().cover,
+    dup: DR.app.settings.dupMap,
+    cover: DR.app.setMeta.aria.cover,
+    deleted: window.__deleted,
+    model: window.__model,
+  }));
+  check(errs, 'both pictures are kept', got.ids.length === 2 && got.ids.includes(oldId));
+  check(errs, 'the stored redirect is as it was', same(got.storedDup, { ghost: oldId }));
+  check(errs, 'the stored cover is as it was', got.storedCover === oldId);
+  check(errs, 'and memory agrees', same(got.dup, { ghost: oldId }) && got.cover === oldId);
+  check(errs, 'no file was deleted', got.deleted.length === 0);
   check(errs, 'no model was called', got.model === 0);
   expect(errs).toEqual([]);
 });

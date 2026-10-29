@@ -507,7 +507,7 @@ export async function fillHashes(say, label, rows = app.images, save = true) {
   const ok = todo.filter(x => x.shash).map(x => x.id);
   if (save && ok.length) await IMGX.flush(ok, (i, t) => say(T('Saving {i}/{n}', { i, n: t })));
 }
-const KEYS_PER_PICTURE = 4; // this install's two first, then those of pictures it replaced, then the ones it came with
+const KEYS_PER_PICTURE = 4; // this install's two first, then the ones it came with, then those of pictures it replaced
 // the turns as a save file carries them: each img with its pictures' content keys by id (ARCHITECTURE.md)
 export async function withPicKeys(turns, say) {
   if (imgError)
@@ -524,7 +524,7 @@ export async function withPicKeys(turns, say) {
     for (const id of new Set(picIds(t.img))) {
       // the keys it came with stay: another install may hold only the files they match
       const x = turnImg(t.img, id) || {};
-      const k = [...new Set([...picKeys(x), ...aliasKeys(x), ...turnKeys(t.img, id)])].slice(0, KEYS_PER_PICTURE);
+      const k = [...new Set([...picKeys(x), ...turnKeys(t.img, id), ...aliasKeys(x)])].slice(0, KEYS_PER_PICTURE);
       if (k.length) (img.keys = img.keys || {})[id] = k;
     }
     return Object.assign({}, t, { img });
