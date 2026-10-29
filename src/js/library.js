@@ -12,6 +12,7 @@ import {
   openingKindToTags,
   picIds,
   picKeys,
+  setsChanged,
   setWorlds,
   storyImages,
   turnImg,
@@ -354,6 +355,7 @@ export async function loadSets() {
     sets.value.docs.forEach(d => {
       app.setMeta[d.id] = thaw(d.data());
     });
+  setsChanged();
   // asked once a boot at most, and only when a migration has work to do
   let asked;
   const priv = () => (asked = asked || isPrivileged());
@@ -406,6 +408,7 @@ async function savePagesOrUndo(rows, undo, label) {
       saved += rs.length;
     } catch (e) {
       rs.forEach(undo);
+      imagesChanged(); // what was built from the changed rows is built again
       failed++;
       logErr(label, e);
     }
@@ -534,6 +537,7 @@ export async function restoreFromManifest(m, onProgress = () => {}) {
   for (const [k, v] of Object.entries(m.sets || {})) {
     const cover = v.cover && app.images.find(x => x.shash === v.cover);
     app.setMeta[k] = cover ? Object.assign({}, v, { cover: cover.id }) : v;
+    setsChanged();
     await SETDOC(k)
       .set(app.setMeta[k])
       .catch(e => noteIgnored('images-view: SETDOC.set', e));

@@ -1409,5 +1409,6 @@
   "Delete {label} from the dictionary? Its {n} {n|picture|pictures} move to {to}.": "{label}을(를) 사전에서 지울까요? 그 그림 {n}장은 {to}(으)로 옮겨져요.",
   "Choose a name and gender; the dice decide your world, race, standing and talent. You can reroll up to {n} times.": "이름과 성별을 정하면 세계, 종족, 신분, 재능은 주사위가 정합니다. 마음에 들지 않으면 {n}번까지 다시 굴릴 수 있어요.",
   "Reroll ({n} left)": "다시 굴리기 ({n}번 남음)",
-  "Born and raised in this world": "이 세계에서 나고 자랐다"
+  "Born and raised in this world": "이 세계에서 나고 자랐다",
+  "Nothing to merge it into: a situation never goes into one under it": "합칠 상황이 없어요: 상황은 제 아래 상황으로 합치지 않아요"
 }

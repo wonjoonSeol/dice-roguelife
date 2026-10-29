@@ -123,16 +123,19 @@ function rewriteFrames(from, to) {
   }
   return ids;
 }
-// The entries under `from` go under `to`, or under nothing; next is a copy, so the live dictionary stays as it is. An
-// entry that was adult through `from` says so itself first.
+// the entries under `from` go under `to`, or under nothing; next is a copy, so the live dictionary stays as it is
 function reparent(next, from, to) {
-  const adult = isAdultSit(from);
   for (const e of Object.values(next))
     if (e.parent === from) {
-      if (adult) e.adult = true;
       if (to) e.parent = to;
       else delete e.parent;
     }
+  return next;
+}
+// before `from` goes (deleted or merged into `to`), an entry under it that was adult only through it says so itself
+function keepAdult(next, from, to) {
+  if (!isAdultSit(from) || (to && isAdultSit(to))) return next;
+  for (const e of Object.values(next)) if (e.parent === from && !e.adult) e.adult = true;
   return next;
 }
 // the frames first: a failure there leaves the dictionary as it was, and a frame naming a key not in it is harmless
@@ -219,12 +222,19 @@ async function editSituation(key = '') {
     return null;
   }
 }
-// an adult situation goes only into another adult one, or its pictures would show in any scene
+// An adult situation goes only into another adult one, or its pictures would show in any scene; none goes into one
+// under it, which would leave that one under nothing that exists
 async function mergeSituation(from) {
   const d = sitDict();
-  const others = Object.keys(d).filter(k => k !== from && (!isAdultSit(from) || isAdultSit(k)));
+  const outside = Object.keys(d).filter(k => k !== from && !sitAncestors(k).includes(from));
+  const others = outside.filter(k => !isAdultSit(from) || isAdultSit(k));
   if (!others.length) {
-    toast(T('An adult situation can only be merged into another adult one'), 5000);
+    toast(
+      outside.length
+        ? T('An adult situation can only be merged into another adult one')
+        : T('Nothing to merge it into: a situation never goes into one under it'),
+      5000,
+    );
     return;
   }
   const answer = openDialog(
@@ -234,7 +244,7 @@ async function mergeSituation(from) {
   $('#dlgNo').onclick = () => answerDialog(null);
   const into = await answer;
   if (!into || !d[into] || !others.includes(into)) return;
-  const next = reparent(clone(d), from, into);
+  const next = reparent(keepAdult(clone(d), from, into), from, into);
   delete next[from];
   await commit(rewriteFrames(from, into), next);
 }
@@ -261,7 +271,8 @@ export async function dropSituation(k) {
       })
     : T('Delete {label} from the dictionary? {n} {n|picture|pictures} lose it.', { label: sitLabel(k), n });
   if (!(await askConfirm(ask))) return;
-  const next = reparent(clone(sitDict()), k, sitDict()[k].parent);
+  const up = sitDict()[k].parent;
+  const next = reparent(keepAdult(clone(sitDict()), k, up), k, up);
   delete next[k];
   await commit(rewriteFrames(k, to), next);
 }

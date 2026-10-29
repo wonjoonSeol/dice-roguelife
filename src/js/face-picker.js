@@ -8,7 +8,17 @@ import { logErr } from './diag.js';
 import { T } from './i18n.js';
 import { closeSheet, openSheet } from './sheet.js';
 import { IMGX, SETDOC } from './library.js';
-import { charSets, charSetsAll, fitsWorld, genderOf, imgUrl, pickEmotion, setCover, turnPeople } from './images.js';
+import {
+  charSets,
+  charSetsAll,
+  fitsWorld,
+  genderOf,
+  imgUrl,
+  pickEmotion,
+  setCover,
+  setsChanged,
+  turnPeople,
+} from './images.js';
 import {
   capTags,
   castCandidates,
@@ -245,6 +255,7 @@ async function retireSet(p) {
   const { npc, cur } = p;
   const m = (app.setMeta[cur] = app.setMeta[cur] || {});
   m.off = true;
+  setsChanged();
   try {
     await SETDOC(cur).set(m);
   } catch (e) {

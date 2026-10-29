@@ -16,6 +16,7 @@ import {
   IMAGE_TYPES,
   imagesChanged,
   imgById,
+  setsChanged,
   imgUrl,
   inheritKeys,
   isOpening,
@@ -379,6 +380,7 @@ const SET_FIELDS = {
 async function saveSetMeta(k, change) {
   const m = (app.setMeta[k] = app.setMeta[k] || {});
   change(m);
+  setsChanged();
   try {
     await SETDOC(k).set(m);
     return true;
@@ -1343,6 +1345,9 @@ async function renameSet(oldK) {
     app.setMeta[key] = m;
     delete app.setMeta[oldK];
   }
+  // read before the write below: the sets show the new key now
+  imagesChanged();
+  setsChanged();
   try {
     await IMGX.flush(imgs.map(x => x.id));
     if (m) {
@@ -1704,6 +1709,7 @@ export async function importTags(file, names = null) {
         const cover = m.cover && findImg(String(m.cover));
         if (cover && (moveTo.get(cover.id) || cover.set || cover.name) === k) meta.cover = cover.id;
         app.setMeta[k] = Object.assign({}, app.setMeta[k] || {}, meta);
+        setsChanged();
         try {
           await SETDOC(k).set(app.setMeta[k]);
           ns++;
@@ -1799,6 +1805,7 @@ export async function importTags(file, names = null) {
     for (const k of left)
       if (!now[k] && app.setMeta[k]) {
         delete app.setMeta[k];
+        setsChanged();
         await SETDOC(k)
           .delete()
           .catch(e => noteIgnored('import tags: empty set card', e));

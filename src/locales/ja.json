@@ -1340,5 +1340,6 @@
   "Delete {label} from the dictionary? Its {n} {n|picture|pictures} move to {to}.": "{label}を辞書から削除しますか？その画像{n}枚は{to}に移ります。",
   "Choose a name and gender; the dice decide your world, race, standing and talent. You can reroll up to {n} times.": "名前と性別を決めれば、世界・種族・身分・才能はダイスが決めます。気に入らなければ{n}回まで振り直せます。",
   "Reroll ({n} left)": "振り直す（残り{n}回）",
-  "Born and raised in this world": "この世界で生まれ育った"
+  "Born and raised in this world": "この世界で生まれ育った",
+  "Nothing to merge it into: a situation never goes into one under it": "統合できる状況がありません：状況は自分の下の状況には統合しません"
 }

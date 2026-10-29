@@ -2,7 +2,7 @@
 import { host } from './host.js';
 import { esc, pick } from './util.js';
 import { EMO_FB, WORLD_ALIAS, WORLDS } from './data.js';
-import { frameSits, isAdultSit, sitAncestors, sitDict, sitKey, sitKeyOf, sitVer } from './situations.js';
+import { frameSits, isAdultSit, isAdultTag, sitAncestors, sitDict, sitKey, sitKeyOf, sitVer } from './situations.js';
 import { SCENARIO_WORLD } from './enums.js';
 import { app } from './app.js';
 import { canonName } from './people.js';
@@ -194,14 +194,14 @@ export function openingHtml(ti) {
   if (!list.length) return '';
   return `<div class="opening${one ? ' banner' : ''}">${list.map(x => `<img class="op-frame" alt="" data-big="${esc(x.id)}" loading="lazy" decoding="async" src="${imgUrl(x.id)}">`).join('')}</div>`;
 }
-// The cover the player chose, else a neutral, smiling or first frame that isn't adult. play: a game screen, where a
-// set with only adult frames has none; the image tab still shows one.
+// The cover the player chose, else a neutral, smiling or first frame that isn't adult. play: a game screen, which
+// skips an adult frame even as the chosen cover, so a set with only adult frames has none; the image tab shows one.
 export function setCover(k, imgs, play = false) {
   imgs = imgs || charSetsAll()[k] || [];
   const c = (app.setMeta[k] || {}).cover;
   const safe = imgs.filter(x => !adultFrame(x));
   return (
-    (c && imgs.find(x => x.id === c)) ||
+    (c && (play ? safe : imgs).find(x => x.id === c)) ||
     safe.find(x => x.emotion === 'neutral') ||
     safe.find(x => x.emotion === 'smile') ||
     safe[0] ||
@@ -231,7 +231,9 @@ const bySet = list => {
 };
 const allSets = memoOf(() => bySet(storyImages().filter(x => x.kind === 'char')));
 export const charSetsAll = () => allSets();
-// the sets casting may use; a set card's retire switch is not a list write, so the retired keys are part of the key
+// the sets casting may use; a set card's retire switch is no list write, so what changes set cards counts it
+let setVer = 0;
+export const setsChanged = () => setVer++;
 const liveSets = memoOf(() =>
   bySet(
     storyImages().filter(
@@ -239,13 +241,7 @@ const liveSets = memoOf(() =>
     ),
   ),
 );
-export const charSets = () =>
-  liveSets(
-    app.setMeta,
-    Object.keys(app.setMeta)
-      .filter(k => app.setMeta[k] && app.setMeta[k].off)
-      .join(' '),
-  );
+export const charSets = () => liveSets(app.setMeta, setVer);
 export function genderOf(k) {
   const g = (app.setMeta[k] || {}).gender;
   if (g) return g;
@@ -296,10 +292,12 @@ const frameWords = x =>
     .toLowerCase()
     .split(/[\s,_]+/)
     .filter(Boolean);
-// A frame is plain only with no situation at all; a key the dictionary no longer has counts as adult, so a picture
-// never shows in a scene its keys don't name.
+// A frame is plain only with no situation at all and no adult tag; a key the dictionary no longer has, or a tag that
+// is an adult key (situations.js isAdultTag), makes it adult, so a picture never shows in a scene its keys don't name.
 const rawSits = x => (Array.isArray(x.situations) ? x.situations : []);
-const adultFrame = x => rawSits(x).some(k => !sitDict()[sitKey(k)] || isAdultSit(sitKey(k)));
+const adultTagged = x => (x.tags || []).some(isAdultTag);
+const adultFrame = x => adultTagged(x) || rawSits(x).some(k => !sitDict()[sitKey(k)] || isAdultSit(sitKey(k)));
+const plainFrame = x => !rawSits(x).length && !adultTagged(x);
 // The situations a set has pictures for, an adult frame counting only for its adult ones. The narrator may name one
 // for the person (prompt.js situationBlock); computed once per set until the list or the dictionary changes.
 let sitMemo = { ver: '', bySet: {} };
@@ -339,7 +337,7 @@ export function pickEmotion(k, emo, look, situation) {
   const s = situationIn(k, situation);
   const ok = x => !adultFrame(x) || (s && isAdultSit(s));
   const named = s ? [s, ...sitAncestors(s)].map(c => imgs.filter(x => ok(x) && frameSits(x).includes(c))) : [];
-  const pool = [...named, imgs.filter(x => !rawSits(x).length), imgs.filter(x => !adultFrame(x))].find(l => l.length);
+  const pool = [...named, imgs.filter(plainFrame), imgs.filter(x => !adultFrame(x))].find(l => l.length);
   if (!pool) return null;
   let c = nearestEmotion(pool, emo);
   const want = (Array.isArray(look) ? look : []).map(x => String(x).toLowerCase()).filter(Boolean);

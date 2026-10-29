@@ -150,6 +150,13 @@ export function sitKeyOf(v) {
   if (d[k]) return k;
   return Object.keys(d).find(x => [d[x].label, d[x].label_ja].some(l => l && sitKey(l) === k)) || '';
 }
+// A tag that is an adult key, in this dictionary (an adult parent counts) or the starting one. Kept for good: a frame
+// tagged so before its tags moved into its situations, or by a pack, never shows as plain (images.js adultFrame).
+const ADULT_DEFAULTS = Object.keys(SIT_DEFAULTS).filter(k => SIT_DEFAULTS[k].adult);
+export const isAdultTag = t => {
+  const k = sitKey(t);
+  return ADULT_DEFAULTS.includes(k) || (!!sitDict()[k] && isAdultSit(k));
+};
 // a frame's situations: its own list, the keys still in the dictionary
 export function frameSits(x) {
   const d = sitDict();
@@ -161,14 +168,12 @@ export function setFrameSits(x, list) {
   if (keep.length) x.situations = keep;
   else delete x.situations;
 }
-// The tag words v2.17.1 read as situations ('formal' was a look then and stays one). library.js moves them into a
-// frame's situations once per library, and importTags does the same for a pack from before situations.
-const OLD_SIT_TAGS = ['battle', 'injured', 'eating', 'sleep', 'bath', 'hug', 'kiss', 'nsfw'];
-// true when the frame changed
+// A frame's tags that are dictionary keys move into its situations, all but 'formal', which stays a look tag.
+// library.js does it once per library, and importTags for a pack from before situations. True when the frame changed.
 export function tagsToSits(x) {
   if (!x || x.kind !== 'char') return false;
   const d = sitDict();
-  const old = (x.tags || []).filter(t => OLD_SIT_TAGS.includes(sitKey(t)) && d[sitKey(t)]);
+  const old = (x.tags || []).filter(t => sitKey(t) !== 'formal' && d[sitKey(t)]);
   if (!old.length) return false;
   x.tags = x.tags.filter(t => !old.includes(t));
   setFrameSits(x, [...(x.situations || []), ...old]);
