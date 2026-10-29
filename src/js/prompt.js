@@ -5,7 +5,7 @@ import { askOf, cmdIs, moneyText, powerGrade } from './data.js';
 import { GENDER_LABEL, SKILL_SRC, STANCE_LABEL } from './enums.js';
 import { LIMITS } from './limits.js';
 import { withWeekday } from './calendar.js';
-import { platform, thaw } from './db.js';
+import { platform, sget } from './db.js';
 import { app } from './app.js';
 import { promptLang, setting, storyLang } from './settings.js';
 import { N_, T, tIn } from './i18n.js';
@@ -35,8 +35,7 @@ export const fillTemplate = (str, v) =>
   String(str || '').replace(/\{(\w+)\}/g, (m, k) => (v[k] !== undefined ? v[k] : m));
 export async function loadPromptConfig() {
   try {
-    const d = await platform.shared.doc('config/prompt').get();
-    const v = d.exists ? thaw(d.data()) : null;
+    const v = await sget('config/prompt');
     prompts = v && v.rules ? Object.assign({}, PR_DEFAULT, v) : PR_DEFAULT;
   } catch (e) {
     prompts = PR_DEFAULT;

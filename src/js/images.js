@@ -124,6 +124,9 @@ export function setWorlds(x, ids) {
   x.worlds = ids;
   x.world = ids.length === 1 ? ids[0] : ids.length ? 'multi' : 'any';
 }
+// labels from before the modern world: a hunter picture fits it too, unless it is a monster or fantasy folk
+export const withModern = ws =>
+  ws.includes('hunter') && !['modern', 'monster', 'fantasy'].some(w => ws.includes(w)) ? [...ws, 'modern'] : ws;
 // labels are the source of truth: list every world an image fits
 export function fitsWorld(x, w) {
   const ws = worldsOf(x);

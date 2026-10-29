@@ -31,7 +31,7 @@ test('worlds', async ({ game }) => {
     off.length === 0,
   );
   const TR = await pg.evaluate(
-    "(()=>{const t=DR.TRANSFER_RACES,k=l=>l.map(x=>DR.tIn('ko',x));return {other:k(t.other),modern:k(t.modern)}})()",
+    "(()=>{const t=DR.TRANSFER_RACES,k=l=>l.map(x=>DR.tIn('ko',x));return {other:k(t.other),earth:k(t.earth)}})()",
   );
   const ERR = '[데이터 없음(ERROR)]'; // one roll in a hundred is the glitch race
   const hr = await pg.evaluate(
@@ -45,7 +45,7 @@ test('worlds', async ({ game }) => {
   check(
     errs,
     'a transfer into the modern hunter world comes from the other world, into fantasy from ours',
-    [...TR.other, ERR].includes(hr) && [...TR.modern, ERR].includes(fr),
+    [...TR.other, ERR].includes(hr) && [...TR.earth, ERR].includes(fr),
   );
   const fb = await pg.evaluate("DR.rollLife('x','남','possess',null,null).world.id!=='possess'");
   console.log('old world choice falls back:', fb);

@@ -18,8 +18,8 @@ export const platform = {
 let whitelist = []; // user ids the owner let in as privileged (config/whitelist)
 export async function loadWhitelist() {
   try {
-    const w = await platform.shared.doc('config/whitelist').get();
-    whitelist = w.exists ? thaw(w.data()).uids || [] : [];
+    const w = await sget('config/whitelist');
+    whitelist = (w && w.uids) || [];
   } catch (e) {
     whitelist = [];
   }
@@ -235,6 +235,11 @@ export const thaw = o => (o == null ? o : JSON.parse(JSON.stringify(o)));
 // missing document (that would start a save over, or write default settings over the real ones).
 export async function dget(p) {
   const s = await userDoc(p).get();
+  return s.exists ? thaw(s.data()) : null;
+}
+// the same for a shared document (images, sets, config)
+export async function sget(p) {
+  const s = await platform.shared.doc(p).get();
   return s.exists ? thaw(s.data()) : null;
 }
 export async function dset(p, d) {

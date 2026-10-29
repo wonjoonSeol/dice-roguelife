@@ -576,17 +576,17 @@ db、sample、user、assets、downloads、artifact の機能をオンにして�
   <ul lang="ko">
     <li>성좌가 있는 삶은 <b>채널이 처음엔 닫혀 있어요</b>. 각성하거나 큰 사건이 생기면 열려요.</li>
     <li>열리기 전에 <code>/성좌</code>를 치면 "아직 당신을 보지 않아요"라고 나와요. 성좌가 없는 삶이면 "이 세계에는 성좌가 없어요"라고 나와요.</li>
-    <li>주사위로 시작하면 세계마다 정해진 확률로 성좌가 있을지 정해져요. 헌터물과 탑은 성좌가 흔한 편이에요.</li>
+    <li>주사위로 시작하면 세계마다 정해진 확률로 성좌가 있을지 정해져요. 헌터물과 탑은 성좌가 흔한 편이에요. 현대에는 없고, 자유 설정에서 <b>있음</b>을 고를 때만 나와요.</li>
     <li>ADMIN의 말투는 ⚙ 설정의 <b>ADMIN 페르소나</b>에서 바꿀 수 있어요.</li>
   </ul><ul lang="en">
     <li>In a life with constellations, <b>the channel starts closed</b>. It opens after an awakening or a big event.</li>
     <li>Typing <code>/star</code> before it opens tells you they aren't watching yet. In a life without constellations, it tells you this world has none.</li>
-    <li>With the dice, each world has its own chance of having constellations. They're common in Hunter and Tower worlds.</li>
+    <li>With the dice, each world has its own chance of having constellations. They're common in Hunter and Tower worlds. Modern Day has none unless you pick <b>Yes</b> in Custom.</li>
     <li>Change ADMIN's personality in ⚙ Settings → <b>ADMIN persona</b>.</li>
   </ul><ul lang="ja">
     <li>星座のいる人生では、<b>チャンネルは閉じた状態で始まります</b>。覚醒や大きな出来事のあとに開きます。</li>
     <li>開く前に <code>/star</code> と打つと、まだ見ていないと教えてくれます。星座のいない人生では、この世界には星座がいないと教えてくれます。</li>
-    <li>ダイスで始める場合、星座のいる確率は世界ごとに違います。ハンターや塔の世界でよく出ます。</li>
+    <li>ダイスで始める場合、星座のいる確率は世界ごとに違います。ハンターや塔の世界でよく出ます。現代には出ず、自由設定で<b>あり</b>を選んだときだけ出ます。</li>
     <li>ADMINの性格は ⚙ 設定 → <b>ADMINのペルソナ</b>で変えられます。</li>
   </ul>
 </section>
@@ -965,7 +965,7 @@ Effects (dice or effect art that is neither a character nor a scene)
 Skip files that are already named as system assets: shadow_*, admin_*, dice*, fx*.
 
 Worlds (for "worlds", 0 to 3 that clearly fit; empty array if it fits anywhere):
-hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster
+hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster, modern
 
 Tags
 - Descriptive tags: lowercase English, 3 to 6 (hair, outfit, props, mood; for backgrounds:
@@ -1039,7 +1039,7 @@ Effects (dice or effect art that is neither a character nor a scene)
 Skip files that are already named as system assets: shadow_*, admin_*, dice*, fx*.
 
 Worlds (for "worlds", 0 to 3 that clearly fit; empty array if it fits anywhere):
-hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster
+hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster, modern
 
 Tags
 - Descriptive tags: lowercase English, 3 to 6 (hair, outfit, props, mood; for backgrounds:
@@ -1112,7 +1112,7 @@ Also
 すでにシステム素材の名前になっているファイルはスキップ：shadow_*、admin_*、dice*、fx*。
 
 世界（"worlds" 用、明らかに合うものを0〜3個。どこにでも合うなら空の配列）：
-hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster
+hunter, apoc, academy, tower, vrmmo, fantasy, rofan, murim, palace, cyber, monster, modern
 
 タグ
 - 説明タグ：小文字の英語で3〜6個（髪、衣装、小物、雰囲気。背景なら場所、時間帯、天気、雰囲気）。
@@ -1233,24 +1233,24 @@ tags.json（キーは新しいファイル名）
   <div class="tablewrap"><table lang="ko">
     <thead><tr><th>이름</th><th>내용</th><th>라이선스 (작가 표기)</th></tr></thead>
     <tbody>
-      <tr><td><a href="https://tulune2204.itch.io/free-fantasy-knight-character-sprite-pack-2-characters-8-expressions-1-rpg-bac">TuLune2204 · Free Fantasy Knight Pack</a></td><td>기사 캐릭터 3명, 표정 9종, 배경 1장이 들어 있어요</td><td>"Free for commercial and personal projects. Credit appreciated but not required."</td></tr>
-      <tr><td><a href="https://itch.io/t/6768452/free-sample-4k-asset-packs-165-fantasy-cyberpunk-sci-fi-backgrounds-for-visual-novels-rpgs">BrightPixel · 4K 배경 팩</a></td><td>다크 판타지, 사이버펑크, SF 배경이에요. <b>데모 샘플만 무료</b>예요.</td><td>쓰기 전에 페이지에서 직접 확인해 주세요</td></tr>
+      <tr><td><a href="https://tulune2204.itch.io/free-fantasy-knight-character-sprite-pack-2-characters-8-expressions-1-rpg-bac">TuLune2204 / Free Fantasy Knight Pack</a></td><td>기사 캐릭터 3명, 표정 9종, 배경 1장이 들어 있어요</td><td>"Free for commercial and personal projects. Credit appreciated but not required."</td></tr>
+      <tr><td><a href="https://itch.io/t/6768452/free-sample-4k-asset-packs-165-fantasy-cyberpunk-sci-fi-backgrounds-for-visual-novels-rpgs">BrightPixel / 4K 배경 팩</a></td><td>다크 판타지, 사이버펑크, SF 배경이에요. <b>데모 샘플만 무료</b>예요.</td><td>쓰기 전에 페이지에서 직접 확인해 주세요</td></tr>
       <tr><td><a href="https://itch.io/game-assets/free/genre-visual-novel/tag-anime/tag-sprites">무료 애니 VN 스프라이트 모음</a></td><td>단일 캐릭터 팩이 많고 무협 한복 스프라이트도 있어요 (둘러보기)</td><td>팩마다 다름</td></tr>
       <tr><td><a href="https://itch.io/game-assets/free/genre-visual-novel/tag-backgrounds">무료 VN 배경 모음</a></td><td>판타지 숲, 마법학교 등. 같은 작가 시리즈는 크기와 스타일이 맞아요 (둘러보기)</td><td>팩마다 다름</td></tr>
     </tbody>
   </table><table lang="en">
     <thead><tr><th>Name</th><th>Contents</th><th>License (as the artist states)</th></tr></thead>
     <tbody>
-      <tr><td><a href="https://tulune2204.itch.io/free-fantasy-knight-character-sprite-pack-2-characters-8-expressions-1-rpg-bac">TuLune2204 · Free Fantasy Knight Pack</a></td><td>3 knight characters, 9 expressions and 1 background</td><td>"Free for commercial and personal projects. Credit appreciated but not required."</td></tr>
-      <tr><td><a href="https://itch.io/t/6768452/free-sample-4k-asset-packs-165-fantasy-cyberpunk-sci-fi-backgrounds-for-visual-novels-rpgs">BrightPixel · 4K background packs</a></td><td>Dark fantasy, cyberpunk and sci-fi backgrounds. <b>Only the demo samples are free</b>.</td><td>Check the page before using them</td></tr>
+      <tr><td><a href="https://tulune2204.itch.io/free-fantasy-knight-character-sprite-pack-2-characters-8-expressions-1-rpg-bac">TuLune2204 / Free Fantasy Knight Pack</a></td><td>3 knight characters, 9 expressions and 1 background</td><td>"Free for commercial and personal projects. Credit appreciated but not required."</td></tr>
+      <tr><td><a href="https://itch.io/t/6768452/free-sample-4k-asset-packs-165-fantasy-cyberpunk-sci-fi-backgrounds-for-visual-novels-rpgs">BrightPixel / 4K background packs</a></td><td>Dark fantasy, cyberpunk and sci-fi backgrounds. <b>Only the demo samples are free</b>.</td><td>Check the page before using them</td></tr>
       <tr><td><a href="https://itch.io/game-assets/free/genre-visual-novel/tag-anime/tag-sprites">Free anime VN sprites</a></td><td>Lots of single-character packs, including martial-arts hanfu sprites (browse)</td><td>Varies by pack</td></tr>
       <tr><td><a href="https://itch.io/game-assets/free/genre-visual-novel/tag-backgrounds">Free VN backgrounds</a></td><td>Fantasy forests, magic schools and more. Series by the same artist match in size and style (browse)</td><td>Varies by pack</td></tr>
     </tbody>
   </table><table lang="ja">
     <thead><tr><th>名前</th><th>内容</th><th>ライセンス（作者の表記）</th></tr></thead>
     <tbody>
-      <tr><td><a href="https://tulune2204.itch.io/free-fantasy-knight-character-sprite-pack-2-characters-8-expressions-1-rpg-bac">TuLune2204 · Free Fantasy Knight Pack</a></td><td>騎士キャラクター3人、表情9種、背景1枚</td><td>"Free for commercial and personal projects. Credit appreciated but not required."</td></tr>
-      <tr><td><a href="https://itch.io/t/6768452/free-sample-4k-asset-packs-165-fantasy-cyberpunk-sci-fi-backgrounds-for-visual-novels-rpgs">BrightPixel · 4K background packs</a></td><td>ダークファンタジー、サイバーパンク、SFの背景。<b>無料なのはデモのサンプルだけ</b>です。</td><td>使う前にページを確認してください</td></tr>
+      <tr><td><a href="https://tulune2204.itch.io/free-fantasy-knight-character-sprite-pack-2-characters-8-expressions-1-rpg-bac">TuLune2204 / Free Fantasy Knight Pack</a></td><td>騎士キャラクター3人、表情9種、背景1枚</td><td>"Free for commercial and personal projects. Credit appreciated but not required."</td></tr>
+      <tr><td><a href="https://itch.io/t/6768452/free-sample-4k-asset-packs-165-fantasy-cyberpunk-sci-fi-backgrounds-for-visual-novels-rpgs">BrightPixel / 4K background packs</a></td><td>ダークファンタジー、サイバーパンク、SFの背景。<b>無料なのはデモのサンプルだけ</b>です。</td><td>使う前にページを確認してください</td></tr>
       <tr><td><a href="https://itch.io/game-assets/free/genre-visual-novel/tag-anime/tag-sprites">Free anime VN sprites</a></td><td>一人用のパックが多数。武侠の漢服スプライトもあります（一覧）</td><td>パックによって異なる</td></tr>
       <tr><td><a href="https://itch.io/game-assets/free/genre-visual-novel/tag-backgrounds">Free VN backgrounds</a></td><td>ファンタジーの森、魔法学校など。同じ作者のシリーズはサイズと画風がそろっています（一覧）</td><td>パックによって異なる</td></tr>
     </tbody>
@@ -1258,28 +1258,28 @@ tags.json（キーは新しいファイル名）
 
   <h3 lang="ko">유료 팩 <span class="tag-paid">유료</span></h3><h3 lang="en">Paid packs <span class="tag-paid">Paid</span></h3><h3 lang="ja">有料パック <span class="tag-paid">有料</span></h3>
   <div class="tablewrap"><table lang="ko">
-    <thead><tr><th>이름</th><th>내용 · 가격</th><th>라이선스 (작가 표기)</th></tr></thead>
+    <thead><tr><th>이름</th><th>내용, 가격</th><th>라이선스 (작가 표기)</th></tr></thead>
     <tbody>
-      <tr><td><a href="https://tulune2204.itch.io/fantasy-2-mage-character-sprite-pack-2-characters-20-expressions-1-rpg-backgro">TuLune2204 · Fantasy 2 Mage Pack</a></td><td>마법사 2명, 표정 20종, 배경 4장이 들어 있어요. 기사 팩과 스타일이 같아서 섞어 쓰기 좋아요. <b>$2 이상</b></td><td>Free Knight Pack과 같은 문구</td></tr>
-      <tr><td><a href="https://tulune2204.itch.io/fantasy-character-sprite-female-knight-pack-b-2-characters-18-expressions">TuLune2204 · Female Knight Pack B</a></td><td>여기사 2명, 표정 20종이 들어 있어요. <b>$2 이상</b></td><td>Free Knight Pack과 같은 문구</td></tr>
-      <tr><td><a href="https://vill8tion.itch.io/anime-visual-novel-backgrounds-vol-2-medieval-fantasy-4k">Vill8tion · Anime VN Backgrounds Vol. 2 Medieval Fantasy 4K</a></td><td>중세 판타지 배경이에요. <b>$2.49 이상</b></td><td>"You can use these assets in both commercial and free projects. You can modify them ... You may not resell the assets directly as a standalone background pack."</td></tr>
-      <tr><td><a href="https://pastens.itch.io/visual-novel-backgrounds-pack">pastens · Visual Novel Background Bundle</a></td><td>애니풍 배경 25장이에요 (AI 생성). 도시와 마을 위주라서 헌터물, 로판에 잘 맞아요. <b>$7.50 이상</b></td><td>상업, 비상업 사용 가능. 수정 가능. 원본 이미지의 재배포, 판매, 공유는 금지</td></tr>
+      <tr><td><a href="https://tulune2204.itch.io/fantasy-2-mage-character-sprite-pack-2-characters-20-expressions-1-rpg-backgro">TuLune2204 / Fantasy 2 Mage Pack</a></td><td>마법사 2명, 표정 20종, 배경 4장이 들어 있어요. 기사 팩과 스타일이 같아서 섞어 쓰기 좋아요. <b>$2 이상</b></td><td>Free Knight Pack과 같은 문구</td></tr>
+      <tr><td><a href="https://tulune2204.itch.io/fantasy-character-sprite-female-knight-pack-b-2-characters-18-expressions">TuLune2204 / Female Knight Pack B</a></td><td>여기사 2명, 표정 20종이 들어 있어요. <b>$2 이상</b></td><td>Free Knight Pack과 같은 문구</td></tr>
+      <tr><td><a href="https://vill8tion.itch.io/anime-visual-novel-backgrounds-vol-2-medieval-fantasy-4k">Vill8tion / Anime VN Backgrounds Vol. 2 Medieval Fantasy 4K</a></td><td>중세 판타지 배경이에요. <b>$2.49 이상</b></td><td>"You can use these assets in both commercial and free projects. You can modify them ... You may not resell the assets directly as a standalone background pack."</td></tr>
+      <tr><td><a href="https://pastens.itch.io/visual-novel-backgrounds-pack">pastens / Visual Novel Background Bundle</a></td><td>애니풍 배경 25장이에요 (AI 생성). 도시와 마을 위주라서 헌터물, 로판에 잘 맞아요. <b>$7.50 이상</b></td><td>상업, 비상업 사용 가능. 수정 가능. 원본 이미지의 재배포, 판매, 공유는 금지</td></tr>
     </tbody>
   </table><table lang="en">
-    <thead><tr><th>Name</th><th>Contents · price</th><th>License (as the artist states)</th></tr></thead>
+    <thead><tr><th>Name</th><th>Contents, price</th><th>License (as the artist states)</th></tr></thead>
     <tbody>
-      <tr><td><a href="https://tulune2204.itch.io/fantasy-2-mage-character-sprite-pack-2-characters-20-expressions-1-rpg-backgro">TuLune2204 · Fantasy 2 Mage Pack</a></td><td>2 mages, 20 expressions and 4 backgrounds. Same style as the knight pack, so they mix well. <b>$2 or more</b></td><td>Same wording as the Free Knight Pack</td></tr>
-      <tr><td><a href="https://tulune2204.itch.io/fantasy-character-sprite-female-knight-pack-b-2-characters-18-expressions">TuLune2204 · Female Knight Pack B</a></td><td>2 female knights and 20 expressions. <b>$2 or more</b></td><td>Same wording as the Free Knight Pack</td></tr>
-      <tr><td><a href="https://vill8tion.itch.io/anime-visual-novel-backgrounds-vol-2-medieval-fantasy-4k">Vill8tion · Anime VN Backgrounds Vol. 2 Medieval Fantasy 4K</a></td><td>Medieval fantasy backgrounds. <b>$2.49 or more</b></td><td>"You can use these assets in both commercial and free projects. You can modify them ... You may not resell the assets directly as a standalone background pack."</td></tr>
-      <tr><td><a href="https://pastens.itch.io/visual-novel-backgrounds-pack">pastens · Visual Novel Background Bundle</a></td><td>25 anime-style backgrounds (AI-generated). Mostly cities and towns, a good fit for hunter and romance fantasy worlds. <b>$7.50 or more</b></td><td>Commercial and non-commercial use allowed. Editing allowed. Redistributing, selling or sharing the original images is not</td></tr>
+      <tr><td><a href="https://tulune2204.itch.io/fantasy-2-mage-character-sprite-pack-2-characters-20-expressions-1-rpg-backgro">TuLune2204 / Fantasy 2 Mage Pack</a></td><td>2 mages, 20 expressions and 4 backgrounds. Same style as the knight pack, so they mix well. <b>$2 or more</b></td><td>Same wording as the Free Knight Pack</td></tr>
+      <tr><td><a href="https://tulune2204.itch.io/fantasy-character-sprite-female-knight-pack-b-2-characters-18-expressions">TuLune2204 / Female Knight Pack B</a></td><td>2 female knights and 20 expressions. <b>$2 or more</b></td><td>Same wording as the Free Knight Pack</td></tr>
+      <tr><td><a href="https://vill8tion.itch.io/anime-visual-novel-backgrounds-vol-2-medieval-fantasy-4k">Vill8tion / Anime VN Backgrounds Vol. 2 Medieval Fantasy 4K</a></td><td>Medieval fantasy backgrounds. <b>$2.49 or more</b></td><td>"You can use these assets in both commercial and free projects. You can modify them ... You may not resell the assets directly as a standalone background pack."</td></tr>
+      <tr><td><a href="https://pastens.itch.io/visual-novel-backgrounds-pack">pastens / Visual Novel Background Bundle</a></td><td>25 anime-style backgrounds (AI-generated). Mostly cities and towns, a good fit for hunter and romance fantasy worlds. <b>$7.50 or more</b></td><td>Commercial and non-commercial use allowed. Editing allowed. Redistributing, selling or sharing the original images is not</td></tr>
     </tbody>
   </table><table lang="ja">
     <thead><tr><th>名前</th><th>内容・価格</th><th>ライセンス（作者の表記）</th></tr></thead>
     <tbody>
-      <tr><td><a href="https://tulune2204.itch.io/fantasy-2-mage-character-sprite-pack-2-characters-20-expressions-1-rpg-backgro">TuLune2204 · Fantasy 2 Mage Pack</a></td><td>魔法使い2人、表情20種、背景4枚。騎士パックと同じ画風なので組み合わせやすいです。<b>2ドル以上</b></td><td>Free Knight Pack と同じ文言</td></tr>
-      <tr><td><a href="https://tulune2204.itch.io/fantasy-character-sprite-female-knight-pack-b-2-characters-18-expressions">TuLune2204 · Female Knight Pack B</a></td><td>女騎士2人、表情20種。<b>2ドル以上</b></td><td>Free Knight Pack と同じ文言</td></tr>
-      <tr><td><a href="https://vill8tion.itch.io/anime-visual-novel-backgrounds-vol-2-medieval-fantasy-4k">Vill8tion · Anime VN Backgrounds Vol. 2 Medieval Fantasy 4K</a></td><td>中世ファンタジーの背景。<b>2.49ドル以上</b></td><td>"You can use these assets in both commercial and free projects. You can modify them ... You may not resell the assets directly as a standalone background pack."</td></tr>
-      <tr><td><a href="https://pastens.itch.io/visual-novel-backgrounds-pack">pastens · Visual Novel Background Bundle</a></td><td>アニメ調の背景25枚（AI生成）。主に都市や町で、ハンターやロマンスファンタジーの世界に合います。<b>7.50ドル以上</b></td><td>商用・非商用での利用可。編集可。元の画像の再配布、販売、共有は不可</td></tr>
+      <tr><td><a href="https://tulune2204.itch.io/fantasy-2-mage-character-sprite-pack-2-characters-20-expressions-1-rpg-backgro">TuLune2204 / Fantasy 2 Mage Pack</a></td><td>魔法使い2人、表情20種、背景4枚。騎士パックと同じ画風なので組み合わせやすいです。<b>2ドル以上</b></td><td>Free Knight Pack と同じ文言</td></tr>
+      <tr><td><a href="https://tulune2204.itch.io/fantasy-character-sprite-female-knight-pack-b-2-characters-18-expressions">TuLune2204 / Female Knight Pack B</a></td><td>女騎士2人、表情20種。<b>2ドル以上</b></td><td>Free Knight Pack と同じ文言</td></tr>
+      <tr><td><a href="https://vill8tion.itch.io/anime-visual-novel-backgrounds-vol-2-medieval-fantasy-4k">Vill8tion / Anime VN Backgrounds Vol. 2 Medieval Fantasy 4K</a></td><td>中世ファンタジーの背景。<b>2.49ドル以上</b></td><td>"You can use these assets in both commercial and free projects. You can modify them ... You may not resell the assets directly as a standalone background pack."</td></tr>
+      <tr><td><a href="https://pastens.itch.io/visual-novel-backgrounds-pack">pastens / Visual Novel Background Bundle</a></td><td>アニメ調の背景25枚（AI生成）。主に都市や町で、ハンターやロマンスファンタジーの世界に合います。<b>7.50ドル以上</b></td><td>商用・非商用での利用可。編集可。元の画像の再配布、販売、共有は不可</td></tr>
     </tbody>
   </table></div>
   <p class="lede" lang="ko">가격과 라이선스는 이 가이드를 만들 때 각 페이지에서 확인한 내용이라 바뀔 수 있어요. 쓰기 전에 페이지를 다시 확인하세요. 둘러보기 페이지 두 곳은 자동 확인이 막혀 있어서 직접 열어 봐야 해요. 팩을 받았다고 해서 그대로 다시 나눠 주면 안 되는 경우가 많아요 (재배포 금지).</p><p class="lede" lang="en">Prices and licenses were checked on each page when this guide was written and may change. Check the page again before using anything. The two browse pages block automated checks, so open them yourself. Getting a pack usually doesn't mean you can hand it out again (no redistribution).</p><p class="lede" lang="ja">価格とライセンスはこのガイドを書いた時点で各ページで確認したもので、変わることがあります。使う前にもう一度ページを確認してください。一覧ページの2つは自動確認をブロックするので、自分で開いてください。パックを手に入れても、たいていは他人に配ることはできません（再配布不可）。</p>

@@ -52,11 +52,11 @@
 | `i18n.js` | 화면 언어(`uiLang`), 번역(`T`, `Tc`, `tIn`, `N_`), 고정 글자 번역(`translateStatic`) |
 | `enums.js` | 저장하고 비교하는 값(성별, 출신, 성좌 관계, 스킬 출처, 무공 칸)과 그 이름, 옛 저장의 한국어 값(`LEGACY`) |
 | `util.js` | 정직한 주사위(`rnd`는 `crypto.getRandomValues`), 공용 도우미(`$`, `esc`, `clone`, `toast`, `noteIgnored`, `cutLine`, `sha256Hex`), 서술 표시(`MARK_RE`) |
-| `data.js` | 데이터 테이블: 등급과 확률(`rollTier`, `tierRank`), 세계, 종족, 신분, 재능, 명령어(`CMDS`, 특성 표 `COMMAND_TYPES`와 `cmdIs`), 감정 |
+| `data.js` | 데이터 테이블: 등급과 확률(`rollTier`, `tierRank`), 세계, 종족, 신분, 재능(힘이 필요한 것과 힘 없는 세계 전용은 `inPool`이 세계의 `mundane`으로 가름), 명령어(`CMDS`, 특성 표 `COMMAND_TYPES`와 `cmdIs`), 감정 |
 | `world-ext.js`, `murim.js` | 세계 애드온: 일부 세계만 가진 체계(아래 "세계 애드온"). `murim.js`는 무림의 것(경지 `REALMS`, 내공, 무공) |
 | `limits.js` | 남기는 양(`LIMITS`): 답 하나의 글자 수와 항목 수, 저장이 평생 들고 있는 양(`kept`), 한 답이 움직일 수 있는 양(`move`) |
 | `calendar.js` | 게임 안 날짜와 시각: `parseKDate`, `addDaysISO`, `clockMin`, `withWeekday` |
-| `db.js` | 기능 핸들과 저장 모드(`platform`), 특권 사용자(`isPrivileged`), 메모리 DB, 압축(gzip + base64, 내보내기용 Z85), `packTurn`/`inflate`, `userDoc`/`userCol`, `dget`/`dset` |
+| `db.js` | 기능 핸들과 저장 모드(`platform`), 특권 사용자(`isPrivileged`), 메모리 DB, 압축(gzip + base64, 내보내기용 Z85), `packTurn`/`inflate`, `userDoc`/`userCol`, `dget`/`dset`, 공유 문서 읽기 `sget` |
 | `turn-store.js` | `turnStore`: 턴을 크기 제한 페이지 문서로 묶어 저장, 충돌 감지(`StoreConflict`), `NEW_SAVES`/`GONE_SAVES` |
 | `app.js` | 앱 정보(`APP_VERSION`, `REPO_URL`), 공유 상태(`app`), 한 번에 동작 하나(`exclusive`, `app.phase`, `abandonAction`) |
 | `settings.js` | 설정 읽기(`setting`, `SETTING_DEFAULTS`)와 순서대로 쓰기(`saveSettings`) |
@@ -67,7 +67,7 @@
 | `roster.js` | 인물 설정의 칸과 길이(`PROFILE`, `PROFILE_FIELDS`, `cleanProfile`: 세트 카드와 명단이 같이 씀), 저장마다 플레이어가 붙여 넣는 인물 명단(`parseRoster`, `rosterNow`, `rosterFor`, `setRoster`, 아래 "인물 명단") |
 | `compat.js` | 옛 저장을 지금 형식으로(`compat`) |
 | **이미지와 캐스팅** | |
-| `library.js` | 이미지 색인(`IMGX`, 공유 `imgidx` 문서), 세트 카드, 매니페스트 복원, 옛 구조 이전, 파일 해시(`fillHashes`), 저장 파일의 그림 키(`withPicKeys`) |
+| `library.js` | 이미지 색인(`IMGX`, 공유 `imgidx` 문서), 세트 카드, 매니페스트 복원, 옛 구조 이전, 세계 라벨 정리(`migrateWorldLabels`, `addModernLabels`), 파일 해시(`fillHashes`), 저장 파일의 그림 키(`withPicKeys`) |
 | `images.js` | 이미지 찾기: `imgById`(id 색인), 턴의 그림(`turnImg`: 내용 키, 그다음 id), 캐릭터 세트(`charSets`), 세계 맞춤(`fitsWorld`, `setWorlds`), 표정 고르기(`pickEmotion`), 장면 HTML |
 | `places.js` | 배경 검색: 내레이터가 영어 단어로 묘사한 장소 → 배경 이미지(`findPlace`) |
 | `casting.js` | 캐스팅: 인물(`{ name, gender, role, weight, look }`, 답에서는 `speakerOf`, `presentOf`)에게 초상화 세트 배정(외모, 역할, 소속 태그 점수), AI 선택, 그림자. 성별이 있는 인물에게는 `기타` 세트를 자동으로 주지 않습니다(얼굴 고르기 창에서는 고를 수 있음). |
@@ -191,7 +191,7 @@
   저장되고, 프롬프트도 이야기 언어로 만듭니다(`promptLang`, `pr`, `pl`).
 - 처음 온 플레이어는 브라우저 언어(한국어가 아니면 영어)로 시작하고, 설정이 있던 기존 플레이어는 한국어를 유지합니다(`boot.js`).
 - 저장하는 값은 언어와 무관한 값(`enums.js`)입니다. 옛 저장의 한국어 값은 `compat`이 바꿉니다.
-- 현대 세계(헌터, 아카데미)의 소지금은 삶을 시작할 때 이야기 언어의 돈(한국어 원, 일본어 엔, 영어 달러)으로 정해집니다
+- 지금 시대의 세계(현대, 헌터, 아카데미)의 소지금은 삶을 시작할 때 이야기 언어의 돈(한국어 원, 일본어 엔, 영어 달러)으로 정해집니다
   (`life.money`, `moneyFor`). 서술에는 다른 통화가 나와도 되고, 금액 변화는 소지금 단위로 바꿔 받습니다. 플레이어가 다른
   통화를 원하면 내레이터가 `money_unit`으로 단위 이름만 바꾸고(`life.unit`, 금액은 그대로), 환전까지 원하면
   `money_rate`(옛 단위당 새 단위)로 가진 돈과 배율(`life.scale`, 한 턴 한도)을 바꾸며, 그 답의 다른 돈 변화보다 먼저
@@ -341,6 +341,7 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
 | `sets/<key>` | 캐릭터 세트 카드(성별, 등급, 역할, 이름, 별칭, 세계, 태그) | 공유 |
 | `config/prompt` | 라이브 프롬프트 | 공유 |
 | `config/whitelist` | 특권 사용자 id | 공유 |
+| `config/migrations` | 라이브러리에서 한 번만 하는 정리가 끝났다는 표시(`LIBFLAGS`, 지금은 `modernLabels`) | 공유 |
 
 옛 구조(`P/saves/items/<id>/turns/<i>`, 공유 `images/<id>`, `data/local/...`)는 읽어서 새 구조로 옮기는 코드만 남아
 있습니다.
@@ -399,6 +400,20 @@ localStorage만 씁니다: `dr:inputHint`(입력 요령 안내), `dr:choiceHint`
 - 파일은 아티팩트 에셋 저장소(`platform.assets`)에, 목록은 공유 `imgidx` 페이지에, 세트 정보는 `sets/<key>`에 있습니다.
 - 이미지 행: `id, kind(char | scene | fx), set, emotion, name, file, hash, shash, world, worlds, tags, createdAt`.
   `fx`는 연출 이미지(주사위 `dice`, `dice_success`, `dice_fail`)라서 "자동 분류"가 건드리지 않습니다.
+- **세계 라벨**: 세트 카드와 이미지 행의 `worlds`가 어울리는 세계이고, 비어 있으면 모든 세계입니다(`fitsWorld`). 캐릭터는
+  세트 카드의 라벨로, 배경은 이미지 행의 라벨로 고릅니다. 세트를 불러올 때(`loadSets`, 부팅이 기다린 뒤 저장을 엶) 특권
+  사용자(주인 등)의 기기에서 두 정리가 차례로 돕니다. 없어진 세계 id를 그 배경 세계로 바꾸고(`migrateWorldLabels`, 옛
+  라벨이 남아 있을 때만), 현대 세계가 생기기 전에 붙인 라벨에 현대를 더합니다(`addModernLabels`). 더하는 규칙은
+  `withModern` 하나입니다: 헌터 라벨이 있고 몬스터와 정통 판타지 라벨이 없는 세트와 배경(괴물, 드레이크, 기사, 엘프는
+  빠짐). 라벨이 없는 세트와 배경은 이미 모든 세계에 맞으므로 건드리지 않습니다.
+  - 라이브러리마다 한 번입니다(`config/migrations`의 `modernLabels`, `LIBFLAGS`: 아티팩트 데이터베이스와 독립 실행판의
+    SQLite가 각자 하나). 비어 있는 라이브러리도 첫 부팅에 표시를 남기므로, 주인이 뺀 현대 칩이나 처음부터 붙이지 않은
+    칩은 다시 붙지 않습니다. 모든 쓰기가 성공했을 때만 표시를 남기고, 실패한 세트와 배경은 메모리도 이전 라벨로
+    되돌려 다음 부팅에 다시 합니다.
+  - 현대 이전에 만든 이미지 팩: 가져오는 `tags.json`이 어디에도 `modern`을 적지 않았으면 그 세트와 배경에 같은 규칙을
+    씌워 씁니다(`importTags`). `modern`이 하나라도 있는 파일은 적힌 그대로 씁니다.
+  - 알고 받아들인 빈틈: 아티팩트를 복사해 `config/migrations`가 빈 채로 시작하면 복사본의 첫 부팅이 다시 돌아, 원본에서
+    뺀 현대 칩이 복사본에서는 다시 붙을 수 있습니다(드묾).
 - **매니페스트**: 목록 전체를 JSON 에셋(`kind: 'dice-roguelife-manifest'`)으로도 남겨 둡니다. 아티팩트를 복제하면 에셋은
   따라오지만 데이터베이스는 비어 있으므로, 시작할 때 매니페스트에서 목록을 되살립니다(`shash`로 짝 맞춤).
 

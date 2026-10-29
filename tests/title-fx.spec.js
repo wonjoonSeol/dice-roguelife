@@ -11,13 +11,18 @@ test('title fx', async ({ game }) => {
   await startLife(pg);
   await pg.fill('#input', '지켜본다');
   await pg.press('#input', 'Enter');
-  await pg.waitForFunction("document.querySelectorAll('.win .fx').length>0", null, { timeout: 15000 });
+  await pg.waitForFunction("[...document.querySelectorAll('.turn')].at(-1)?.querySelector('.win .fx')", null, {
+    timeout: 15000,
+  });
   const wins = await pg.evaluate(
     "[...[...document.querySelectorAll('.turn')].slice(-1)[0].querySelectorAll('.win')].map(w=>w.innerText.replace(/\\n/g,' / '))",
   );
   console.log('title windows:', wins);
-  const el = (await pg.$$('.turn')).at(-1);
-  await el.screenshot({ path: shot('title_fx.png') });
+  // a locator, not a handle: the log may redraw after the window shows
+  await pg
+    .locator('.turn')
+    .last()
+    .screenshot({ path: shot('title_fx.png') });
   const ok = wins.some(w => w.includes('빈민가 아이들의 상납 서열'));
   if (!ok) errs.push('no effect line');
   expect(errs).toEqual([]);

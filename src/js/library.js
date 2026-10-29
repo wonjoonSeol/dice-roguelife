@@ -1,11 +1,21 @@
 /* ============ image library: index, set cards ============ */
 import { inParallel, noteIgnored, nowIso, sha256Hex, toast } from './util.js';
 import { WORLD_ALIAS } from './data.js';
-import { dget, dset, isPrivileged, platform, thaw, userCol } from './db.js';
+import { dget, dset, isPrivileged, platform, sget, thaw, userCol } from './db.js';
 import { app } from './app.js';
 import { saveSettings } from './settings.js';
 import { logErr } from './diag.js';
-import { imagesChanged, imgUrl, picIds, picKeys, turnImg, turnKeys } from './images.js';
+import {
+  imagesChanged,
+  imgUrl,
+  picIds,
+  picKeys,
+  setWorlds,
+  turnImg,
+  turnKeys,
+  withModern,
+  worldsOf,
+} from './images.js';
 import { T } from './i18n.js';
 
 export let imgError = '';
@@ -322,18 +332,29 @@ export async function migrateLegacy() {
   }
 }
 export async function loadSets() {
-  try {
-    const q = await platform.shared.collection('sets').limit(1000).get();
-    app.setMeta = {};
-    q.docs.forEach(d => {
+  const [sets, flags] = await Promise.allSettled([
+    platform.shared.collection('sets').limit(1000).get(),
+    sget('config/migrations'),
+  ]);
+  app.setMeta = {};
+  if (sets.status === 'fulfilled')
+    sets.value.docs.forEach(d => {
       app.setMeta[d.id] = thaw(d.data());
     });
+  // asked once a boot at most, and only when a migration has work to do
+  let asked;
+  const priv = () => (asked = asked || isPrivileged());
+  // awaited, so the first casting after boot already sees the new labels
+  try {
+    await migrateWorldLabels(priv);
+    if (flags.status === 'rejected') throw flags.reason;
+    const done = flags.value || {};
+    if (sets.status === 'fulfilled' && !imgError && !done.modernLabels) await addModernLabels(priv, done);
   } catch (e) {
-    app.setMeta = {};
+    logErr('wlabels', e);
   }
-  migrateWorldLabels().catch(e => logErr('wlabels', e));
 }
-export async function migrateWorldLabels() {
+export async function migrateWorldLabels(priv = isPrivileged) {
   // retired world ids on cards and images become the backgrounds they meant; runs once on the owner's device
   const old = v => Object.prototype.hasOwnProperty.call(WORLD_ALIAS, v);
   const fix = list => [
@@ -344,7 +365,7 @@ export async function migrateWorldLabels() {
   );
   const imgIds = app.images.filter(x => Array.isArray(x.worlds) && x.worlds.some(old)).map(x => x.id);
   if (!setKs.length && !imgIds.length) return;
-  if (!(await isPrivileged())) return;
+  if (!(await priv())) return;
   for (const k of setKs) {
     app.setMeta[k].worlds = fix(app.setMeta[k].worlds);
     if (old(app.setMeta[k].world)) app.setMeta[k].world = app.setMeta[k].worlds[0] || 'any';
@@ -354,6 +375,59 @@ export async function migrateWorldLabels() {
   await IMGX.flush(imgIds);
   toast(T('World labels updated: {sets} sets, {imgs} images', { sets: setKs.length, imgs: imgIds.length }), 4000);
 }
+// one-time library upkeep marks itself done here, with the library, so the artifact and the standalone each run it once
+export const LIBFLAGS = () => platform.shared.doc('config/migrations');
+// Labels from before the modern world (withModern). Once per library, empty or not, so a chip the owner takes off or
+// never put on stays that way; an older pack imported later gets the same rule in importTags. flags: config/migrations.
+export async function addModernLabels(priv, flags) {
+  const grown = x => {
+    const ws = worldsOf(x),
+      n = withModern(ws);
+    return n !== ws && n;
+  };
+  const setWork = Object.keys(app.setMeta)
+    .map(k => [k, grown(app.setMeta[k])])
+    .filter(([, n]) => n);
+  const pages = new Map();
+  for (const x of app.images) {
+    const n = x.kind === 'scene' && grown(x);
+    if (!n) continue;
+    const p = IMGX.assign(x.id);
+    if (!pages.has(p)) pages.set(p, []);
+    pages.get(p).push([x, n]);
+  }
+  if (!(await priv())) return; // even with nothing to relabel, the owner's boot marks the library done
+  let sets = 0,
+    bgs = 0,
+    failed = 0;
+  await inParallel(setWork, 8, async ([k, n]) => {
+    const next = { ...app.setMeta[k] };
+    setWorlds(next, n);
+    try {
+      await SETDOC(k).set(next);
+      app.setMeta[k] = next;
+      sets++;
+    } catch (e) {
+      failed++;
+      logErr('modern labels: set', e);
+    }
+  });
+  await inParallel([...pages], 3, async ([p, xs]) => {
+    const before = xs.map(([x]) => [x, x.worlds, x.world]);
+    for (const [x, n] of xs) setWorlds(x, n);
+    try {
+      await IMGX.save(p);
+      bgs += xs.length;
+    } catch (e) {
+      for (const [x, worlds, world] of before) Object.assign(x, { worlds, world }); // memory matches the page again
+      failed++;
+      logErr('modern labels: backgrounds', e);
+    }
+  });
+  if (!failed) await LIBFLAGS().set({ ...flags, modernLabels: nowIso() });
+  if (sets || bgs) toast(T('Modern Day added to {sets} sets and {bgs} backgrounds', { sets, bgs }), 4000);
+}
+
 export async function findManifestAsset() {
   try {
     const l = (await platform.assets.list()).assets

@@ -16,6 +16,7 @@ import {
   imgUrl,
   setCover,
   setWorlds,
+  withModern,
   worldChips,
   worldsOf,
 } from './images.js';
@@ -1219,6 +1220,11 @@ export async function importTags(file) {
     const a = Array.isArray(m.worlds) ? m.worlds : m.world && m.world !== 'any' ? [m.world] : [];
     return a.filter(x => WORLDS.some(w => w.id === x));
   };
+  // a pack that never names the modern world was made before it: its sets and backgrounds get the library's rule
+  const oldPack = ![j.sets, j.images, j.backgrounds].some(g =>
+    Object.values(g || {}).some(m => m && wl(m).includes('modern')),
+  );
+  const wlSet = m => (oldPack ? withModern(wl(m)) : wl(m));
   const byKey = new Map();
   for (const i of app.images) {
     for (const k of [i.file, i.name, 'bg_' + i.name, (i.file || '').replace(/\.[^.]+$/, '')])
@@ -1269,7 +1275,7 @@ export async function importTags(file) {
         const meta = {}; // only the fields present in the file; everything else is kept
         if (m.gender) meta.gender = m.gender;
         if ('worlds' in m || 'world' in m) {
-          const ws = wl(m);
+          const ws = wlSet(m);
           setWorlds(meta, ws);
         }
         const role = [m.role, m.vibe, m.look].filter(Boolean).join(', ').slice(0, 120);
@@ -1310,7 +1316,7 @@ export async function importTags(file) {
     if (!x) continue;
     x.kind = 'scene';
     {
-      const ws = wl(m);
+      const ws = wlSet(m);
       if (ws.length) setWorlds(x, ws);
     }
     x.tags = [
