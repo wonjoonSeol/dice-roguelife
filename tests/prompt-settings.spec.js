@@ -5,7 +5,7 @@ import { ANSWER, check, claudeMock, startLife } from './support/harness.js';
 
 const CHECK = String.raw`(()=>{const p=DR.buildPrompt('간다',null);const at=s=>s?p.indexOf(s):-2;const rules=p.indexOf('\nRules:\n');
   return {ko:at(DR.prompts.lang.ko),lang:at(DR.prompts.lang.en),len:at(DR.pr('lenLong')),tip:at(DR.prompts.tip.en),
-  style:at(DR.pr('styles').jinyong),rules,bytes:new Blob([p]).size}})()`;
+  style:at(DR.pr('styles').jinyong),noch:at(DR.pr('noChoices')),rules,bytes:new Blob([p]).size}})()`;
 // every prompt the page sends, in order
 // window.__more: fields added to the answer
 const RECORD = `async(p)=>{(window.__p=window.__p||[]).push(p);return Object.assign(await (${ANSWER})(),window.__more||{})}`;
@@ -20,6 +20,7 @@ test('prompt settings', async ({ game }) => {
   if (plain.lang !== -1 || plain.len !== -1 || plain.tip !== -1) errs.push('blocks present with default settings');
   if (plain.ko < 0 || plain.ko > plain.rules) errs.push('a Korean story is not told to answer in Korean');
   check(errs, 'a new save has the default prose style, which adds nothing', plain.style === -1);
+  check(errs, 'choices are offered by default', plain.noch === -1);
   // the Memory tab switches the open save to Jin Yong: its narrator prompts get the style, its summaries don't
   await pg.click('[data-tab="memory"]');
   await pg.click('#memStyle [data-sty="jinyong"]');
@@ -57,6 +58,12 @@ test('prompt settings', async ({ game }) => {
   console.log('rebuilt smaller:', small);
   if (small.bytes >= on.bytes) errs.push('prompt was not rebuilt smaller');
   if (Math.min(small.lang, small.len, small.tip, small.style) < 0) errs.push('blocks lost in the smaller rebuild');
+  // choices off, one setting for every game: the narrator is told to offer none and a reply's choices drop
+  await pg.evaluate('DR.app.settings.choices=false;0');
+  const off = await pg.evaluate(CHECK);
+  const kept = await pg.evaluate("DR.normalize({narration:'x',choices:['a','b']}).choices.length");
+  check(errs, 'choices off is told before the rules list', off.noch > 0 && off.noch < off.rules);
+  check(errs, 'choices off drops the choices of a reply', kept === 0);
   expect(errs).toEqual([]);
 });
 
