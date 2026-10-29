@@ -85,6 +85,13 @@ export function closeGone(id, msg) {
   renderSaves();
   if (msg) toast(msg, 4500);
 }
+// what a save's card repeats from its state, read without opening the save (the saves tab, a new game's notes)
+export const cardFields = st => ({
+  turns: st.next,
+  lifeNo: st.lifeNo,
+  noteIds: st.noteIds,
+  ...(st.turnNo != null ? { lifeTurns: st.turnNo } : {}),
+});
 let persistQueue = Promise.resolve();
 // one state write at a time, so they never trip each other's check
 export function persist() {
@@ -122,13 +129,12 @@ async function persistNow() {
   } /* never write an older copy over a newer one */
   if (!app.currentSave || app.currentSave.id !== id) return;
   // the card's version (sv) goes up only with a write that landed: a failed write must not look like a change made elsewhere
-  const card = Object.assign({}, app.currentSave, {
-    sv: (app.currentSave.sv || 0) + 1,
-    updatedAt: nowIso(),
-    turns: app.state.next,
-    lifeNo: app.state.lifeNo,
-  });
-  if (app.state.turnNo != null) card.lifeTurns = app.state.turnNo;
+  const card = Object.assign(
+    {},
+    app.currentSave,
+    { sv: (app.currentSave.sv || 0) + 1, updatedAt: nowIso() },
+    cardFields(app.state),
+  );
   try {
     await dset(`states/items/${id}`, app.state);
     await dset(`saves/items/${id}`, card);
@@ -144,7 +150,7 @@ async function persistNow() {
 }
 // What the player wrote is not story: a snapshot brought back (a rewrite, a branch, a saved state that fell behind)
 // keeps the notes and character lists of the state open now (snapshots hold no lists, roster.js snapOf)
-const PLAYER_KEYS = ['userNotes', 'roster'];
+const PLAYER_KEYS = ['userNotes', 'roster', 'noteIds'];
 export function fromSnap(snap) {
   const st = compat(clone(snap));
   for (const k of PLAYER_KEYS) if (app.state && app.state[k] !== undefined) st[k] = clone(app.state[k]);

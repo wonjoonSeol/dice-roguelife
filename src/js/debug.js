@@ -16,6 +16,7 @@ import * as diag from './diag.js';
 import * as rules from './rules.js';
 import * as people from './people.js';
 import * as roster from './roster.js';
+import * as notes from './notes.js';
 import * as compat from './compat.js';
 import * as sheet from './sheet.js';
 import * as shell from './shell.js';
@@ -46,6 +47,7 @@ import * as hall from './hall.js';
 import * as savesView from './saves-view.js';
 import * as memoryView from './memory-view.js';
 import * as rosterView from './roster-view.js';
+import * as notesView from './notes-view.js';
 import * as imagesView from './images-view.js';
 import * as zip from './zip.js';
 
@@ -71,6 +73,7 @@ const MODULES = [
   rules,
   people,
   roster,
+  notes,
   murim,
   worldExt,
   compat,
@@ -101,6 +104,7 @@ const MODULES = [
   savesView,
   memoryView,
   rosterView,
+  notesView,
   imagesView,
   zip,
 ];

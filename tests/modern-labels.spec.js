@@ -2,7 +2,7 @@
 // they are monsters or fantasy folk), that it runs once per library even when empty (a chip taken off, or never put on,
 // stays that way across a reload), the same rule for a tags.json made before the world, and a modern life's face
 import { test, expect } from './support/test.js';
-import { check, claudeMock, same, startLife } from './support/harness.js';
+import { check, claudeMock, keptStore, same, startLife } from './support/harness.js';
 
 // candidates that differ: of the women, only hunter1 should fit the modern world after the migration
 const SETS = {
@@ -46,15 +46,13 @@ const mock = (seed, fail = []) =>
   claudeMock(
     "async()=>({admin:'',narration:'장면.',speaker:'한서윤',speaker_gender:'female',speaker_role:'office worker',speaker_weight:'major',speaker_look:['suit'],emotion:'neutral',system:[],choices:['a'],stat_changes:{},clock:{days_passed:0},memory:{},dead:false})",
     {
-      before: String.raw`
-(()=>{const KEY='__dr_store',saved=sessionStorage.getItem(KEY);
- if(saved){for(const [k,v] of JSON.parse(saved))__store.set(k,v);}
- else if(${seed}){for(const [k,v] of Object.entries(${JSON.stringify(SETS)}))__store.set('sets/'+k,v);
-   const rows=${JSON.stringify(ROWS)};__store.set('imgidx/0000',{p:0,n:rows.length,rows});}
- const set=__store.set.bind(__store),del=__store.delete.bind(__store),keep=()=>sessionStorage.setItem(KEY,JSON.stringify([...__store]));
- const FAIL=saved?[]:${JSON.stringify(fail)};
- __store.set=(k,v)=>{if(FAIL.includes(k))throw new Error('write failed');const r=set(k,v);keep();return r};__store.delete=k=>{const r=del(k);keep();return r};keep();})();
-`,
+      before: keptStore({
+        first: seed
+          ? `for(const [k,v] of Object.entries(${JSON.stringify(SETS)}))__store.set('sets/'+k,v);
+   const rows=${JSON.stringify(ROWS)};__store.set('imgidx/0000',{p:0,n:rows.length,rows});`
+          : '',
+        fail,
+      }),
     },
   );
 // the stored labels: set cards by key, background rows by name

@@ -31,6 +31,9 @@ export let toast = function toast(msg, ms = 2600) {
 export function fmt(n) {
   return Number(n || 0).toLocaleString(locale());
 }
+const UTF8 = new TextEncoder();
+export const utf8Bytes = s => UTF8.encode(String(s ?? '')).length;
+export const kb = bytes => `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
 
 // Errors a caller deliberately survives (a cleanup that may fail, a capability that may be missing). They are kept
 // here instead of thrown so ⚙ → Diagnostics can show what went wrong on a phone, where there is no console.

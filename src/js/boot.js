@@ -2,7 +2,7 @@
 import { host } from './host.js';
 import { $, esc, noteIgnored, nowIso, toast } from './util.js';
 import { dget, loadWhitelist, memDB, platform, thaw, userCol } from './db.js';
-import { app } from './app.js';
+import { app, lastSaveCard } from './app.js';
 import { settingsLoaded } from './settings.js';
 import { okLang, T, uiLang } from './i18n.js';
 import { applyUiLang } from './settings-sheet.js';
@@ -12,6 +12,7 @@ import { startNewLifeForm } from './new-life.js';
 import { openSave } from './persistence.js';
 import { renderLog, syncInputHint } from './log.js';
 import { loadPromptConfig } from './prompt.js';
+import { loadNotes } from './notes.js';
 
 export async function boot() {
   setTimeout(() => {
@@ -143,8 +144,8 @@ async function bootInner() {
   await loadWhitelist();
   await loadImages();
   await loadSets();
-  await loadSaves();
-  const last = (app.settings.lastSave && app.saves.find(s => s.id === app.settings.lastSave)) || app.saves[0];
+  await Promise.all([loadNotes(), loadSaves()]);
+  const last = lastSaveCard();
   if (last) await openSave(last.id);
   else startNewLifeForm();
 }

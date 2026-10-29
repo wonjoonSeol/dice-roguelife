@@ -23,7 +23,7 @@ import {
   worldChips,
   worldsOf,
 } from './images.js';
-import { readZip } from './zip.js';
+import { legacyEncodings, readZip } from './zip.js';
 import { WORLD_EXT } from './world-ext.js';
 import { capTags, isGeneric, isIdTag, setIds, setTier, TIERS_CAST, toEnglishTags } from './casting.js';
 import { exportPack } from './images-export.js';
@@ -752,7 +752,7 @@ async function expandUploads(files) {
     }
     let entries;
     try {
-      entries = await readZip(f, uiLang() === 'ja' ? ['shift_jis', 'euc-kr'] : ['euc-kr', 'shift_jis']);
+      entries = await readZip(f, legacyEncodings(uiLang()));
     } catch (e) {
       toast(T("Can't read {zip} ({why})", { zip: f.name, why: why(e) }), 6000);
       continue;

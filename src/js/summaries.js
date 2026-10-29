@@ -1,14 +1,14 @@
 /* ============ memory: summaries ============ */
-import { noteIgnored } from './util.js';
+import { noteIgnored, utf8Bytes } from './util.js';
 import { platform } from './db.js';
 import { turnStore } from './turn-store.js';
 import { app } from './app.js';
 import { persist } from './persistence.js';
-import { fillTemplate, pr, prLang, recentWindow, tbytes, turnText } from './prompt.js';
+import { fillTemplate, pr, prLang, sentWindow, turnText } from './prompt.js';
 
 export async function maybeSummarize() {
   const lastI = app.state.next - 1;
-  const keep = recentWindow().length;
+  const keep = sentWindow().length;
   if (lastI - app.state.summarizedUpto < keep + 22) return; // summarize only what has fallen out of the raw window, in chunks of at least 22
   const upto = lastI - keep - 2;
   let chunk = app.turns.filter(t => t.i > app.state.summarizedUpto && t.i <= upto);
@@ -23,7 +23,7 @@ export async function maybeSummarize() {
   if (chunk.length < 6) return;
   try {
     const ctext = chunk.map(turnText).join('\n\n').slice(0, 40000);
-    const nsent = Math.max(4, Math.min(12, Math.round(tbytes(ctext) / 4000)));
+    const nsent = Math.max(4, Math.min(12, Math.round(utf8Bytes(ctext) / 4000)));
     const r = await platform.sample.json(
       fillTemplate(pr('summary'), {
         lang: prLang('summaryLang'),

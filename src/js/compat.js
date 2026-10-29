@@ -7,6 +7,7 @@ import { extFill } from './world-ext.js';
 
 export function compat(st) {
   st.cast = st.cast || {};
+  st.noteIds = st.noteIds || [];
   if (st.life && st.life.world && WORLD_ALIAS[st.life.world.id]) {
     const [bg, en] = WORLD_ALIAS[st.life.world.id];
     const nw = WORLDS.find(w => w.id === bg);

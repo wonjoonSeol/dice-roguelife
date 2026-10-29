@@ -20,7 +20,7 @@ const reply = {
   highlights: [],
   inherit: { name: 'Memory', grade: 'F', desc: 'Remember the journey.' },
 };
-let s, url, models, built;
+let s, url, models, prompts, built;
 // the real page, built once and served as the download serves it
 test.beforeAll(async () => {
   built = tempDir();
@@ -29,11 +29,13 @@ test.beforeAll(async () => {
 test.afterAll(() => rmSync(built, { recursive: true, force: true }));
 test.beforeEach(async () => {
   models = [];
+  prompts = [];
   s = await openServer({
     pageFile: join(built, 'page.html'),
     fetcher: async (_, { body }) => {
       const request = JSON.parse(body);
       models.push(request.model);
+      prompts.push(request.messages[0].content);
       const array = request.messages[0].content.includes('JSON array');
       return Response.json({
         model: 'mock-model',
@@ -246,6 +248,32 @@ test('a provider with recommended models fills the first one, its summary model 
   await page.locator('#apiModel').dispatchEvent('change');
   await expect(page.locator('#apiSummary')).toHaveValue('my-summary');
   await expect(page.locator('#apiMax')).toHaveValue('32768');
+});
+
+test('a ticked library note reaches the narrator through the server, and the library stays on it', async ({ page }) => {
+  await configure(page);
+  await startLife(page, { name: 'Reader', wait: 100 });
+  await expect.poll(() => page.evaluate(() => DR.app.turns.some(t => t.kind === 'ai'))).toBe(true);
+  await page.click('[data-tab="memory"]');
+  const text = '## House rules\n- STANDALONE-NOTE: the inn is always open.';
+  await page.setInputFiles('#noteLib [data-lib-upload]', [
+    { name: 'Scenario.md', mimeType: 'text/markdown', buffer: Buffer.from(text) },
+    { name: 'Other.md', mimeType: 'text/markdown', buffer: Buffer.from('OTHER-NOTE') },
+  ]);
+  await expect.poll(() => page.evaluate(() => (DR.app.notes || []).length)).toBe(2);
+  const id = await page.evaluate(() => DR.noteByName('Scenario').id);
+  await page.check(`[data-lib-use="${id}"]`);
+  await expect.poll(() => page.evaluate(() => DR.app.state.noteIds)).toEqual([id]);
+  await page.evaluate(() => DR.send('Look around'));
+  const turn = prompts.find(p => p.includes('Look around') && p.includes('[This input]'));
+  expect(turn).toContain(`[Note: Scenario]\n${text}`);
+  expect(turn).not.toContain('OTHER-NOTE');
+  // the server keeps the library and the pick: a reload reads both back
+  await page.reload();
+  await expect
+    .poll(() => page.evaluate(() => DR.app.notes && DR.app.notes.map(n => n.name)))
+    .toEqual(['Other', 'Scenario']);
+  expect(await page.evaluate(() => DR.app.state.noteIds)).toEqual([id]);
 });
 
 test('the image list the game saves for copies comes back intact', async ({ page }) => {

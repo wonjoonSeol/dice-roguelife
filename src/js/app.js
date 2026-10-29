@@ -14,11 +14,14 @@ export const app = {
   turns: [], // the loaded turn rows of the open save
   images: [], // the image library index
   setMeta: {}, // character set cards by key
+  notes: null, // the player's note library (notes.js), null until it is read
   settings: { tier: 'default' }, // this player's settings
   pendingRoll: null, // a rolled fate waiting on the new life form
   phase: 'idle', // what the game is doing, see exclusive() below
   turn: null, // the reply being written (turn.js runTurn): the log reads its heading for the live box
 };
+// the card of the save played last, else the newest
+export const lastSaveCard = () => app.saves.find(s => s.id === app.settings.lastSave) || app.saves[0];
 
 /* ============ one action at a time ============ */
 // A send, a rewrite, a retry, the opening reply, the life ledger and a branch each hold the game until they finish,

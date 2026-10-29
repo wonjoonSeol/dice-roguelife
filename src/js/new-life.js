@@ -39,8 +39,12 @@ import { chooseUiLang } from './settings-sheet.js';
 import { extStart } from './world-ext.js';
 import { rosterTextOf, setRoster, snapOf } from './roster.js';
 import { bindRosterEditor, rosterEditorHtml } from './roster-view.js';
+import { lastNoteIds } from './notes.js';
+import { bindNotePicker, notePickerHtml, pickedInForm } from './notes-view.js';
 
 const TALENT_MAX = 5;
+// a regression keeps its save's notes; a new game starts with the last save's
+const startNotes = inherit => (inherit ? app.state.noteIds : lastNoteIds());
 let tierLocked = false;
 // free setup for players without owner rights stops at C
 function lockTierSel(sel) {
@@ -81,6 +85,7 @@ export function startNewLifeForm(inherit) {
   bindTalentRows();
   lockFreeSetup(inherit);
   bindProfileCount();
+  bindNotePicker();
   bindFormLang();
   $('#rollBtn').onclick = () => rollFromForm(inherit, sel);
 }
@@ -123,6 +128,7 @@ export function redrawNewLifeForm() {
     else el.value = v;
   }
   $('#prof').dispatchEvent(new Event('input'));
+  bindNotePicker();
   if (pending) {
     app.pendingRoll = pending;
     revealFate(pending.life, pending.inherit, true);
@@ -157,6 +163,7 @@ function newLifeHtml(inherit) {
     <div class="field"><label>${T('Gender')}</label><div class="seg" id="gseg">${GENDERS.map(g => `<button type="button" data-g="${g}" aria-pressed="${g === GENDER.MALE}">${T(GENDER_LABEL[g])}</button>`).join('')}</div></div>`
     }
     <div class="field"><label for="prof">${T('Character profile (optional): looks, personality, verbal tics, backstory, anything weird you like')}</label><textarea id="prof" rows="3" maxlength="600" placeholder="${esc(T('e.g. Worked the night shift at a convenience store in a past life and is obsessed with instant noodles. Ends every sentence with "I mean, though." Loses all reason around cats.'))}">${esc(inherit ? app.state.life.profile || '' : app.settings.profile || '')}</textarea><div class="row profile-head"><label class="row profile-toggle"><input type="checkbox" id="profSave" checked> ${T('Save as the default for my next life')}</label><span class="muted count-note" id="profCount"></span></div></div>
+    ${notePickerHtml(startNotes(inherit))}
     <div class="field"><label>${T('World')}</label><div class="seg" id="wseg">${worlds.map(w => `<button type="button" data-w="${w}" aria-pressed="${w === 'random'}">${w === 'random' ? T('Random') : T(WORLDS.find(x => x.id === w).name)}</button>`).join('')}</div></div>
     ${
       inherit
@@ -563,6 +570,7 @@ function revealFate(life, inherit, again) {
 async function beginLife() {
   const { life, inherit, lang, roster } = app.pendingRoll;
   app.pendingRoll = null;
+  const noteIds = pickedInForm() ?? startNotes(inherit); // no picker: the library is empty or unread
   const b = BASE[life.originTier];
   const skills = [
     { ...life.talent, src: SKILL_SRC.TALENT },
@@ -613,6 +621,7 @@ async function beginLife() {
     pastLives: past,
     userNotes,
     roster: (inherit && app.state.roster) || {}, // every world's list goes on; this life uses its own world's
+    noteIds, // the library notes ticked on this screen (notes.js)
     dead: false,
     next: inherit ? app.state.next : 0,
   };

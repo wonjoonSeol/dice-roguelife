@@ -5,7 +5,7 @@ import { dset } from './db.js';
 import { turnStore } from './turn-store.js';
 import { app, currentRun, exclusive, isIdle } from './app.js';
 import { answerDialog, askConfirm, askPrompt, openDialog } from './sheet.js';
-import { fromSnap, openSave, persist, storeError } from './persistence.js';
+import { cardFields, fromSnap, openSave, persist, storeError } from './persistence.js';
 import { renderStrip } from './status.js';
 import { renderLog } from './log.js';
 import { parseCmd } from './composer.js';
@@ -291,16 +291,17 @@ async function makeBranch(t, i) {
     { id: app.currentSave.id, name: app.currentSave.name, turn: i },
     t.snap.turnNo != null ? { turnNo: t.snap.turnNo } : {},
   );
+  const st = fromSnap(t.snap);
+  st.next = i + 1;
   const meta = {
     id: uid(),
     name: T('{name} (branch)', { name: app.currentSave.name }),
     createdAt: nowIso(),
     updatedAt: nowIso(),
     parent,
-    lifeNo: t.snap.lifeNo,
-    turns: i + 1,
     store: 2,
     pages: 0,
+    ...cardFields(st),
   };
   toast(T('Copying the branch...'));
   try {
@@ -309,8 +310,6 @@ async function makeBranch(t, i) {
     await storeError(e);
     return;
   }
-  const st = fromSnap(t.snap);
-  st.next = i + 1;
   await dset(`states/items/${meta.id}`, st);
   await dset(`saves/items/${meta.id}`, meta);
   app.saves.unshift(meta);

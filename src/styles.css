@@ -4108,7 +4108,8 @@ textarea.mem-edit {
 .roster-box {
   margin-top: 12px;
 }
-.roster-text {
+.roster-text,
+.note-text {
   width: 100%;
   box-sizing: border-box;
   margin-top: 6px;
@@ -4143,6 +4144,31 @@ textarea.mem-edit {
 .roster-notes {
   margin: 6px 0 0;
   padding-left: 18px;
+}
+/* the note library: the memory tab's list and the new game's picker */
+.note-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+}
+.note-row b {
+  overflow-wrap: anywhere;
+}
+.note-tools {
+  gap: 6px;
+  margin-top: 8px;
+}
+.note-size.warn,
+.count-note.over {
+  color: var(--danger);
+}
+.nl-note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 /* saves, export, storage */
 .saves-tools {

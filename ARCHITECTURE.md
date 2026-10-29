@@ -65,6 +65,7 @@
 | `rules.js` | 저장이 시작 때 고정한 규칙(`snapshotRules`, `rule`), 성장 속도, 상태창 공개, 주사위(`ODDS_RE`, `PIVOTAL_RE`, `rollGrade`, `critOf`), 칭호, 의뢰 같음 판정 |
 | `people.js` | 인물: 별칭 정리(`canonName`, `aliasOut`: 합친 이름과 명단의 별칭), 이름 합치기(`renamePerson`), 최근 관계(`activeRel`), 등장 기록(`markSeen`), 호감 단계(`BONDS`, `moveBond`) |
 | `roster.js` | 인물 설정의 칸과 길이(`PROFILE`, `PROFILE_FIELDS`, `cleanProfile`: 세트 카드와 명단이 같이 씀), 저장마다 플레이어가 붙여 넣는 인물 명단(`parseRoster`, `rosterNow`, `rosterFor`, `setRoster`, 아래 "인물 명단") |
+| `notes.js` | 노트 보관함: 플레이어가 올린 노트의 저장소(`loadNotes`, `notesReady`, `saveNote`, `saveNotes`, `deleteNote`, `app.notes`), 저장이 체크한 노트(`pickedNotes`, `state.noteIds`, `lastNoteIds`), 저장 파일에 담기와 가져오기 계획(`notesForFile`, `planNotes`). 프롬프트에서의 크기는 `prompt.js`(`notesBytes`, `notesShare`). 아래 "노트 보관함" |
 | `compat.js` | 옛 저장을 지금 형식으로(`compat`) |
 | **이미지와 캐스팅** | |
 | `library.js` | 이미지 색인(`IMGX`, 공유 `imgidx` 문서), 세트 카드, 매니페스트 복원, 옛 구조 이전, 세계 라벨 정리(`migrateWorldLabels`, `addModernLabels`), 파일 해시(`fillHashes`), 저장 파일의 그림 키(`withPicKeys`) |
@@ -96,6 +97,7 @@
 | `saves-view.js` | 저장 탭, 저장 공간 계측, 이야기 내보내기, 저장 파일 내보내기와 가져오기 |
 | `memory-view.js` | 기억 탭 |
 | `roster-view.js` | 인물 명단 편집기(`rosterEditorHtml`, `bindRosterEditor`): 운명 화면과 기억 탭이 같이 씀. 붙여 넣기, 파일 열기, 읽은 사람과 건너뛴 줄 미리 보기 |
+| `notes-view.js` | 노트 보관함 화면: 기억 탭의 목록(`renderNoteLibrary`: 여러 파일 올리기, 새로 쓰기, 고치기, 이름 바꾸기, 지우기, 이 게임에서 쓸지 체크)과 새 게임 화면의 고르기(`notePickerHtml`, `pickedInForm`) |
 | `images-view.js` | 이미지 탭: 업로드(zip 풀기, 같은 이름으로 바꾸기), 자동 분류, 매니페스트 저장, 중복 정리 |
 | `zip.js` | zip 쓰기(이미지 팩 내보내기의 `makeZip`)와 읽기(올린 zip의 `readZip`, 아래 "이미지 라이브러리"). 다른 모듈을 쓰지 않아요 |
 | `debug.js` | 디버그 핸들 `window.DR` (위 "모듈 규칙") |
@@ -180,6 +182,49 @@
   `canonName`으로 바꿉니다.
   맞는 세트가 없는 명단 인물은 다른 인물처럼 자동으로 얼굴을 받고, AI 선택에는 명단의 소속, 직책, 외모가 갑니다. 이름 없는
   배역을 받아도 설정은 명단의 것입니다.
+
+### 노트 보관함 (모든 세계)
+
+플레이어가 미리 써 둔 노트(시나리오, 문체 지침 같은 .md, .txt 파일)를 한 번 올려 두고, 저장마다 쓸 것만 체크합니다.
+기억 탭의 유저 노트 칸(`userNotes`, 1200자)은 그대로이고, 보관함은 그 옆에 따로 있습니다(`notes-view.js`).
+
+- **저장**: 저장과 상관없는 계정 전체의 보관함입니다. 노트 하나가 문서 하나(`P/notes/items/<id>` = `{ name, text, updatedAt }`,
+  id는 `uid()`)이고, 부팅 때 `loadNotes`가 저장 목록과 함께 `app.notes`로 읽습니다. 메모리의 노트는 본문 바이트(`bytes`)를
+  한 번 세어 들고 있습니다. 노트 하나는 32,768바이트(UTF-8)까지이고(`NOTE_MAX`), 더 큰 파일은 이름을 알려 주고 받지
+  않습니다. 이름은 파일 이름에서 확장자를 뺀 것이고, 올리기, 편집기, 가져오기 모두 NFC로 맞춰(`cleanNoteName`) macOS의 분해된
+  한글 이름도 같은 이름이 됩니다. 한 번에 올린 파일끼리 이름이 같으면 뒤의 것이 "이름 (2)"가 되고, 보관함에 이미 있는 이름이
+  있으면 그 묶음에 한 번만 바꿀지, 건너뛸지 묻습니다. 파일은 나란히 읽고(`Promise.allSettled`, 읽지 못한 파일은 이름을 알림)
+  나란히 씁니다(`saveNotes`). 본문은 UTF-8로 읽히면 UTF-8(BOM 제외), 아니면 화면 언어 순서의 옛 인코딩(일본어 화면은
+  shift_jis 먼저, 그 밖은 euc-kr 먼저, `zip.js` `decodeText`, `legacyEncodings`: 압축 파일 이름과 같은 규칙)으로 읽습니다.
+  메모장의 ANSI(CP949) 파일이 깨지지 않게 하려는 것입니다.
+- **저장마다**: 체크한 노트의 id 목록이 `state.noteIds`입니다(옛 저장은 `compat`이 빈 목록으로). `PLAYER_KEYS`에 있어서
+  다시 쓰기, 분기, 뒤처진 상태 복구가 지금 체크를 둡니다(`fromSnap`). 다음 삶과 새 게임은 새 삶 화면의 고르기에서 정하는데,
+  다음 삶은 그 저장의 체크, 새 게임은 마지막으로 한 저장의 체크로 시작합니다(`lastNoteIds`, `lastSaveCard`). 보관함을 읽지
+  못했으면 고르기 자리에 그 사실과 다시 시도 버튼이 나오고, 게임은 마지막 저장의 체크로 시작해서 아래 `notes_unread`가
+  알립니다. 저장 카드에도 `noteIds` 사본이 있습니다(`cardFields`: `persistNow`, 분기, 가져오기가 씀). 지울 때 그 노트를 쓰는
+  저장 수도 카드로 셉니다(`savesUsing`). 지운 노트는 그 저장들이 보내지 않을 뿐, 다른 것은 바꾸지 않습니다.
+  기억 탭의 체크는 열린 저장이 있고 새 삶 화면이 떠 있지 않을 때만 보입니다. 새 삶 화면이 떠 있으면 그 화면의 고르기만 체크를
+  정합니다(기억 탭은 그쪽을 가리키는 한 줄). 체크를 쓸 때는 이 기기가 아직 읽지 않은 id(다른 기기가 더한 노트)를 지우지 않고
+  둡니다(`withUnseen`: 기억 탭과 고르기 모두). 노트 문서는 저장 탭의 문서 수 계측에도 들어갑니다(`dbUsage`).
+- **프롬프트**: 내레이터 턴(`buildPrompt`)에만, 플레이어 메모 블록에서 유저 노트 다음에 노트마다 `[노트: 이름]` 제목을
+  붙여 통째로 갑니다. 요약, 인생 결산, 초상화 고르기, 자동 분류는 받지 않습니다. 노트의 크기는 그 렌더된 부분의 바이트
+  하나로 셉니다(`notesBytes`). 노트는 줄이지 않습니다. 최근 기록은 늘 설정의 예산(`recentBudget`)으로 담고, 프롬프트가
+  한도의 90%를 넘을 때만 줄입니다: 먼저 설정, 배경 어휘, 전생을 빼고, 그래도 넘으면 넘는 만큼 최근 기록을 덜 담습니다
+  (`windowOf`의 바이트 단위로, 최소 6줄). 그래도 넘는데 노트만 빼면 들어가면 아무것도 보내지 않고 `notes_too_large`로
+  이유를 알립니다. 노트 없이도 넘으면 노트 탓이 아니므로 예전처럼 보냅니다. 90%는 요청 id와 다시 시도 때 붙는 형식 줄이
+  들어갈 자리입니다. 실제로 보낸 줄은 `sentWindow`가 기억하고, 요약(`maybeSummarize`의 `keep`)이 그 창을 쓰므로 덜 보낸
+  턴은 요약됩니다(이 저장의 최신 줄에 대한 프롬프트가 없으면 설정의 창). 설정의 "지금 몇 턴"은 설정의 창입니다. 기억 탭과
+  새 삶 화면은 체크한 노트가 한도에서 차지하는 몫을 보여 주고, 3분의 1을 넘으면 경고합니다(`notesShare`). 보관함을 읽지
+  못한 채 노트를 쓰는 저장이 턴을 보내면 한 번 더 읽고, 그래도 못 읽으면 보내지 않습니다(`notesReady`, `notes_unread`).
+  체크한 id 중 보관함에 없는 것이 있으면 그 묶음마다 한 번 다시 읽어, 다른 기기가 더한 노트도 보냅니다. 다시 읽기가 실패하면
+  읽어 둔 보관함을 그대로 씁니다. 저장 파일 내보내기와 가져오기도 같은 확인을 합니다. 게임이 직접 쓴 오류 문구는 `shown`
+  표시를 달고 그대로 보입니다(`sampleError`).
+- **저장 파일**: 체크한 노트(`id, name, text`)를 `notes`로 담습니다. 가져올 때는 먼저 계획만 세웁니다(`planNotes`): 이
+  보관함에 있는 id는 이쪽 노트를 두고, 이름과 내용이 같은 노트가 있으면 그것으로 체크하고, 나머지는 새 id로 더합니다. 지운
+  노트의 옛 id를 아직 체크하고 있는 다른 저장이 그 노트를 다시 받지 않게 하려는 것입니다. 이름이 같은데 내용이 다르면 가져온
+  쪽을 "이름 (2)"로, 이름이 없으면 "제목 없음"으로 합니다. 32KB가 넘는 노트는 이름을 알려 주고 뺍니다. 노트를 먼저 쓰고,
+  쓰지 못한 노트는 저장의 체크에서 빼서 없는 노트를 가리키지 않게 합니다. 그다음 저장(페이지, 상태, 카드)을 쓰고, 저장을 쓰지
+  못하면 방금 쓴 노트를 지워 남기지 않습니다. "가져옴" 알림에 들어오지 못한 노트의 이름이 같이 나옵니다.
 
 ## 번역
 
@@ -298,7 +343,7 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
 - **최근 기록**: `recentWindow`가 요약되지 않은 턴을 최신부터 바이트 예산(`recentBudget`, 설정값, 기본 40000바이트)까지
   담습니다. 최소 6줄은 항상 담습니다.
 - **크기 보호**: 프롬프트가 `platform.limits.maxPromptBytes`의 90%를 넘으면 설정, 배경 어휘, 전생 블록을 빼고 다시
-  만듭니다.
+  만듭니다. 그래도 넘으면 최근 기록을 넘는 만큼 덜 담고(최소 6줄), 요약은 실제로 보낸 창을 씁니다. 체크한 보관함 노트는 줄이지 않습니다(위 "노트 보관함").
 - **라이브 프롬프트**: 시작할 때 `loadPromptConfig`가 데이터베이스 `config/prompt`를 읽어, `rules`가 있으면
   `PR_DEFAULT` 위에 항목별로 덮어씁니다(얕은 병합). 배포 때 이 문서를 갱신합니다([RELEASING.md](RELEASING.md)).
 
@@ -312,7 +357,7 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
   - 1~5턴 전이면 `applyErratum`이 금액, 아이템, 장부, 관계를 정해진 범위 안에서만 고치고, 다음 답 첫머리에 자연스럽게
     수습하라는 정정(`prompts.errata`)을 붙입니다.
 - **분기**(`fork`): `snap`이 있는 아무 줄에서 그 지점까지의 턴을 복사해 새 저장을 만듭니다(`turnStore.copyUpTo`).
-- 다시 쓰기와 분기가 `snap`으로 상태를 되돌릴 때 플레이어가 쓴 것(노트 `userNotes`, 인물 명단 `roster`)은 지금 것을
+- 다시 쓰기와 분기가 `snap`으로 상태를 되돌릴 때 플레이어가 쓴 것(노트 `userNotes`, 인물 명단 `roster`, 보관함 체크 `noteIds`)은 지금 것을
   둡니다(`fromSnap`). 이야기가 아니라서, 앞 답 뒤에 고친 것이 다시 쓰기로 사라지지 않습니다.
 
 ## 저장 구조
@@ -335,6 +380,7 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
 | `P/states/items/<id>` | 상태 전체 | 개인 |
 | `P/saves/items/<id>/pages/<p>` | 턴 페이지 `{p, v, first, last, n, rows}` | 개인 |
 | `P/settings` | 설정 | 개인 |
+| `P/notes/items/<id>` | 노트 보관함의 노트 하나 `{name, text, updatedAt}` | 개인 |
 | `P/diag` | 최근 오류 8개 | 개인 |
 | `P/hall/items/<id>` | "나만 보기" 전당 기록 | 개인 |
 | `hall/<id>` | 공개 전당 기록 | 공유 |
@@ -349,10 +395,10 @@ ADMIN 성격 → 치트 대응 → 성장 속도 → 바깥 지식 → 세계, �
 
 ### 저장 카드와 상태
 
-- **저장 카드**: `id, name, createdAt, updatedAt, parent, lifeNo, turns, lifeTurns, store, pages, sv`. `store: 2`는 페이지
+- **저장 카드**: `id, name, createdAt, updatedAt, parent, lifeNo, turns, lifeTurns, store, pages, sv, noteIds`. `store: 2`는 페이지
   구조, `parent`는 분기 원본입니다.
 - **상태**(`state`)의 주요 키: `life, lifeNo, stats, rules, titles, skills, items, equipped, energy, ledger, quests, lore,
-  relations, cast, clock, summaries, summarizedUpto, corrections, userNotes, roster, next, turnNo, dead` 등. 세계 애드온이 있는 세계는
+  relations, cast, clock, summaries, summarizedUpto, corrections, userNotes, roster, noteIds, next, turnNo, dead` 등. 세계 애드온이 있는 세계는
   `ladder, standing, bonds`와 애드온의 상태(`murim`)도 가집니다.
 - **턴 줄**: `i, at, kind(user | ai | system | ledger), text, req, roll, luck, fate, out, deltas, notes, img, clock, snap`.
   `out`과 `snap`은 저장할 때 gzip + base64로 줄여 `z` 필드 하나에 넣고(`packTurn`), 읽을 때 되돌립니다(`inflate`).
@@ -380,7 +426,8 @@ localStorage만 씁니다: `dr:inputHint`(입력 요령 안내), `dr:choiceHint`
 ### 저장 파일 내보내기
 
 - 바깥 봉투: `{app: 'dice-roguelife', format: 3, n, d}`. `d`는 안쪽 내용을 gzip한 뒤 Z85로 인코딩한 문자열입니다.
-- 안쪽: `{app, format: 1, appVersion: 'Dice Roguelife, v<버전>', exportedAt, save, state, turns}`. 이미지는 넣지 않습니다.
+- 안쪽: `{app, format: 1, appVersion: 'Dice Roguelife, v<버전>', exportedAt, save, state, turns, notes}`. 이미지는 넣지 않습니다.
+  `notes`는 그 저장이 체크한 보관함 노트입니다(위 "노트 보관함").
 - 가져오기는 새 id와 " (가져옴)" 이름으로 새 저장을 만들고, 턴을 다시 묶어 페이지, 상태, 카드 순서로 씁니다.
 - 그림 id는 설치(아티팩트, 독립 실행판)마다 새로 매겨지므로, 파일에 담는 턴에는 `img.keys`(그 턴의 그림 id → 내용 키)를
   붙입니다(`withPicKeys`). 내용 키는 저장된 파일과 처음 올린 파일의 SHA-256 앞 16자(`picKeys`: `shash`, `hash`)입니다.

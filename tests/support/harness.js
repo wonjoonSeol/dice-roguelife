@@ -33,6 +33,17 @@ window.claude={use:async(n)=>{ if(n==='db')return window.__dbmock; if(n==='user'
   );
 }
 
+// claudeMock's `before` for a mock database kept in sessionStorage, so a reload boots on what the page wrote. first:
+// JS run on the first load only (to seed the store); fail: documents whose writes fail during the first load
+export const keptStore = ({ first = '', fail = [] } = {}) => `
+(()=>{const KEY='__dr_store',saved=sessionStorage.getItem(KEY);
+ if(saved){for(const [k,v] of JSON.parse(saved))__store.set(k,v);}
+ else{${first}}
+ const set=__store.set.bind(__store),del=__store.delete.bind(__store),keep=()=>sessionStorage.setItem(KEY,JSON.stringify([...__store]));
+ const FAIL=saved?[]:${JSON.stringify(fail)};
+ __store.set=(k,v)=>{if(FAIL.includes(k))throw new Error('write failed');const r=set(k,v);keep();return r};__store.delete=k=>{const r=del(k);keep();return r};keep();})();
+`;
+
 // fill the new-game form and start. dice: the per-save luck mode. name: '' on a regression's form, which has none.
 // onFate: run on the fate screen, before accepting
 export async function startLife(
