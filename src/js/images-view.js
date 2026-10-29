@@ -17,13 +17,15 @@ import {
   imgById,
   imgUrl,
   inheritKeys,
-  openingName,
+  isOpening,
   openingOff,
   openingSets,
   openingWorlds,
   setCover,
   setWorlds,
+  showBigImage,
   withModern,
+  withOpeningTags,
   worldChips,
   worldsOf,
 } from './images.js';
@@ -81,9 +83,9 @@ function imagesHeaderHtml(usage, orphan, canAuto) {
    ${orphan > 0 ? `<div class="notice img-notice">${T('Storage holds {files} images but the list has only {listed}.', { files: usage.files, listed: app.images.length })} <button class="btn inline-action" id="recover">${T('Recover the list')}</button></div>` : ''}
    <details class="odds guide img-guide"><summary>${T('Help: tags and file names')}</summary>
       <p>${T('<b>There are two kinds of tags</b>, with one rule: proper nouns stay in their own language, everything else is English.')}</p>
-      <div class="g"><code>${T('Looks')}</code><span>${T('English. <code>black hair</code>, <code>armor</code>. The narrator describes looks in English and the code compares word by word. Korean is turned into English when saved; English only gets its spelling fixed.')}</span><code>${T('Identity')}</code><span>${T('<code>key:value</code>. The key is English (<code>faction</code>, <code>company</code>, any word), the value is a proper noun in its own language (<code>faction:Tang Clan</code>, <code>company:Nintendo</code>). It is compared as is, never translated. It must be on every frame of a set, so add it on the set card; "Find faction tags" pulls them from descriptions.')}</span></div>
+      <div class="g"><code>${T('Looks')}</code><span>${T('English. <code>black hair</code>, <code>armor</code>. The narrator describes looks in English and the code compares word by word. Korean is turned into English when saved; English only gets its spelling fixed.')}</span><code>${T('Identity')}</code><span>${T('<code>key:value</code>. The key is English (<code>faction</code>, <code>company</code>, any word), the value is a proper noun in its own language (<code>faction:Tang Clan</code>, <code>company:Nintendo</code>). It is compared as is, never translated. It must be on every frame of a set, so add it on the set card; "Find faction tags" pulls them from descriptions.')}</span><code>opening<br>opening:{name}<br>order:{n}</code><span>${T('Opening frames, stacked full width above the first reply of a life. <code>opening</code> puts a picture in the unnamed sequence, <code>opening:murim</code> in a named one, and <code>order:2</code> sets its place (otherwise file names in order, panel 2 before panel 10). Any kind of picture can be one, and it is then used nowhere else. One sequence that fits the world is picked at random')}</span><code>game-master</code><span>${T("Shown as one banner above the first reply when no opening fits the world (with none, the game master's picture). It stays a normal picture everywhere else")}</span></div>
       <p>${T("<b>File name rules</b> (you'll be asked when a name doesn't fit)")}</p>
-      <div class="g"><code>{set}_{emotion}</code><span>${T('Character. <code>female1_smile.png</code>. A set is one person with several expressions.')}</span><code>shadow_{gender}</code><span>${T('Silhouette for extras. <code>shadow_male_neutral.png</code>, <code>shadow_female_2.png</code>. Grouped into a set per gender')}</span><code>bg_{place}_{time}</code><span>${T('Background. <code>bg_tavern_night.png</code>')}</span><code>admin_{emotion}</code><span>${T('Game master')}</span><code>opening_{n}<br>opening_{set}_{n}</code><span>${T('Opening frames, shown in number order full width above the first reply of a life. <code>opening_1.png</code>, <code>opening_2.png</code> are one sequence; <code>opening_murim_1.png</code> starts a named one. One that fits the world is picked at random')}</span><code>dice</code><span>${T('Dice effect. <code>dice</code>, <code>dice_success</code>, <code>dice_fail</code>. Needs no labels and auto-sort skips it')}</span></div>
+      <div class="g"><code>{set}_{emotion}</code><span>${T('Character. <code>female1_smile.png</code>. A set is one person with several expressions.')}</span><code>shadow_{gender}</code><span>${T('Silhouette for extras. <code>shadow_male_neutral.png</code>, <code>shadow_female_2.png</code>. Grouped into a set per gender')}</span><code>bg_{place}_{time}</code><span>${T('Background. <code>bg_tavern_night.png</code>')}</span><code>admin_{emotion}</code><span>${T('Game master')}</span><code>dice</code><span>${T('Dice effect. <code>dice</code>, <code>dice_success</code>, <code>dice_fail</code>. Needs no labels and auto-sort skips it')}</span></div>
       <p>${T('Uploading the same file again skips it.')}</p>
       <p>${T('A file with the same name as a picture in the library but different content replaces it (you are asked first). Its set, tags and cover stay, and past turns show the new picture.')}</p>
       <p>${T("A zip goes in as is: its pictures from every folder (a name found in two folders gets the folder's name in front), and its tags.json if it has one, so there is no need to unzip it or import the tags separately.")}</p>
@@ -183,12 +185,12 @@ function profileHtml(m) {
 function openingsSectionHtml() {
   const seqs = Object.entries(openingSets());
   if (!seqs.length) return '';
-  return `   <div class="sec"><h4>${T('Openings ({n})', { n: seqs.length })}</h4><p class="muted op-lead">${T('Shown above the first reply of a life: one sequence that fits its world, at random. With none, a bg_game-master background or the game master is shown.')}</p>
+  return `   <div class="sec"><h4>${T('Openings ({n})', { n: seqs.length })}</h4><p class="muted op-lead">${T('Pictures tagged opening. The first reply of a life shows one sequence that fits its world, at random; with none, a picture tagged game-master or the game master.')}</p>
     ${seqs.map(([k, frames]) => openingCardHtml(k, frames)).join('')}</div>
 `;
 }
 function openingCardHtml(k, frames) {
-  return `<div class="item set-card op-card" data-opening="${esc(k)}"><div class="set-head"><div class="names"><b>${esc(k ? 'opening_' + k : 'opening')}</b></div><div class="muted flags"><span class="count">${T('{n} {n|image|images}', { n: frames.length })}</span><label><input type="checkbox" data-ooff ${openingOff(frames) ? 'checked' : ''}>${T('Retired')}</label></div></div>
+  return `<div class="item set-card op-card" data-opening="${esc(k)}"><div class="set-head"><div class="names"><b>${esc(k ? 'opening:' + k : 'opening')}</b></div><div class="muted flags"><span class="count">${T('{n} {n|image|images}', { n: frames.length })}</span><label><input type="checkbox" data-ooff ${openingOff(frames) ? 'checked' : ''}>${T('Retired')}</label></div></div>
      <div class="row op-frames">${frames.map(x => `<img src="${imgUrl(x.id)}" data-big="${x.id}" data-cap="${esc(x.file || x.name || '')}" loading="lazy" decoding="async" alt="" class="op-thumb">`).join('')}</div>
      <div class="set-row">${worldChips(openingWorlds(frames), 'data-ow')}</div></div>`;
 }
@@ -492,12 +494,6 @@ let setQuery = '',
   setPage = 0,
   setRecent = false;
 const SET_PER = 10;
-function showBigImage(id, caption) {
-  openSheet(
-    `<div class="big-image"><img src="${imgUrl(id)}" alt="" class="big-image-pic">${caption ? `<p class="muted big-image-cap">${esc(caption)}</p>` : ''}<div class="row actions centered"><button class="btn" data-close>${T('Close')}</button></div></div>`,
-    { center: true },
-  );
-}
 function imgGrid() {
   const q = imgQuery.trim().toLowerCase();
   let all = app.images
@@ -524,17 +520,15 @@ function imgGrid() {
   return `<div class="imggrid">${list
     .map(
       x => `<div class="img" data-id="${x.id}"><img class="th th-img" data-big="${x.id}" data-cap="${esc(x.file || x.name || '')}" src="${imgUrl(x.id)}" loading="lazy" decoding="async" alt=""><div class="f">
-    <select data-f="kind" ${sel}><option value="char" ${x.kind === 'char' ? 'selected' : ''}>${T('Character')}</option><option value="scene" ${x.kind === 'scene' ? 'selected' : ''}>${T('Background')}</option><option value="fx" ${x.kind === 'fx' ? 'selected' : ''}>${T('Effect (dice)')}</option><option value="opening" ${x.kind === 'opening' ? 'selected' : ''}>${T('Opening')}</option></select>
+    <select data-f="kind" ${sel}><option value="char" ${x.kind === 'char' ? 'selected' : ''}>${T('Character')}</option><option value="scene" ${x.kind === 'scene' ? 'selected' : ''}>${T('Background')}</option><option value="fx" ${x.kind === 'fx' ? 'selected' : ''}>${T('Effect (dice)')}</option></select>
     ${
       x.kind === 'char'
         ? `<input data-f="set" value="${esc(x.set || x.name || '')}" placeholder="${T('Set (female1)')}"><select data-f="emotion" ${sel}>${EMOS.map(e => `<option ${(x.emotion || 'neutral') === e ? 'selected' : ''}>${e}</option>`).join('')}</select>`
         : x.kind === 'fx'
           ? `<input data-f="name" value="${esc(x.name || '')}" placeholder="dice, dice_success, dice_fail">`
-          : x.kind === 'opening'
-            ? `<input data-f="set" value="${esc(x.set || '')}" placeholder="${T('Sequence (blank: opening_1, 2...)')}"><input data-f="order" type="number" min="1" value="${x.order || 1}" title="${T('Frame number')}">${worldChips(worldsOf(x), 'data-w')}`
-            : `<input data-f="name" value="${esc(x.name || '')}" placeholder="${T('Background name (tavern_night)')}">${worldChips(worldsOf(x), 'data-w')}`
+          : `<input data-f="name" value="${esc(x.name || '')}" placeholder="${T('Background name (tavern_night)')}">${worldChips(worldsOf(x), 'data-w')}`
     }
-    ${x.kind === 'opening' ? '' : `<input data-f="tags" value="${esc((x.tags || []).join(', '))}" placeholder="${x.kind === 'char' ? T('Tags: armor, wounded, night') : T('Tags: inn, night, rain, crowded')}">`}
+    <input data-f="tags" value="${esc((x.tags || []).join(', '))}" placeholder="${x.kind === 'char' ? T('Tags: armor, wounded, night') : T('Tags: inn, night, rain, crowded')}">
     <button class="btn danger img-del" data-delimg>${T('Delete')}</button></div></div>`,
     )
     .join('')}</div>${pager}`;
@@ -565,6 +559,7 @@ function bindImgGrid() {
       el =>
         (el.onchange = async () => {
           const f = el.dataset.f;
+          const was = isOpening(x);
           x[f] =
             f === 'tags'
               ? capTags(
@@ -575,13 +570,9 @@ function bindImgGrid() {
                       .filter(Boolean),
                   ),
                 )
-              : f === 'order'
-                ? Math.max(1, parseInt(el.value, 10) || 1)
-                : el.value.trim();
+              : el.value.trim();
           if (f === 'tags') el.value = x.tags.join(', ');
-          if (f === 'kind' && x.kind === 'opening') x.order = x.order || 1;
-          if (x.kind === 'opening' && (f === 'kind' || f === 'set' || f === 'order')) x.name = openingName(x);
-          if (f === 'set' && x.kind === 'char' && x.set && !KEY_RE.test(x.set)) {
+          if (f === 'set' && x.set && !KEY_RE.test(x.set)) {
             toast(T('Set names may only use English letters, digits, _ and -'), 4000);
             el.value = x.set = el.dataset.prev || '';
             return;
@@ -595,7 +586,8 @@ function bindImgGrid() {
             toast(T('Save failed: {err}', { err: err.code || err.message }));
             logErr('img', err);
           }
-          if (f === 'kind' || f === 'set' || f === 'order') renderImages();
+          // an opening tag moves the picture between the openings and the other lists
+          if (f === 'kind' || f === 'set' || (f === 'tags' && (was || isOpening(x)))) renderImages();
         }),
     );
     const del = card.querySelector('[data-delimg]');
@@ -615,15 +607,17 @@ function bindImgGrid() {
       };
   });
 }
-// frame: an opening frame, shown full width, so its width is kept (a tall webtoon panel stays sharp on a phone)
+// frame: replacing an opening frame. Frames are shown full width, so one (or any tall strip, like a webtoon panel)
+// keeps its width to stay sharp on a phone
 async function compress(file, frame) {
   try {
     const bmp = await createImageBitmap(file);
     const portrait = bmp.height > bmp.width * 1.1;
     const max = portrait ? 1100 : 1400;
-    const k = frame
-      ? Math.min(1, 1200 / bmp.width, 4800 / bmp.height)
-      : Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const k =
+      frame || bmp.height >= bmp.width * 2.5
+        ? Math.min(1, 1200 / bmp.width, 4800 / bmp.height)
+        : Math.min(1, max / Math.max(bmp.width, bmp.height));
     if (k === 1 && file.type === 'image/webp') return { blob: file, portrait }; // already stored size: keep the bytes (no second compression)
     const cv = document.createElement('canvas');
     cv.width = Math.round(bmp.width * k);
@@ -646,11 +640,6 @@ function parseName(fname, portrait) {
     .split(/[_\s]+/)
     .filter(Boolean)
     .map(s => s.toLowerCase());
-  if (parts[0] === 'opening') {
-    // opening_{n} or opening_{set}_{n}: the number is the frame's place in its sequence
-    const n = parts.length > 1 && /^\d+$/.test(parts[parts.length - 1]) ? +parts.pop() : 1;
-    return { kind: 'opening', set: parts.slice(1).join('_'), order: n, name: base.toLowerCase(), tags: [] };
-  }
   if (parts[0] === 'bg' || parts[0] === 'background')
     return { kind: 'scene', name: parts.slice(1).join('_') || base, tags: parts.slice(1) };
   if (/^(dice|fx)/.test(parts[0] || '')) return { kind: 'fx', name: base.toLowerCase(), tags: parts };
@@ -1104,7 +1093,7 @@ async function uploadFiles(picked) {
     let row = null;
     try {
       let t = performance.now();
-      const { blob, portrait } = await compress(f, (old || parseName(f.name)).kind === 'opening');
+      const { blob, portrait } = await compress(f, !!old && isOpening(old));
       time.compress += performance.now() - t;
       t = performance.now();
       const r = await sendWithRetry(blob, f);
@@ -1680,17 +1669,13 @@ export async function importTags(file, names = null) {
     touched.add(x.id);
     ni++;
   }
-  // an opening frame: its sequence and number from the entry, else from the file name
+  // a v2.16.4 pack lists its opening frames apart ({ sequence, order, worlds }): they become tags on a background
   for (const [fn, e] of Object.entries(j.openings || {})) {
     const x = findImg(fn);
     if (!x) continue;
     const m = e || {};
-    const p = parseName(fn);
-    const named = p.kind === 'opening' ? p : { set: x.kind === 'opening' ? x.set || '' : '', order: x.order || 1 };
-    x.kind = 'opening';
-    x.set = m.sequence != null ? String(m.sequence).trim() : named.set;
-    x.order = Number.isFinite(+m.order) && +m.order >= 1 ? Math.floor(+m.order) : named.order;
-    x.name = openingName(x);
+    x.tags = capTags(withOpeningTags(x.tags, m.sequence != null ? String(m.sequence).trim() : '', +m.order));
+    x.kind = 'scene';
     const ws = wl(m);
     if (ws.length) setWorlds(x, ws);
     touched.add(x.id);
@@ -1796,7 +1781,6 @@ async function saveManifest() {
     worlds: x.worlds || [],
     world: x.world || 'any',
     variant: x.variant || '',
-    order: x.order,
     off: x.off,
     akeys: x.akeys,
   }));
@@ -1918,7 +1902,7 @@ async function dedupeImages() {
   await Promise.all(Array.from({ length: 6 }, worker));
   // an opening frame is only compared with other frames: one that looks like a background still belongs to its sequence
   for (const op of [false, true]) {
-    const idx = items.map((_, i) => i).filter(i => (items[i].kind === 'opening') === op);
+    const idx = items.map((_, i) => i).filter(i => isOpening(items[i]) === op);
     for (const g of groupSimilar(idx.map(i => sigs[i]))) {
       const [k, ...rest] = g.map(i => idx[i]).sort((i, j) => byOldest(items[i], items[j]));
       // a group can chain through a third picture: offer only copies that look like the one kept
@@ -1967,7 +1951,7 @@ async function dedupeImages() {
 }
 // asks a quick model what each untagged picture is; effects (fx, e.g. the dice reveal) and opening frames keep their kind
 async function autoTagAll() {
-  const todo = app.images.filter(x => !x.autoTagged && x.kind !== 'fx' && x.kind !== 'opening');
+  const todo = app.images.filter(x => !x.autoTagged && x.kind !== 'fx' && !isOpening(x));
   if (!todo.length) {
     toast(T('No images to auto-sort'));
     return;

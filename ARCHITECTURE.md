@@ -470,17 +470,22 @@ localStorage만 씁니다: `dr:inputHint`(입력 요령 안내), `dr:choiceHint`
 ### 이미지 라이브러리
 
 - 파일은 아티팩트 에셋 저장소(`platform.assets`)에, 목록은 공유 `imgidx` 페이지에, 세트 정보는 `sets/<key>`에 있습니다.
-- 이미지 행: `id, kind(char | scene | fx | opening), set, emotion, name, file, hash, shash, world, worlds, tags, createdAt`, 바꾼
-  그림이면 `akeys`. `fx`는 연출 이미지(주사위 `dice`, `dice_success`, `dice_fail`)라서 "자동 분류"가 건드리지 않습니다.
-- **오프닝**: `opening_{번호}`, `opening_{묶음}_{번호}` 파일은 `kind: 'opening'`, `set`(묶음 이름, 이름 없는 묶음은 `''`),
-  `order`(번호)인 행입니다(`parseName`). 삶의 첫 답(`runTurn`의 `intro`, 다음 삶과 첫 답 다시 쓰기 포함)을 시작할 때
-  `openingFor`가 고릅니다: 그 세계에 맞는 묶음 중 무작위(묶음의 세계는 컷들의 라벨을 합친 것, 컷 하나라도 `off`면 제외),
-  없으면 이름이 `bg_game-master`로 시작하는 배경 중 세계에 맞는 것, 없으면 `admin` 세트의 neutral, smile, 아무 그림 순. 턴의
-  `img.opening`(컷 id, 번호 순) 또는 `img.banner`(id 하나)로 남고 `picIds`에 들어가 내용 키도 같이 갑니다. 로그는 그 턴의
-  배경 배너 자리에 컷을 화면 너비로 쌓아 보여 주고(`openingHtml`, 인물 줄은 그대로), 스트리밍 중에도 같습니다. 오프닝 컷은
-  캐스팅, 배경 찾기, 자동 분류, 캐릭터 세트에 들어가지 않고, 중복 정리의 "모양이 같음"은 컷끼리만 견줍니다. 올릴 때는 폭을
-  지켜(가로 1200, 세로 4800까지) 줄입니다. 이미지 탭에서는 묶음마다 카드(컷 순서, 세계 칩, 제외)로 보입니다. 팩의
-  `tags.json`은 `openings`(파일 이름별 `sequence`, `order`, `worlds`)로 담고 가져옵니다.
+- 이미지 행: `id, kind(char | scene | fx), set, emotion, name, file, hash, shash, world, worlds, tags, createdAt`, 바꾼 그림이면
+  `akeys`. `fx`는 연출 이미지(주사위 `dice`, `dice_success`, `dice_fail`)라서 "자동 분류"가 건드리지 않습니다.
+- **오프닝**: 파일 이름이나 종류와 상관없이 태그로 정합니다(`images.js`). `opening` 태그는 이름 없는 묶음, `opening:<이름>`은
+  그 이름의 묶음의 컷이고(`openingSeq`), 순서는 `order:<번호>` 태그, 없으면 파일 이름의 자연 순서(panel 2가 panel 10보다
+  먼저)입니다. 삶의 첫 답(`runTurn`의 `intro`, 다음 삶과 첫 답 다시 쓰기 포함)을 시작할 때 `openingFor`가 고릅니다: 그 세계에
+  맞는 묶음 중 무작위(묶음의 세계는 컷들의 라벨을 합친 것, 컷 하나라도 `off`면 제외), 없으면 `game-master` 태그 그림 중 세계에
+  맞는 것(캐릭터는 세트 카드의 라벨도), 없으면 `admin` 세트의 neutral, smile, 아무 그림 순. 턴의 `img.opening`(컷 id, 순서대로)
+  또는 `img.banner`(id 하나)로 남고 `picIds`에 들어가 내용 키도 같이 갑니다. 로그는 그 턴의 배경 배너 자리에 컷을 화면 너비로
+  쌓아 보여 주고(`openingHtml`, 인물 줄은 그대로), 스트리밍 중에도 같습니다. 오프닝 그림은 캐스팅, 캐릭터 세트, 배경 찾기,
+  주사위 연출, 자동 분류, 현대 라벨 붙이기(`addModernLabels`)에 들어가지 않고, 중복 정리의 "모양이 같음"은 컷끼리만
+  견줍니다. `game-master` 그림은 다른 곳에서 보통 그림 그대로입니다. 오프닝 컷을 바꿔 올리거나 아주 긴 그림(세로가 가로의
+  2.5배 이상)을 올리면 폭을 지켜(가로 1200, 세로 4800까지) 줄입니다. 이미지 탭에서는 묶음마다 카드(컷 순서, 세계 칩,
+  제외)로 보입니다. 팩과 `tags.json`은 다른 태그처럼 태그로 담습니다.
+  - v2.16.4는 오프닝을 따로 `kind: 'opening'`(`set`: 묶음, `order`: 번호)으로 저장했습니다. 그런 행은 불러올 때와 사본용
+    목록에서 되살릴 때 태그 붙은 배경이 되고(`openingKindToTags`, 메모리에서 바꾼 것을 다음 페이지 쓰기가 저장), 그때의 팩
+    `tags.json`의 `openings`(파일 이름별 `sequence`, `order`, `worlds`)도 태그로 가져옵니다.
 - **올리기**(`uploadFiles`): 그림 파일과 zip을 받습니다. 모델은 부르지 않습니다.
   - zip은 `expandUploads`가 먼저 그림 목록으로 풉니다. `readZip`(`zip.js`)은 끝 레코드와 중앙 디렉터리, 항목마다 로컬 헤더만
     `file.slice`로 읽어서 수백 MB 팩도 통째로 메모리에 올리지 않습니다. 저장(stored) 항목은 잘라낸 Blob 그대로, deflate 항목은

@@ -8,6 +8,7 @@ export function openSheet(html, opts = {}) {
   $('#sheetInner').innerHTML = html;
   $('#sheet').classList.toggle('center', !!opts.center);
   $('#sheet').classList.toggle('wide', !!opts.wide);
+  $('#sheet').classList.toggle('zoom', !!opts.zoom);
   $('#sheet').classList.toggle('modal', !!opts.modal); // closed only by its own buttons, so typed text isn't lost
   $('#sheet').classList.remove('hidden');
 }

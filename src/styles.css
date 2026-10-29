@@ -3967,6 +3967,12 @@ label.row.opt > input {
   margin: 0 auto;
   background: var(--panel2);
 }
+.sheet.center.zoom .inner {
+  max-width: 96vw;
+}
+.sheet.zoom .big-image-pic {
+  max-height: none;
+}
 .big-image-cap {
   font-size: 12.5px;
   margin: 10px 0 0;
@@ -4437,4 +4443,9 @@ textarea.mem-edit {
 }
 .sw-actions {
   margin-top: 14px;
+}
+
+/* a story picture opens full size on a tap (log.js big) */
+#log [data-big] {
+  cursor: zoom-in;
 }
