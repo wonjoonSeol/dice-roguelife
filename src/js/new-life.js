@@ -45,7 +45,7 @@ import {
 } from './enums.js';
 import { isPrivileged, platform } from './db.js';
 import { NEW_SAVES, turnStore } from './turn-store.js';
-import { app, exclusive, lastSaveCard } from './app.js';
+import { app, exclusive } from './app.js';
 import { saveSettings, setting, storyLang } from './settings.js';
 import { adminOn, snapshotRules } from './rules.js';
 import { showTab } from './shell.js';
@@ -59,7 +59,7 @@ import { chooseUiLang } from './settings-sheet.js';
 import { extStart, WORLD_EXT } from './world-ext.js';
 import { parseRoster, rosterTextOf, setRoster, snapOf } from './roster.js';
 import { bindRosterEditor, joinRoster, openImport, rosterEditorHtml } from './roster-view.js';
-import { lastNoteIds, noteById } from './notes.js';
+import { noteById } from './notes.js';
 import {
   bindNotePicker,
   bindOnePicker,
@@ -74,16 +74,10 @@ import {
 } from './notes-view.js';
 
 const TALENT_MAX = 5;
-// a regression keeps its save's notes; a new game starts with the last save's
-const startNotes = inherit => (inherit ? app.state.noteIds : lastNoteIds());
-// the prose style the same way: the save's, else the last save's
-const startStyle = inherit => {
-  const s = inherit ? app.state.style : (lastSaveCard() || {}).style;
-  return STYLES.includes(s) ? s : STYLE.DEFAULT;
-};
-// a new game opens in the last save's mode; a regression goes on as a roguelike
-const startPlay = inherit =>
-  !inherit && (lastSaveCard() || {}).mode === MODE.SCENARIO ? MODE.SCENARIO : MODE.ROGUELIKE;
+// A regression goes on with its save's notes and prose style; a new game starts clean (nothing ticked, the default
+// style, the dice roguelike), whatever the last game used
+const startNotes = inherit => (inherit ? app.state.noteIds : []);
+const startStyle = inherit => (inherit && STYLES.includes(app.state.style) ? app.state.style : STYLE.DEFAULT);
 // A scenario's extras (enums.js ADDON), ticked on the form (sc) and in the Memory tab (mem); the world add-on only for
 // a world that has one (X), named by it, and listed first
 export const addonRowsHtml = (pre, on, X) =>
@@ -94,8 +88,6 @@ export const addonRowsHtml = (pre, on, X) =>
         `<label class="row opt${k === ADDON.EXT ? ' addon-ext' : ''}"><input type="checkbox" id="${pre}Addon-${k}" data-addon="${k}"${on[k] ? ' checked' : ''}> ${esc(T(k === ADDON.EXT ? X.name : ADDON_LABEL[k]))}</label>`,
     )
     .join('');
-// the form's ticks start from the last scenario save's
-const startAddons = () => ({ ...((lastSaveCard() || {}).addons || {}) });
 const formAddons = () =>
   Object.fromEntries([...document.querySelectorAll('#scAddons [data-addon]')].map(c => [c.dataset.addon, c.checked]));
 // the extras for the picked world: its add-on starts ticked, with a choice of where on its ladder the story starts
@@ -103,7 +95,7 @@ function syncAddons(worldId) {
   const box = $('#scAddons');
   if (!box) return;
   const X = WORLD_EXT[worldId] || null;
-  const on = { ...startAddons(), ...formAddons() };
+  const on = formAddons();
   if (X && !$('#scAddon-ext')) on.ext = true;
   box.innerHTML =
     addonRowsHtml('sc', on, X) +
@@ -119,7 +111,7 @@ export const styleChips = (cur, off) =>
   ).join('');
 const formStyle = () => ($('#styseg button[aria-pressed="true"]') || { dataset: {} }).dataset.sty;
 // a style note, like the style: the save's, else the last save's
-const startStyleNote = inherit => (inherit ? app.state.styleNoteId : (lastSaveCard() || {}).styleNoteId) || null;
+const startStyleNote = inherit => (inherit && app.state.styleNoteId) || null;
 // the note picker under the style chips (#styNote, or #mstyNote in the Memory tab), shown while From a note is picked
 export const styleNoteHtml = (key, style, id) =>
   `<div id="${key}Wrap" class="style-note${style === STYLE.NOTE ? '' : ' hidden'}">${onePickerHtml(key, id)}</div>`;
@@ -169,7 +161,7 @@ export function startNewLifeForm(inherit) {
   $('#composer').classList.add('hidden');
   const log = $('#log');
   // the form's choices; play is the game mode, scWorld a scenario's picture world
-  const sel = { world: 'random', gender: GENDER.MALE, mode: 'gacha', play: startPlay(inherit), scWorld: 'none' };
+  const sel = { world: 'random', gender: GENDER.MALE, mode: 'gacha', play: MODE.ROGUELIKE, scWorld: 'none' };
   log.innerHTML = newLifeHtml(inherit, sel.play);
   bindChoice(log, '#playseg', 'pm', v => {
     sel.play = v;
@@ -354,7 +346,7 @@ function newLifeHtml(inherit, play) {
 // a scenario game's own fields: its note (required), an optional first scene, the world its pictures come from and
 // its characters
 function scenarioHtml() {
-  return `<div class="field sc-only"><label>${T('Scenario: a note from your library')}</label>${scenarioPickerHtml((lastSaveCard() || {}).scenarioId || null)}</div>
+  return `<div class="field sc-only"><label>${T('Scenario: a note from your library')}</label>${scenarioPickerHtml(null)}</div>
     <div class="field sc-only"><label for="scFirst">${T('First scene (optional)')}</label><textarea id="scFirst" rows="4" maxlength="${LIMITS.userNotes}" placeholder="${esc(T('e.g. The rain has not stopped for three days. You push open the door of the bookshop at the end of the alley.'))}"></textarea><label class="row opt"><input type="checkbox" id="scVerbatim"> ${T('Show this text as the first message, as it is')}</label><p class="muted field-note">${T('Unticked, the narrator writes the opening from the scenario, starting from this situation when there is one.')}</p></div>
     <div class="field sc-only"><label>${T('World of the pictures (optional)')}</label><div class="seg" id="scwseg"><button type="button" data-scw="none" aria-pressed="true">${T('None')}</button>${WORLDS.map(w => `<button type="button" data-scw="${w.id}" aria-pressed="false">${T(w.name)}</button>`).join('')}</div><p class="muted field-note">${T('It only decides which pictures fit. None means any picture.')}</p></div>
     <div class="field sc-only"><label>${T('Extras')}</label><div id="scAddons" class="addons"></div><p class="muted field-note">${T('Each extra brings in only its own part of the game. You can change them later in the Memory tab.')}</p></div>

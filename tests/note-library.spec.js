@@ -1,6 +1,6 @@
 // The note library (notes.js): notes uploaded once, kept for every save, and ticked per save. Only the ticked ones
 // reach the narrator, whole, and nothing else gets them; the pick survives a reload, a rewrite and the next lives, and a
-// new game starts with the last save's. Same names ask once; a note over 32 KB is refused; the game trims its own
+// new game starts with none ticked. Same names ask once; a note over 32 KB is refused; the game trims its own
 // blocks around a big note; a save file brings its notes along.
 import { test, expect } from './support/test.js';
 import { check, claudeMock, keptStore, startLife } from './support/harness.js';
@@ -140,17 +140,18 @@ test('ticked notes reach the narrator, and only narrator turns', async ({ game }
   );
   check(errs, 'and its opening reply gets the note', p.includes('BETA-EDITED'));
 
-  // 6) a new game starts with the last save's pick
+  // 6) a new game starts with nothing ticked, though the last save had Beta, and takes what its screen ticks
   await pg.evaluate("DR.showTab('play');DR.app.state=null;DR.app.turns=[];DR.startNewLifeForm();0");
   check(
     errs,
-    "a new game's screen ticks the last save's notes",
-    (await ticked(pg, ids.b)) && !(await ticked(pg, ids.a)),
+    "a new game's screen ticks none of the last save's notes",
+    !(await ticked(pg, ids.b)) && !(await ticked(pg, ids.a)),
   );
+  await pg.check(`#nlNote-${ids.b}`);
   await begin(pg, { name: '설화' });
   const second = await pg.evaluate('DR.app.currentSave.id');
   check(errs, 'a new save', second !== first);
-  check(errs, 'which uses the same notes', (await noteIds(pg)) === ids.b);
+  check(errs, 'which uses the note its screen ticked', (await noteIds(pg)) === ids.b);
 
   // 7) summaries, the Life Review and tagging never get a note
   n = await prompts(pg);
@@ -533,6 +534,7 @@ test('a save file carries its notes, under new ids: a deleted note never comes b
   await pg.waitForFunction('!!window.__exp', null, { timeout: 15000 });
   // a second save that ticks it too
   await pg.evaluate("DR.showTab('play');DR.app.state=null;DR.app.turns=[];DR.startNewLifeForm();0");
+  await pg.check(`#nlNote-${id}`);
   await begin(pg, { name: '설화' });
   const s2 = await pg.evaluate('DR.app.currentSave.id');
   check(errs, 'both saves tick the note', (await noteIds(pg)) === id);
@@ -678,9 +680,7 @@ test('a save file carries its notes, under new ids: a deleted note never comes b
   expect(errs).toEqual([]);
 });
 
-test("an unread library: the new game says so, keeps the last save's notes, and sends nothing without them", async ({
-  game,
-}) => {
+test('an unread library: the new game says so and starts with no notes', async ({ game }) => {
   const { pg, errs } = await game(MOCK, { size: [420, 900] });
   await pg.waitForSelector('#rollBtn');
   await begin(pg, {});
@@ -701,7 +701,7 @@ test("an unread library: the new game says so, keeps the last save's notes, and 
     await pg.evaluate("!!document.querySelector('#noteLib [data-lib-retry]')"),
   );
 
-  // a new game: the picker says so, the game starts with the last save's notes, and its opening isn't sent
+  // a new game: the picker says so, and the game starts with no notes, so its opening goes out
   await pg.evaluate("DR.showTab('play');DR.app.state=null;DR.app.turns=[];DR.startNewLifeForm();0");
   check(
     errs,
@@ -711,23 +711,21 @@ test("an unread library: the new game says so, keeps the last save's notes, and 
   const n = await prompts(pg);
   await startLife(pg, { name: '설화' });
   await idle(pg);
-  check(errs, "the new save keeps the last save's notes", (await noteIds(pg)) === id);
-  check(errs, 'nothing was sent without them', (await prompts(pg)) === n);
-  const said = await pg.evaluate('window.__toasts.join(" | ")');
-  check(errs, `the turn says why (${said.slice(0, 60)})`, /노트 보관함을 읽지 못했어요/.test(said));
+  check(errs, "the new save has none of the last save's notes", (await noteIds(pg)) === '');
+  check(errs, 'its opening was sent', (await prompts(pg)) > n);
 
-  // once the library is back, the picker's retry reads it, with the last save's notes ticked
+  // once the library is back, the picker's retry reads it, with nothing ticked
   await pg.evaluate(
     "sessionStorage.removeItem('__notes_down');DR.showTab('play');DR.app.state=null;DR.app.turns=[];DR.startNewLifeForm();0",
   );
   await pg.click('#nlNotesBox [data-nl-retry]');
   await pg.waitForSelector('#nlNotes');
-  check(errs, 'the picker shows the library again, the notes ticked', await ticked(pg, id));
+  check(errs, 'the picker shows the library again, nothing ticked', !(await ticked(pg, id)));
   expect(errs).toEqual([]);
 });
 
-// the save played last and the save changed last differ here: the new game follows the one played
-test('a new game starts with the notes of the save played last, and its own picks are kept', async ({ game }) => {
+// whatever the save played last ticked, a new game's screen starts with none, and keeps what it ticks
+test('a new game starts with no notes ticked, and its own picks are kept', async ({ game }) => {
   const { pg, errs } = await game(MOCK, { size: [420, 900] });
   await pg.waitForSelector('#rollBtn');
   await begin(pg, {});
@@ -743,8 +741,11 @@ test('a new game starts with the notes of the save played last, and its own pick
 
   // a second save, with Beta picked on its own screen instead
   await pg.evaluate("DR.showTab('play');DR.app.state=null;DR.app.turns=[];DR.startNewLifeForm();0");
-  check(errs, "the picker starts with the first save's notes", (await ticked(pg, ids.a)) && !(await ticked(pg, ids.b)));
-  await pg.uncheck(`#nlNote-${ids.a}`);
+  check(
+    errs,
+    "the picker starts with none of the first save's notes",
+    !(await ticked(pg, ids.a)) && !(await ticked(pg, ids.b)),
+  );
   await pg.check(`#nlNote-${ids.b}`);
   await pg.click(`#nlNotes [data-nl-open="${ids.a}"]`);
   check(
@@ -758,13 +759,12 @@ test('a new game starts with the notes of the save played last, and its own pick
   await begin(pg, { name: '설화' });
   check(errs, 'the second save keeps what its screen ticked', (await noteIds(pg)) === ids.b);
 
-  // the first save opened again: played last, while the second is the newest
+  // the first save, with Alpha, opened again and played last: a new game still starts with nothing
   await pg.evaluate(id => DR.openSave(id), s1);
   await idle(pg);
-  const order = await pg.evaluate(() => ({ last: DR.app.settings.lastSave, newest: DR.app.saves[0].id }));
-  check(errs, 'the fixture: played last and changed last differ', order.last === s1 && order.newest !== s1);
+  check(errs, 'the fixture: the save played last ticks Alpha', (await noteIds(pg)) === ids.a);
   await pg.evaluate("DR.showTab('play');DR.app.state=null;DR.app.turns=[];DR.startNewLifeForm();0");
-  check(errs, 'a new game follows the save played last', (await ticked(pg, ids.a)) && !(await ticked(pg, ids.b)));
+  check(errs, 'a new game takes nothing from it', !(await ticked(pg, ids.a)) && !(await ticked(pg, ids.b)));
   expect(errs).toEqual([]);
 });
 
@@ -806,11 +806,6 @@ test('ticks keep the notes another device added, and the next turn reads them in
     p.includes('LATE-RULE') && p.includes('ALPHA-RULE'),
   );
 
-  // a new game's picker keeps one it can't show either
-  await behind('late2', 'Later', 'LATER-RULE');
-  await pg.evaluate("DR.showTab('play');DR.app.state=null;DR.app.turns=[];DR.startNewLifeForm();0");
-  await begin(pg, { name: '설화' });
-  check(errs, 'a new game keeps the note its picker could not show', (await noteIds(pg)).split(',').includes('late2'));
   expect(errs).toEqual([]);
 });
 

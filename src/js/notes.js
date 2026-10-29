@@ -2,7 +2,7 @@
 import { noteIgnored, nowIso, uid, utf8Bytes } from './util.js';
 import { N_, T } from './i18n.js';
 import { thaw, userCol, userDoc } from './db.js';
-import { app, lastSaveCard } from './app.js';
+import { app } from './app.js';
 import { NOTE_TYPE, NOTE_TYPES, STYLE } from './enums.js';
 
 // One document per note, P/notes/items/<id> = { name, text, updatedAt, type, cast? }, shared by every save of this
@@ -91,7 +91,6 @@ export const styleNote = (st = app.state) =>
 export const scenarioName = (st = app.state) =>
   (scenarioNote(st) || {}).name || (st && st.scenarioName) || T('Scenario');
 // a new game starts with the notes of the save played last; the card has them, the library is not needed
-export const lastNoteIds = () => (lastSaveCard() || {}).noteIds || [];
 // how many saves tick this note: the open one by its state, the others by their cards (persistence.js cardFields)
 export function savesUsing(id) {
   const open = app.state && app.currentSave ? app.currentSave.id : null;
