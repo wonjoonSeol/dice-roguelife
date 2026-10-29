@@ -30,8 +30,8 @@ API call. Keep the server running while you play.
 
 Presets for OpenAI, Anthropic, Google Gemini, Azure OpenAI and Perplexity (each in its own request format), plus
 OpenRouter, Groq, DeepSeek, Mistral, xAI, Together, Fireworks, DeepInfra, Cerebras, NVIDIA NIM and Hugging Face
-(OpenAI-compatible), and the local servers Ollama, LM Studio, llama.cpp and vLLM. **Custom** takes any
-OpenAI-compatible endpoint. Remote endpoints must use HTTPS; local servers can use HTTP on localhost.
+(OpenAI-compatible), the local servers Ollama, LM Studio, llama.cpp and vLLM, and Claude Code (below). **Custom**
+takes any OpenAI-compatible endpoint. Remote endpoints must use HTTPS; local servers can use HTTP on localhost.
 
 Use a model that follows JSON instructions well. Turn on JSON mode only if the model supports it, and turn off
 streaming if the endpoint doesn't support it. **Fast** in ⚙ Settings uses the optional summary model; Standard and
@@ -45,8 +45,27 @@ Qwen3.8-27B (Q4_K_M) on an RTX 4090, a new life takes about 30 seconds and a tur
 You can keep several connections as **profiles** (say, a paid model and a local one): pick **+ New profile** in the
 **Profile** list, name it and save. Choosing a profile in the list switches the game to it at once.
 
-Logins that reuse a chat subscription (Claude Pro/Max through Claude Code, ChatGPT through Codex, Gemini CLI) are not
-supported: their providers' terms don't allow it in other apps. If you have a Claude subscription, play the artifact.
+**Claude Code (claude -p)** runs each narration through the `claude` command installed on this computer. Install
+[Claude Code](https://docs.claude.com/en/docs/claude-code), choose it as the provider and enter a model (`sonnet`,
+`opus`, `haiku` or a full model ID). It runs with no tools, settings, skills or CLAUDE.md files, so it is only the model.
+It works with a Claude subscription or an API key, whichever `claude` uses:
+
+- **Claude Pro/Max:** leave the key blank and log in once with `claude` (`/login`). Turns count against your
+  subscription's usage limits; when they run out, the game says to wait, like a rate limit. The game never sees the
+  login: it runs your own `claude`, and an `ANTHROPIC_API_KEY` in the environment the server was started from wins
+  over the login.
+- **API key:** put it in the profile's key field (kept like any profile's key, and given to the `claude` process only),
+  and turns are billed to your API account, like the Anthropic preset. **Remove the saved key** goes back to the login.
+
+`claude` gets the server's whole environment, so other `ANTHROPIC_` settings there (a gateway's `ANTHROPIC_BASE_URL`,
+say) apply to it too. The output limit applies; images, the endpoint and network retries don't. Each request starts a
+new `claude` process, which is slower than a direct API call, and the casting picks for the people in a scene start
+theirs while the reply streams. On Windows the server starts `claude.exe` only: if `claude` works in a terminal but the
+game says Claude Code was not found, yours is probably a `.cmd` script, which Node.js can't start without a shell: use
+the native installer instead.
+
+Other chat subscriptions (ChatGPT through Codex, Gemini CLI) are not supported: their providers' terms don't allow it
+in other apps.
 
 ## Costs and keys
 

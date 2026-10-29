@@ -180,7 +180,7 @@ export async function startServer({
       });
     },
     // Saves a profile (previous: the one it was, for a rename; none for a new one) and makes it the one in use.
-    // A blank key keeps the profile's own, unless the endpoint changed.
+    // A blank key keeps the profile's own, unless the endpoint or protocol changed; a null key removes it.
     '/api/connection/set': async req => {
       const { name: raw, previous, config, apiKey } = await readJson(req, 100_000);
       const name = String(raw || '').trim();
@@ -188,7 +188,8 @@ export async function startServer({
       return editConnection(c => {
         if (name !== previous && profileOf(c, name)) throw apiError('name_taken', 'That profile name is taken.');
         const old = profileOf(c, previous) || { config: {}, apiKey: '' };
-        const key = apiKey ? String(apiKey).trim() : config.endpoint === old.config.endpoint ? old.apiKey : '';
+        const same = config.endpoint === old.config.endpoint && config.protocol === old.config.protocol;
+        const key = apiKey ? String(apiKey).trim() : apiKey !== null && same ? old.apiKey : '';
         if (previous && previous !== name) delete c.profiles[previous];
         c.profiles[name] = { config, apiKey: key };
         c.active = name;

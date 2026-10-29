@@ -68,5 +68,8 @@
   "Could not reach GitHub to check. See the <a href=\"{url}\" target=\"_blank\" rel=\"noopener\">releases page</a>.": "GitHub に接続できず確認できませんでした。<a href=\"{url}\" target=\"_blank\" rel=\"noopener\">リリースページ</a>をご覧ください。",
   "Version v{version} is out: <a href=\"{url}\" target=\"_blank\" rel=\"noopener\">download it</a>, unzip it anywhere and run npm start there. Your saves and AI connection stay in {path}. In a copy of the repository: git pull, npm ci, npm start.": "v{version} が出ています：<a href=\"{url}\" target=\"_blank\" rel=\"noopener\">ダウンロード</a>して好きな場所に展開し、そこで npm start を実行します。セーブと AI 接続は {path} にそのまま残ります。リポジトリのコピーなら git pull、npm ci、npm start。",
   "This is the latest version.": "最新バージョンです。",
+  "This Claude Code is too old for the game. Run claude update, then try again.": "この Claude Code はゲームには古すぎます。claude update を実行してから、もう一度お試しください。",
+  "Remove the saved key": "保存したキーを削除",
+  "Claude Code was not found. Install it, run claude once to log in, then try again.": "Claude Code が見つかりません。インストールして claude を一度実行しログインしてから、もう一度お試しください。",
   "The provider does not know this model ID. Check its exact name in the model list of the provider.": "プロバイダーがこのモデル ID を認識していません。プロバイダーのモデル一覧で正確な名前を確認してください。"
 }

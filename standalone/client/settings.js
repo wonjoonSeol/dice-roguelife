@@ -27,6 +27,7 @@ const PROTOCOLS = [
   ['gemini', 'Gemini'],
   ['azure', 'Azure OpenAI'],
   ['perplexity', 'Perplexity Sonar'],
+  ['claude-cli', 'Claude Code (claude -p)'],
 ];
 // form field -> connection setting
 const TEXT = {
@@ -56,6 +57,7 @@ function panelHtml() {
     ${field('apiEndpoint', tr('API base URL'), 'type="url"')}
     <div class="field"><label for="apiProtocol">${tr('API protocol')}</label><select id="apiProtocol">${options(PROTOCOLS)}</select></div>
     ${field('apiKey', tr('API key (optional for local models)'), 'type="password" autocomplete="off"')}
+    ${check('apiForget', tr('Remove the saved key'))}
     ${field('apiModel', tr('Model ID (Azure: deployment name)'), 'autocomplete="off"')}
     ${field('apiSummary', tr('Summary model ID (optional)'), 'autocomplete="off"')}
     ${field('apiVersion', tr('Azure API version'), 'placeholder="2024-10-21"')}
@@ -127,7 +129,15 @@ export function bindProviderSettings(root) {
   const q = id => root.querySelector('#api' + id);
   const status = text => (q('Status').textContent = text);
   let armed = false; // Delete was pressed once
-  const azureOnly = () => (q('Version').closest('.field').hidden = q('Protocol').value !== 'azure');
+  const box = id => q(id).closest('.field, .opt');
+  // the fields this protocol uses; a hidden one is saved empty or off (save)
+  const protocolFields = () => {
+    const protocol = q('Protocol').value,
+      cli = protocol === 'claude-cli';
+    box('Version').hidden = protocol !== 'azure';
+    // Claude Code has no address, pictures or network retries; its key is optional (else claude's own login)
+    for (const id of ['Endpoint', 'Vision', 'Retries']) box(id).hidden = cli;
+  };
   // the profile list, then the chosen profile's settings (a new one starts from the defaults)
   const show = name => {
     const names = profileNames();
@@ -139,10 +149,12 @@ export function bindProviderSettings(root) {
     for (const [id, key] of Object.entries(CHECKS)) q(id).checked = !!c[key];
     q('Key').value = '';
     q('Key').placeholder = profileHasKey(name) ? tr('Saved on this computer. Leave blank to keep it.') : '';
+    q('Forget').checked = false;
+    box('Forget').hidden = !profileHasKey(name);
     q('Delete').disabled = !name;
     q('Delete').textContent = tr('Delete profile');
     armed = false;
-    azureOnly();
+    protocolFields();
   };
   // after the profiles changed: show the one in use, and let the game know its limits
   const refresh = async message => {
@@ -177,18 +189,20 @@ export function bindProviderSettings(root) {
     q('Endpoint').value = p.endpoint;
     q('Protocol').value = p.protocol;
     q('Key').value = q('Model').value = q('Summary').value = '';
-    azureOnly();
+    protocolFields();
   };
-  q('Protocol').onchange = azureOnly;
+  q('Protocol').onchange = protocolFields;
   const save = async () => {
     const next = {};
-    for (const [id, key] of Object.entries(TEXT)) next[key] = q(id).value.trim();
+    const shown = id => !box(id).hidden;
+    for (const [id, key] of Object.entries(TEXT)) next[key] = shown(id) ? q(id).value.trim() : '';
     for (const [id, key] of Object.entries(NUMBERS)) next[key] = Number(q(id).value);
-    for (const [id, key] of Object.entries(CHECKS)) next[key] = q(id).checked;
+    for (const [id, key] of Object.entries(CHECKS)) next[key] = shown(id) && q(id).checked;
     const counts = Object.values(NUMBERS).every(k => Number.isInteger(next[k]) && next[k] >= 0);
-    if (!next.model || !next.endpoint || !counts || !next.maxTokens || !next.promptBytes)
+    if (!next.model || (!next.endpoint && shown('Endpoint')) || !counts || !next.maxTokens || !next.promptBytes)
       throw new Error(tr('Enter an endpoint, model and valid limits.'));
-    await saveConnection(q('Name').value.trim(), q('Profile').value, next, q('Key').value);
+    const key = q('Forget').checked ? null : q('Key').value; // null: the server drops the saved key
+    await saveConnection(q('Name').value.trim(), q('Profile').value, next, key);
     await refresh(tr('Connection saved.'));
   };
   q('Save').onclick = () => act(save);

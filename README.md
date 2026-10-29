@@ -227,8 +227,9 @@ npm run release -- 2.5.0   # bump the version, check, test, package
 
 ## Optional: standalone (for developers)
 
-The artifact is the way to play. For people who would rather run the game on their own computer with an API key or a
-local model (Ollama, LM Studio and others), there is a community-maintained add-on in [standalone/](standalone/README.md):
+The artifact is the way to play. For people who would rather run the game on their own computer with an API key, a
+local model (Ollama, LM Studio and others) or Claude Code (`claude -p`, with a Claude subscription or an API key), there
+is a community-maintained add-on in [standalone/](standalone/README.md):
 download `dice-roguelife-standalone-v….zip` from the [latest release](https://github.com/wonjoonSeol/dice-roguelife/releases/latest), unzip it and run `npm start` (Node.js
 22.13 or later, nothing to install). It is a separate download: the artifact page is still `dice-roguelife.html`, and
 the artifact build doesn't include the add-on. To play on your phone as well, reach your computer through Tailscale

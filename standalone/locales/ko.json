@@ -68,5 +68,8 @@
   "Could not reach GitHub to check. See the <a href=\"{url}\" target=\"_blank\" rel=\"noopener\">releases page</a>.": "GitHub에 연결하지 못해 확인하지 못했어요. <a href=\"{url}\" target=\"_blank\" rel=\"noopener\">릴리스 페이지</a>를 확인하세요.",
   "Version v{version} is out: <a href=\"{url}\" target=\"_blank\" rel=\"noopener\">download it</a>, unzip it anywhere and run npm start there. Your saves and AI connection stay in {path}. In a copy of the repository: git pull, npm ci, npm start.": "v{version}이 나왔어요: <a href=\"{url}\" target=\"_blank\" rel=\"noopener\">내려받아</a> 아무 곳에나 압축을 풀고 거기서 npm start를 실행하세요. 저장과 AI 연결은 {path}에 그대로 있어요. 저장소 사본이라면 git pull, npm ci, npm start.",
   "This is the latest version.": "최신 버전이에요.",
+  "This Claude Code is too old for the game. Run claude update, then try again.": "이 Claude Code는 게임에 쓰기에 너무 오래됐어요. claude update를 실행한 뒤 다시 시도하세요.",
+  "Remove the saved key": "저장된 키 지우기",
+  "Claude Code was not found. Install it, run claude once to log in, then try again.": "Claude Code를 찾지 못했어요. 설치하고 claude를 한 번 실행해 로그인한 뒤 다시 시도하세요.",
   "The provider does not know this model ID. Check its exact name in the model list of the provider.": "제공업체가 이 모델 ID를 알지 못해요. 제공업체의 모델 목록에서 정확한 이름을 확인하세요."
 }
