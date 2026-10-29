@@ -676,5 +676,40 @@ test('roster', async ({ game }) => {
     'within a group a mentioned card comes before an unmentioned roster person',
     ns.indexOf('혜정(') >= 0 && ns.indexOf('운학(') > ns.indexOf('혜정('),
   );
+
+  // 4) Import characters from the save's notes: one model call, only once Read is pressed; the people join the list
+  // ({user} is the player, left out) and, with the box ticked, the notes keep only the rest
+  const listBefore = await pg.evaluate(() => {
+    DR.app.state.userNotes = '세계: 마교가 강하다.\n### 은둔고수\n-황보엽:48세+男/권왕/무뚝뚝\n-{user}:주인공';
+    window.__next = {
+      roster: '# 은둔고수\n이름: 황보엽 / 별칭: 권왕 / 성별: 남 / 직책: 48세\n이름: {user} / 직책: 주인공',
+      rest: '세계: 마교가 강하다.',
+    };
+    window.__lastPrompt = '';
+    DR.showTab('memory');
+    return DR.app.state.roster.murim;
+  });
+  await pg.click('#memBox .mem-roster [data-roster-import]');
+  await pg.waitForSelector('#impRead');
+  const askedEarly = await pg.evaluate('window.__lastPrompt');
+  await pg.click('#impRead');
+  await pg.click('#impAdd');
+  await pg.waitForFunction(() => !DR.app.state.userNotes.includes('황보엽'));
+  const imp = await pg.evaluate(() => ({
+    asked: window.__lastPrompt,
+    notes: DR.app.state.userNotes,
+    list: DR.app.state.roster.murim,
+    names: DR.rosterNow().map(e => e.name),
+    alias: (DR.rosterFor('권왕') || {}).name,
+  }));
+  await pg.evaluate('window.__next = null');
+  check(errs, 'no model call before Read is pressed', askedEarly === '');
+  check(errs, 'the import reads the notes', imp.asked.includes('-황보엽:48세+男') && imp.asked.includes('"roster"'));
+  check(
+    errs,
+    'the imported people join the list after its own, without {user}',
+    imp.list.startsWith(listBefore) && imp.alias === '황보엽' && !imp.names.includes('{user}') && imp.names.length > 1,
+  );
+  check(errs, 'the notes keep only the rest', imp.notes === '세계: 마교가 강하다.');
   expect(errs).toEqual([]);
 });

@@ -65,10 +65,11 @@ export function renderNoteLibrary() {
   const st = tickable() ? app.state : null,
     lib = app.notes;
   const used = new Set(st ? st.noteIds : []);
+  // the box ticks; the name opens the note, like Edit
   const rows = (lib || [])
     .map(
       n =>
-        `<div class="note-row">${st ? `<label class="row opt grow"><input type="checkbox" data-lib-use="${esc(n.id)}"${used.has(n.id) ? ' checked' : ''}> <b>${esc(n.name)}</b></label>` : `<b class="grow">${esc(n.name)}</b>`}<span class="muted count-note">${kb(n.bytes)}</span><button class="btn ghost chip-sm" data-lib-edit="${esc(n.id)}">${T('Edit')}</button><button class="x" data-lib-del="${esc(n.id)}" aria-label="${T('Delete')}">✕</button></div>`,
+        `<div class="note-row">${st ? `<input type="checkbox" data-lib-use="${esc(n.id)}" aria-label="${esc(T('Use {name} in this game', { name: n.name }))}"${used.has(n.id) ? ' checked' : ''}>` : ''}<button type="button" class="note-name grow" data-lib-open="${esc(n.id)}">${esc(n.name)}</button><span class="muted count-note">${kb(n.bytes)}</span><button class="btn ghost chip-sm" data-lib-edit="${esc(n.id)}">${T('Edit')}</button><button class="x" data-lib-del="${esc(n.id)}" aria-label="${T('Delete')}">✕</button></div>`,
     )
     .join('');
   root.innerHTML = `<h4>${T('Note library ({n})', { n: (lib || []).length })}</h4><p class="muted mem-hint">${T(st ? HINT_GAME : formUp() ? HINT_FORM : HINT)}</p>${
@@ -93,8 +94,8 @@ export function renderNoteLibrary() {
       }),
   );
   root
-    .querySelectorAll('[data-lib-edit]')
-    .forEach(b => (b.onclick = () => openNoteEditor(noteById(b.dataset.libEdit))));
+    .querySelectorAll('[data-lib-edit],[data-lib-open]')
+    .forEach(b => (b.onclick = () => openNoteEditor(noteById(b.dataset.libEdit || b.dataset.libOpen))));
   root.querySelectorAll('[data-lib-del]').forEach(b => (b.onclick = () => removeNote(b.dataset.libDel)));
   root.querySelector('[data-lib-new]').onclick = () => openNoteEditor(null);
   root.querySelector('[data-lib-upload]').onchange = async e => {
@@ -271,7 +272,7 @@ function pickerInner(ids) {
   return `<div class="field" id="nlNotes"><label>${T('Notes from your library (sent to Claude every turn)')}</label><div class="nl-note-list">${lib
     .map(
       n =>
-        `<label class="row opt"><input type="checkbox" id="nlNote-${esc(n.id)}" data-nl-note="${esc(n.id)}"${on.has(n.id) ? ' checked' : ''}> <span>${esc(n.name)} <span class="muted">${kb(n.bytes)}</span></span></label>`,
+        `<div class="row opt"><input type="checkbox" id="nlNote-${esc(n.id)}" data-nl-note="${esc(n.id)}" aria-label="${esc(T('Use {name} in this game', { name: n.name }))}"${on.has(n.id) ? ' checked' : ''}><button type="button" class="note-name" data-nl-open="${esc(n.id)}">${esc(n.name)}</button><span class="muted">${kb(n.bytes)}</span><button type="button" class="btn ghost chip-sm" data-nl-edit="${esc(n.id)}">${T('Edit')}</button></div>`,
     )
     .join('')}</div><p class="muted field-note note-size" data-note-size></p></div>`;
 }
@@ -282,6 +283,9 @@ export function bindNotePicker() {
   if (again) again.onclick = retry;
   const sync = () => showSize(box, pickedInForm());
   box.querySelectorAll('[data-nl-note]').forEach(c => (c.onchange = sync));
+  box
+    .querySelectorAll('[data-nl-open],[data-nl-edit]')
+    .forEach(b => (b.onclick = () => openNoteEditor(noteById(b.dataset.nlOpen || b.dataset.nlEdit))));
   sync();
 }
 // what the form has ticked, or null when it shows no picker (an empty library, or one that could not be read)

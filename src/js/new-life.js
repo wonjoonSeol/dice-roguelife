@@ -279,6 +279,19 @@ function bindWorldNoteSave() {
   };
   sync();
 }
+// the setting box as a source for Import characters; its leftover also replaces what the rolled fate took from it
+const worldNoteSource = () => ({
+  label: T('Setting and characters box'),
+  text: () => ($('#worldNote') ? $('#worldNote').value : ''),
+  put: rest => {
+    const box = $('#worldNote'),
+      life = app.pendingRoll && app.pendingRoll.life;
+    if (box) box.value = rest.slice(0, LIMITS.userNotes);
+    if (!life || life.seedNotes === undefined) return;
+    life.seedNotes = app.settings.worldNote = rest.slice(0, LIMITS.userNotes);
+    saveSettings().catch(e => noteIgnored('new-life: dset settings', e));
+  },
+});
 // the profile box shows how much of its 600 characters is used
 function bindProfileCount() {
   const ta = $('#prof'),
@@ -587,9 +600,15 @@ function revealFate(life, inherit, again) {
    ${inherit && inherit.name ? `<div class="item fate-note"><div class="m">${T('Inherited')}</div><div class="t"><span class="tier ${inherit.grade}">${inherit.grade}</span> ${esc(inherit.name)}</div><div class="m">${esc(inherit.desc)}</div></div>` : ''}
    <details class="roster-box"${draft ? ' open' : ''}><summary>${T('Characters for this story (optional)')}</summary>${rosterEditorHtml(draft)}<p class="muted field-note">${T('Kept in this save for lives in this world. Each turn the narrator gets the names of a few people not met yet, and the full details only of the few the story is on right now, so a long list costs no more.')}</p></details>
    <div class="row fate-actions"><button class="btn primary" id="acceptBtn">${T('Begin with this fate')}</button></div>`;
-  bindRosterEditor(f, life.world.id, life.name, v => {
-    if (app.pendingRoll) app.pendingRoll.roster = v; // a redrawn screen (another language) keeps the draft
-  });
+  bindRosterEditor(
+    f,
+    life.world.id,
+    life.name,
+    v => {
+      if (app.pendingRoll) app.pendingRoll.roster = v; // a redrawn screen (another language) keeps the draft
+    },
+    { own: worldNoteSource(), lang: app.pendingRoll && app.pendingRoll.lang },
+  );
   if (!again)
     cards.forEach((c, i) =>
       setTimeout(

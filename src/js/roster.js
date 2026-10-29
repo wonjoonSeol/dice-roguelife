@@ -71,11 +71,18 @@ const KEYED = /^([^:：]{1,24}?)\s*[:：]\s*(.*)$/;
 const HEADING = /^#{1,6}\s*([^#].*?)\s*#*$/;
 const BULLET = /^(?:[-*+•]|\d{1,3}[.)])\s+/;
 const RULE = /^[\s\-*_=~`>]*$/; // a markdown rule, a code fence or an empty quote: no content
-const ME = /\{\{\s*user\s*\}\}/i;
+const ME = /\{\s*user\s*\}/i; // {user} or {{user}}: the player, in other RP services' sheets
 const NAMED = /^(.*?)\s*(?:[(（]([^)）]*)[)）])?$/;
 const join = (a, b) => (a ? a + ', ' + b : b);
 // a value in a pair of quotes, without them
 const unquote = v => (v.length > 1 && CLOSE[v[0]] && v.endsWith(CLOSE[v[0]]) ? v.slice(1, -1) : v);
+const cleanLine = raw =>
+  raw
+    .replace(/\*\*|__/g, '')
+    .replace(/^\s*>\s?/, '')
+    .trim();
+// a # heading: the affiliation of the people under it
+export const isHeading = raw => HEADING.test(cleanLine(raw));
 
 // the people a pasted text holds, and what it skipped or changed (notes: { line, why, ... } for the preview)
 export function parseRoster(text, me = '') {
@@ -95,10 +102,7 @@ export function parseRoster(text, me = '') {
       cur = null;
       skip(why, x);
     };
-    const t = raw
-      .replace(/\*\*|__/g, '')
-      .replace(/^\s*>\s?/, '')
-      .trim();
+    const t = cleanLine(raw);
     if (!t) {
       cur = null;
       return;

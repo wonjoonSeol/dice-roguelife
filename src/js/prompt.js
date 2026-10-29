@@ -24,11 +24,12 @@ import { NOTES_UNREAD, notesReady, pickedNotes } from './notes.js';
 export let prompts = PR_DEFAULT; // narrator prompt text; config/prompt in the db overrides field by field
 // a prompts.json map keyed by story language ("lang", "tip", "ledgerLang", "summaryLang")
 export const prLang = k => ((prompts && prompts[k]) || {})[storyLang()] || '';
-// a prompts.json entry; an English story reads prompts.en's version when there is one
-export const pr = k => {
-  const en = promptLang() === 'en' && prompts.en;
+// a prompts.json entry; an English or Japanese story reads prompts.en's version when there is one
+export const prIn = (lang, k) => {
+  const en = lang !== 'ko' && prompts.en;
   return en && en[k] !== undefined ? en[k] : prompts[k];
 };
+export const pr = k => prIn(promptLang(), k);
 export const pl = (en, vars) => tIn(promptLang(), en, vars);
 // the talent fields of a life's opening prompt and first row; a life started with no talent says so
 export const talentVars = life =>
@@ -816,7 +817,7 @@ export async function callNarrator(text, cmd, turn) {
     });
   }
 }
-function extractJson(t) {
+export function extractJson(t) {
   if (!t) return null;
   t = String(t).replace(/```(?:json)?/gi, '');
   const a = t.indexOf('{'),
