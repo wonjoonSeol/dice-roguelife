@@ -41,6 +41,7 @@ import { renderLog } from './log.js';
 //   cur, g, w    their current set, its gender, the world of this life
 //   why, clues   the clues kept for them (app.state.castWhy) and the same as one list
 //   sets, q      the usable character sets and the search text
+//   shown        how many of the matching sets the grid shows ("Show more" adds a page)
 //   score        castScorer for these clues
 function openPicker(npc, ti) {
   const cur = app.state.cast[npc];
@@ -55,6 +56,7 @@ function openPicker(npc, ti) {
     clues: [...why.look, ...why.role],
     sets: charSets(),
     q: '',
+    shown: FACE_PAGE,
     score: null,
   };
   p.score = scorer(p);
@@ -149,11 +151,13 @@ function drawWhy(p) {
       if (n) n.focus();
     };
 }
-// up to 24 sets that fit the world and the gender (and the search), most clue matches first. Sets labeled other
-// (기타) are offered to anyone here: the player choosing by hand may want a beast's face that casting never gives
+// the sets that fit the world and the gender (and the search), most clue matches first, a page at a time ("Show more"
+// adds one). Sets labeled other (기타) are offered to anyone here: the player choosing by hand may want a beast's face
+// that casting never gives
+const FACE_PAGE = 24;
 function drawGrid(p) {
   const { npc, cur, g, w, sets, q } = p;
-  const cands = Object.keys(sets)
+  const all = Object.keys(sets)
     .filter(
       k =>
         k !== cur &&
@@ -169,22 +173,34 @@ function drawGrid(p) {
         .toLowerCase()
         .includes(q);
     })
-    .sort((a, b) => hitsOf(p, b).length - hitsOf(p, a).length || p.score(b) - p.score(a))
-    .slice(0, 24);
+    // scored once each: the sort compares them many times
+    .map(k => ({ k, hits: hitsOf(p, k).length, score: p.score(k) }))
+    .sort((a, b) => b.hits - a.hits || b.score - a.score);
+  const cands = all.slice(0, p.shown),
+    left = all.length - cands.length;
+  const cells = cands
+    .map(({ k, hits }) => {
+      const f = faceOf(p, k);
+      const m = app.setMeta[k] || {};
+      const o = holderOf(npc, k);
+      const rt = o && app.state.deadNpc && app.state.deadNpc[o];
+      return `<button type="button" data-pick="${esc(k)}" ${rt ? `disabled title="${T('The face of someone who died in this life; it cannot be used again')}"` : ''} class="fp-cell">${f ? `<img src="${imgUrl(f.id)}" loading="lazy" alt="" class="fp-thumb${o ? ' taken' : ''}">` : '<span class="fp-thumb"></span>'}${o ? `<span class="fp-badge">${rt ? '✝ ' : ''}${esc(o)}</span>` : ''}<span class="fp-label">${esc(m.charName || k)}${hits ? ` <b class="fp-hits">✓${hits}</b>` : ''}</span></button>`;
+    })
+    .join('');
   $('#castGrid').innerHTML =
-    cands
-      .map(k => {
-        const f = faceOf(p, k);
-        const m = app.setMeta[k] || {};
-        const o = holderOf(npc, k);
-        const rt = o && app.state.deadNpc && app.state.deadNpc[o];
-        const hits = hitsOf(p, k).length;
-        return `<button type="button" data-pick="${esc(k)}" ${rt ? `disabled title="${T('The face of someone who died in this life; it cannot be used again')}"` : ''} class="fp-cell">${f ? `<img src="${imgUrl(f.id)}" loading="lazy" alt="" class="fp-thumb${o ? ' taken' : ''}">` : '<span class="fp-thumb"></span>'}${o ? `<span class="fp-badge">${rt ? '✝ ' : ''}${esc(o)}</span>` : ''}<span class="fp-label">${esc(m.charName || k)}${hits ? ` <b class="fp-hits">✓${hits}</b>` : ''}</span></button>`;
-      })
-      .join('') || `<p class="muted empty">${T('No matching sets.')}</p>`;
+    (cells || `<p class="muted empty">${T('No matching sets.')}</p>`) +
+    (left
+      ? `<button type="button" class="btn ghost fp-more" id="castMore">${T('Show more ({n} left)', { n: left })}</button>`
+      : '');
   $('#castGrid')
     .querySelectorAll('[data-pick]:not([disabled])')
     .forEach(b => (b.onclick = () => applyFace(p, b.dataset.pick)));
+  const more = $('#castMore');
+  if (more)
+    more.onclick = () => {
+      p.shown += FACE_PAGE;
+      drawGrid(p);
+    };
 }
 
 /* ---- changes ---- */
@@ -367,6 +383,7 @@ export let openCast = async function openCast(npc, ti) {
     clearTimeout(qt);
     qt = setTimeout(() => {
       p.q = e.target.value.trim().toLowerCase();
+      p.shown = FACE_PAGE;
       drawGrid(p);
     }, 200);
   };
