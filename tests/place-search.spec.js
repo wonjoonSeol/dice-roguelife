@@ -7,7 +7,7 @@ const MOCK =
   MOCK_BASE +
   String.raw`
 window.claude={use:async(n)=>{ if(n==='db')return window.__dbmock; if(n==='user')return{id:async()=>'u_test',isOwner:async()=>true,can:async()=>true};
- if(n==='sample'){const f=async()=>({text:''});f.limits=async()=>({maxPromptBytes:262144});f.json=async(p)=>({admin:'',narration:'첫 문단.\n\n[[@subway, platform]]\n\n아래로.',system:[],choices:['a'],stat_changes:{},clock:{days_passed:0,time:'오전 10시',place:'역 물품보관함 앞'},memory:{},dead:false,scene:'station, locker'});return f;} return null;}};
+ if(n==='sample'){const f=async()=>({text:''});f.limits=async()=>({maxPromptBytes:262144});f.json=async(p)=>({admin:'',narration:'첫 문단.\n\n[[@subway, platform]]\n\n아래로.\n\n[[@hwasanpa, pine path, stone steps, morning mist]]\n\n끝.',system:[],choices:['a'],stat_changes:{},clock:{days_passed:0,time:'오전 10시',place:'역 물품보관함 앞'},memory:{},dead:false,scene:'station, locker'});return f;} return null;}};
 `;
 const CASES = [
   ['station, locker', 'station-lobby'],
@@ -59,6 +59,10 @@ test('place search', async ({ game }) => {
   );
   console.log('memory:', mem);
   bad += Number(mem !== 'cottage-room memory');
+  // a long mark the narrator wrote (a proper noun and a list) is never shown as raw text in the story
+  const raw = await pg.evaluate(() => document.querySelector('#log').textContent.includes('[['));
+  console.log('raw mark in the story:', raw);
+  bad += Number(raw);
   const v = await pg.evaluate(
     "(()=>{const v=DR.placeVocab();return[v.length,new TextEncoder().encode(v.join(', ')).length]})()",
   );

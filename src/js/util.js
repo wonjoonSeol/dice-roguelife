@@ -82,7 +82,10 @@ export function shortWhat(x) {
   return t.length > 24 ? t.slice(0, 23) + '…' : t;
 }
 
-export const MARK_RE = /\[\[\s*(@?)([^\[\]\n]{1,30}?)\s*\]\]/g;
+// a mark is any [[...]] on one line (a person, or @ and place words); the length cap only bounds the scan
+export const MARK_RE = /\[\[\s*(@?)([^\[\]\n]{1,200}?)\s*\]\]/g;
+// a mark on its own line, with the blank lines around it
+export const MARK_LINE_RE = /\n*(\[\[[^\[\]\n]{1,200}\]\])\n*/g;
 
 export const stripMarks = t =>
   String(t || '')
