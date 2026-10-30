@@ -11,6 +11,7 @@ const TEXT = {
   no_profile: N_('That profile is gone. Choose another in Settings.'),
   bad_settings: N_('Check the port (1 to 65535), the data folder and the names.'),
   too_large: N_('This is too large to store.'),
+  local_only: N_('Change this on the computer the server runs on.'),
 };
 const failed = code =>
   Object.assign(new Error(tr(TEXT[code] || N_('Request failed.'))), { code: code || 'storage_error' });

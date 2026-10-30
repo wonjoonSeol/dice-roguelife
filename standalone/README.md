@@ -99,12 +99,25 @@ Import tags.json, and your saves in Import save file. Past turns show their pict
 
 ## Playing on your phone (Tailscale)
 
-The server only answers this computer. To play from your phone as well, install [Tailscale](https://tailscale.com/) on
-the computer and the phone with the same account, then on the computer run `tailscale serve --bg 3000` (allow HTTPS
+The server only answers this computer (unless `bind` says otherwise, below). To play from your phone as well, install
+[Tailscale](https://tailscale.com/) on the computer and the phone with the same account, then on the computer run `tailscale serve --bg 3000` (allow HTTPS
 when it asks). It prints this computer's address, such as `https://my-pc.tail1234.ts.net`. Add that name in **⚙ Settings →
 Server settings** (or to `hosts` in `config.json`, below) and open the address on the phone.
 
 Only devices on your Tailscale account can reach it. Don't play the same save on two devices at the same time.
+
+## Playing on your phone (WireGuard or the home network)
+
+With a WireGuard tunnel home, or on the same Wi-Fi, the phone opens the computer by its IP address and the server's
+own port, with nothing in between. Set `"bind": "0.0.0.0"` in `config.json` (below) and restart the server; it prints
+the addresses another device can open, such as `http://192.168.0.114:3000`. If the phone can't load it, allow
+Node.js through the Windows firewall for that network.
+
+Any device that can reach that address can play, read your saves and narrate with your AI connection, so keep the
+port closed on the router. Server settings and AI connections can only be changed on the computer itself. Over plain
+http the phone's browser has no Copy buttons, and it can't fingerprint pictures and notes: a picture uploaded again
+isn't recognized as the same one, restoring pictures from an image list finds none, and reading a library note's
+characters asks the AI every time.
 
 ## Server settings (config.json)
 
@@ -124,6 +137,10 @@ settings**, or by hand. Every field can be left out:
   starts from that folder.
 - `hosts`: other names this server answers to, for Tailscale (above). These apply at once; a new port or folder
   applies the next time you run `npm start`.
+- `bind`: the IPv4 address the server listens on, `127.0.0.1` (this computer only) unless set. `0.0.0.0` lets
+  devices in by IP address (above); one address, such as the computer's own WireGuard one, limits it to that network,
+  and the game is then opened at that address on this computer too. Set by hand (Server settings leaves it as it is);
+  it applies at the next start.
 
 The AI connection itself is chosen in ⚙ Settings and kept in the data folder (`connection.json`).
 
@@ -145,7 +162,7 @@ changing the artifact:
 | File                         | Role                                                                                                                           |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `start.js`                   | `npm start`: checks the Node.js version, starts the server, says where the data is and whether a newer version is out          |
-| `server.js`                  | The local server on 127.0.0.1: serves the page, the storage API, the relay and the update check; finds the app-data folder     |
+| `server.js`                  | The server on 127.0.0.1 or `bind`: serves the page, the storage API, the relay and the update check; finds the app-data folder |
 | `page.js`, `page.html`       | The page: built from the source at start in a copy of the repository, shipped built (`page.html`) in the download              |
 | `store.js`                   | Documents in SQLite (Node's built-in `node:sqlite`) with memDB's behavior (`src/js/db.js`), images as files, the AI connection |
 | `relay.js`                   | Turns a narration request into each provider's format and streams the reply back                                               |
@@ -162,7 +179,10 @@ The artifact build (`npm run build`) contains none of this. The only lines in th
 `src/js/host.js` and the optional `bindSettings` call in `src/js/settings-sheet.js`.
 
 The page carries a token made for each server start; storage and relay requests must send it, and pictures need the
-cookie the page sets. The server answers only `localhost` and `127.0.0.1` on its own port, and the names in `hosts`.
+cookie the page sets. The server answers only `localhost` and `127.0.0.1` on its own port, the names in `hosts`, and
+with `bind` off this computer, any IP address on its own port (a name could be a site rebinding it, a typed address
+can't). Requests by IP must come from a page on that same address, and only connections from this computer may
+change the server settings or the AI connections.
 
 ## Tests
 

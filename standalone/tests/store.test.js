@@ -173,6 +173,7 @@ test('config.json: checked at start, so a bad file stops the server with a clear
     writeFileSync(join(dir, 'config.json'), JSON.stringify({ hosts: 'my-pc' }));
     await assert.rejects(openServer({ dataDir: dir }), { code: 'bad_settings' });
     assert.throws(() => checkConfig({ port: 70000 }), { code: 'bad_settings' });
+    assert.throws(() => checkConfig({ bind: 'my-pc' }), { code: 'bad_settings' });
     assert.deepEqual(checkConfig({ port: 3100, dataDir: 'my-data', hosts: ['my-pc.tail1234.ts.net'] }).port, 3100);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -195,6 +196,9 @@ test('server settings from ⚙: written to config.json, names allowed at once, p
     const back = { port, dataDir: '', hosts: ['my-pc.tail1234.ts.net'] };
     assert.deepEqual(await (await s.call('/api/server/set', back)).json(), { restart: false });
     assert.equal('dataDir' in s.readJson('config.json'), false);
+    // bind is set by hand only: the page can't open the server to the network
+    await s.call('/api/server/set', { ...back, bind: '0.0.0.0' });
+    assert.equal('bind' in s.readJson('config.json'), false);
     for (const bad of [{ port: 0 }, { hosts: ['bad host/'] }, { dataDir: 5 }]) {
       const res = await s.call('/api/server/set', bad);
       assert.deepEqual([res.status, await res.json()], [400, { code: 'bad_settings' }]);
