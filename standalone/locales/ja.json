@@ -65,6 +65,7 @@
   "Advanced": "詳細設定",
   "That profile is gone. Choose another in Settings.": "そのプロファイルはもうありません。設定で別のプロファイルを選んでください。",
   "This is too large to store.": "大きすぎて保存できません。",
+  "Change this on the computer the server runs on.": "サーバーを動かしているコンピューターで変更してください。",
   "Now: port {port}, {path}": "現在：ポート {port}、{path}",
   "Kept in config.json in the app-data folder on this computer, with your saves.": "このコンピューターのアプリデータフォルダーに、セーブと一緒に config.json として保存されます。",
   "Empty: the app-data folder": "空欄ならアプリデータフォルダー",

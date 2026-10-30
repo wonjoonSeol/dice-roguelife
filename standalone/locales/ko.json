@@ -65,6 +65,7 @@
   "Advanced": "고급 설정",
   "That profile is gone. Choose another in Settings.": "그 프로필이 없어졌어요. 설정에서 다른 프로필을 고르세요.",
   "This is too large to store.": "너무 커서 저장할 수 없어요.",
+  "Change this on the computer the server runs on.": "서버가 돌아가는 컴퓨터에서 바꾸세요.",
   "Now: port {port}, {path}": "현재: 포트 {port}, {path}",
   "Kept in config.json in the app-data folder on this computer, with your saves.": "이 컴퓨터의 앱 데이터 폴더에 저장과 함께 config.json으로 보관돼요.",
   "Empty: the app-data folder": "비우면 앱 데이터 폴더",

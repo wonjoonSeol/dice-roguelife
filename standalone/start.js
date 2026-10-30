@@ -7,18 +7,28 @@ try {
   );
   process.exit(1);
 }
-const { adoptOldData, appHome, checkUpdate, startServer, trustSystemCertificates } = await import('./server.js');
+const { adoptOldData, appHome, checkUpdate, lanAddresses, LOOPBACK, startServer, trustSystemCertificates } =
+  await import('./server.js');
 trustSystemCertificates();
 let server;
 try {
   for (const old of adoptOldData()) console.log(`Copied ${old} to ${appHome()}. You can delete the old copy.`);
   server = await startServer();
 } catch (e) {
-  console.error(e.code === 'EADDRINUSE' ? `Port ${e.port} is in use: is the game already running?` : e.message);
+  const words = {
+    EADDRINUSE: `Port ${e.port} is in use: is the game already running?`,
+    EADDRNOTAVAIL: `${e.address}, the bind address in config.json, isn't this computer's now: connect that network, or remove bind.`,
+  };
+  console.error(words[e.code] ?? e.message);
   console.error(`Settings and data: ${appHome()}`);
   process.exit(1);
 }
-console.log(`Dice Roguelife (standalone): http://localhost:${server.address().port}`);
+const { address, port } = server.address();
+const everywhere = address === '0.0.0.0';
+console.log(
+  `Dice Roguelife (standalone): http://${everywhere || LOOPBACK.test(address) ? 'localhost' : address}:${port}`,
+);
+if (everywhere) for (const a of lanAddresses()) console.log(`  from another device: http://${a}:${port}`);
 console.log(`Saves, pictures and the AI connection: ${server.dataPath}`);
 // Ctrl+C: the store closes with the server, so nothing is left half-written
 for (const signal of ['SIGINT', 'SIGTERM'])

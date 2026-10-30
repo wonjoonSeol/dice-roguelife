@@ -35,9 +35,9 @@ export async function openServer({ dataDir = tempDir(), pageFile = STUB, ...opti
   const res = await fetch(url);
   const token = /window.DR_SERVER_TOKEN="([a-f0-9]+)"/.exec(await res.text())[1];
   const cookie = res.headers.get('set-cookie').split(';')[0];
-  // a POST with the page's token; an object body is sent as JSON
-  const call = (path, body, headers = {}) =>
-    fetch(url + path, {
+  // a POST with the page's token (to base: another address of this server); an object body is sent as JSON
+  const call = (path, body, headers = {}, base = url) =>
+    fetch(base + path, {
       method: 'POST',
       headers: { 'X-DR-Token': token, ...headers },
       body: body && typeof body === 'object' && !(body instanceof Uint8Array) ? JSON.stringify(body) : body,
@@ -49,5 +49,5 @@ export async function openServer({ dataDir = tempDir(), pageFile = STUB, ...opti
     await new Promise(resolve => server.close(resolve));
     if (!keep) rmSync(dataDir, { recursive: true, force: true });
   };
-  return { url, cookie, call, readJson, stop, dataDir };
+  return { url, cookie, call, readJson, stop, dataDir, server };
 }

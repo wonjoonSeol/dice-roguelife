@@ -1,10 +1,11 @@
-// The standalone app: a server on this computer only (127.0.0.1) that serves the game page, keeps saves, images and
+// The standalone app: a local server (127.0.0.1, or `bind`) that serves the game page, keeps saves, images and
 // the AI connection on disk (store.js) and relays narration requests to the chosen provider (relay.js). See README.md.
 import { createServer } from 'node:http';
 import tls from 'node:tls';
 import { randomBytes } from 'node:crypto';
 import { cpSync, createReadStream, existsSync, mkdirSync, readFileSync, statfsSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { isIP } from 'node:net';
+import { homedir, networkInterfaces } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -20,6 +21,22 @@ const MAX_JSON = 32_000_000; // a save page or an image analysis request
 const MAX_ASSET = 25_000_000;
 const IDLE = 300_000; // a provider silent this long is given up on (a slow local model still streams)
 const HOST_NAME = /^[a-z0-9-]+(\.[a-z0-9-]+)*$/i;
+const IPV4_HOST = /^(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?$/; // a Host typed as an IP address
+export const LOOPBACK = /^127\./;
+
+// this computer's addresses another device can open (bind 0.0.0.0)
+export const lanAddresses = () =>
+  Object.values(networkInterfaces())
+    .flat()
+    .filter(a => a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254.'))
+    .map(a => a.address);
+// a route only this computer may use: judged by where the connection comes from (loopback, or this computer's own
+// address when it opens the game by IP), as any program can write a Host header
+export const localOnly = route => req => {
+  const { remoteAddress: from = '', localAddress } = req.socket;
+  if (!LOOPBACK.test(from) && from !== localAddress) throw apiError('local_only', 'Only on this computer.');
+  return route(req);
+};
 
 // Where config.json, saves, pictures and the AI connection live: the user's app-data folder, never the app's own, so an
 // update is a new copy with nothing to carry over and the app folder holds no keys. DICE_ROGUELIFE_HOME moves it.
@@ -99,8 +116,13 @@ export function checkConfig(c) {
     (c.port === undefined || (Number.isInteger(c.port) && c.port >= 1 && c.port <= 65535)) &&
     (c.dataDir === undefined || typeof c.dataDir === 'string') &&
     (c.hosts === undefined ||
-      (Array.isArray(c.hosts) && c.hosts.length <= 10 && c.hosts.every(h => HOST_NAME.test(h))));
-  if (!ok) throw apiError('bad_settings', 'config.json: port is 1 to 65535, dataDir a folder, hosts a list of names.');
+      (Array.isArray(c.hosts) && c.hosts.length <= 10 && c.hosts.every(h => HOST_NAME.test(h)))) &&
+    (c.bind === undefined || isIP(c.bind) === 4);
+  if (!ok)
+    throw apiError(
+      'bad_settings',
+      'config.json: port is 1 to 65535, dataDir a folder, hosts a list of names, bind an IPv4 address.',
+    );
   if (c.hosts) c.hosts = c.hosts.map(h => h.toLowerCase()); // browsers send host names in lower case
   if (c.dataDir !== undefined) c.dataDir = c.dataDir.trim();
   return c;
@@ -146,9 +168,16 @@ export async function startServer({
   const html = pageFile ? readFileSync(pageFile, 'utf8') : (await buildPage()).html;
   const store = openStore(dataDir);
   const page = html.replace('<script>', `<script>window.DR_SERVER_TOKEN=${JSON.stringify(token)};`);
+  const bind = config.bind || '127.0.0.1';
   const port = () => server.address().port;
-  // this computer's own names, with the port, and without it on 80 (browsers leave a default port out)
-  const local = () => ['127.0.0.1', 'localhost'].flatMap(h => (port() === 80 ? [h, `${h}:80`] : [`${h}:${port()}`]));
+  // a host with this server's port, and without it on 80 (browsers leave a default port out)
+  const withPort = h => (port() === 80 ? [h, `${h}:80`] : [`${h}:${port()}`]);
+  const local = () => ['127.0.0.1', 'localhost'].flatMap(withPort); // this computer's own names
+  // bind off this computer: a Host typed as an IP on this port, never a name a site could rebind
+  const byAddress = host => {
+    const m = !LOOPBACK.test(bind) && IPV4_HOST.exec(host);
+    return !!m && isIP(m[1]) === 4 && withPort(m[1]).includes(host);
+  };
   const cookieName = () => `dr_token_${port()}`; // cookies aren't kept apart by port
   // reads the profiles, lets edit change them, saves them and returns what the page may see
   const editConnection = edit => {
@@ -183,16 +212,16 @@ export async function startServer({
         c.active = name;
       });
     },
-    '/api/connection/delete': async req => {
+    '/api/connection/delete': localOnly(async req => {
       const { name } = await readJson(req, 1000);
       return editConnection(c => {
         delete c.profiles[name];
         if (c.active === name) c.active = Object.keys(c.profiles)[0] || '';
       });
-    },
+    }),
     // Saves a profile (previous: the one it was, for a rename; none for a new one) and makes it the one in use.
     // A blank key keeps the profile's own, unless the endpoint or protocol changed; a null key removes it.
-    '/api/connection/set': async req => {
+    '/api/connection/set': localOnly(async req => {
       const { name: raw, previous, config, apiKey } = await readJson(req, 100_000);
       const name = String(raw || '').trim();
       if (!name || name.length > 40 || name === '__proto__') throw apiError('bad_name', 'Profile name.');
@@ -205,7 +234,7 @@ export async function startServer({
         c.profiles[name] = { config, apiKey: key };
         c.active = name;
       });
-    },
+    }),
     // ⚙ Settings → Check for updates
     '/api/update': async () => ({ ...(await checkUpdate(fetcher)), dataPath: dataDir }),
     // ⚙ Settings → Server settings: what config.json says, and what this run uses (port and folder change at the next
@@ -219,20 +248,24 @@ export async function startServer({
         running: { port: port(), dataPath: dataDir },
       };
     },
-    '/api/server/set': async req => {
-      const next = checkConfig(await readJson(req, 10_000));
+    '/api/server/set': localOnly(async req => {
+      // only the fields the panel has: bind and the rest stay as config.json has them
+      const body = Object(await readJson(req, 10_000));
+      const fields = ['port', 'dataDir', 'hosts'].filter(k => k in body);
+      const next = checkConfig(Object.fromEntries(fields.map(k => [k, body[k]])));
       const saved = { ...readJsonFile(configFile, {}), ...next };
       if (!saved.dataDir) delete saved.dataDir;
       mkdirSync(dirname(configFile), { recursive: true });
       writeAtomic(configFile, JSON.stringify(saved, null, 2) + '\n');
       names = next.hosts || [];
       return { restart: (saved.port ?? 3000) !== port() || folder(saved.dataDir) !== dataDir };
-    },
+    }),
   };
 
   async function handle(req, res) {
     const host = String(req.headers.host || '').toLowerCase();
-    if (!local().includes(host) && !names.includes(host)) return res.writeHead(403).end();
+    const ip = byAddress(host);
+    if (!local().includes(host) && !names.includes(host) && !ip) return res.writeHead(403).end();
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     const url = new URL(req.url, 'http://localhost');
@@ -260,7 +293,10 @@ export async function startServer({
     const route = req.method === 'POST' && (url.pathname === '/api/sample' ? 'sample' : routes[url.pathname]);
     if (!route) return res.writeHead(404).end();
     const origin = req.headers.origin;
-    const fromHere = local().some(h => origin === 'http://' + h) || names.some(n => origin === 'https://' + n);
+    const fromHere =
+      local().some(h => origin === 'http://' + h) ||
+      names.some(n => origin === 'https://' + n) ||
+      (ip && origin === 'http://' + host);
     if (origin && !fromHere) return res.writeHead(403).end();
     // from this app, with another start's token: a page opened before the server restarted
     if (req.headers['x-dr-token'] !== token) return sendJson(res, 403, { code: 'stale_page' });
@@ -284,7 +320,7 @@ export async function startServer({
   server.on('close', () => store.close());
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(config.port ?? 3000, '127.0.0.1', resolve);
+    server.listen(config.port ?? 3000, bind, resolve);
   });
   server.dataPath = dataDir;
   return server;

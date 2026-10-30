@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { providerRequest, normalizeEvent, readSSE, relaySample, httpError, claudeSample } from '../relay.js';
+import { lanAddresses, localOnly } from '../server.js';
 import { hostStatus, openServer } from './support.js';
 
 const input = (protocol = 'compatible', extra = {}) => ({
@@ -169,6 +170,51 @@ test('cancellation reaches upstream fetch', async () => {
   c.abort();
   await assert.rejects(promise, { name: 'AbortError' });
 });
+test('bind 0.0.0.0: an IP Host on this port gets in, never a name or a dressed-up address', async () => {
+  const s = await openServer({ bind: '0.0.0.0' });
+  try {
+    const port = Number(new URL(s.url).port);
+    assert.equal(await hostStatus(s.url, `192.168.0.114:${port}`), 200);
+    for (const host of [
+      `192.168.0.114:${port + 1}`,
+      `my-pc.lan:${port}`,
+      `evil.example@192.168.0.114:${port}`,
+      `0x7f000001:${port}`,
+      `192.168.0.114.:${port}`,
+    ])
+      assert.equal(await hostStatus(s.url, host), 403, host);
+  } finally {
+    await s.stop();
+  }
+});
+// the network, for real: this machine opening itself by its own address (a second device can't be played here)
+const [lanIp] = lanAddresses();
+test('bind 0.0.0.0: the game by IP, from a page on that address', { skip: !lanIp }, async () => {
+  const s = await openServer({ bind: '0.0.0.0' });
+  const base = s.url.replace('127.0.0.1', lanIp);
+  const post = async (path, body, origin = base) => (await s.call(path, body, { Origin: origin }, base)).status;
+  try {
+    assert.equal((await fetch(base)).status, 200);
+    assert.deepEqual(await (await s.call('/api/sample', '{}', { Origin: base }, base)).json(), {
+      code: 'not_configured',
+    });
+    assert.equal(await post('/api/sample', '{}', `http://10.255.255.1:${new URL(base).port}`), 403);
+    assert.equal(await post('/api/server/set', {}), 200, 'this computer, by its own address');
+  } finally {
+    await s.stop();
+  }
+});
+test('settings and AI connections change only from this computer', () => {
+  const route = localOnly(() => 'done');
+  const from =
+    (remoteAddress, localAddress = '192.168.0.114') =>
+    () =>
+      route({ socket: { remoteAddress, localAddress } });
+  assert.equal(from('127.0.0.1', '127.0.0.1')(), 'done');
+  assert.equal(from('192.168.0.114')(), 'done', 'this computer by its own address');
+  assert.throws(from('192.168.0.50'), { code: 'local_only' }, 'another device');
+  assert.throws(from('10.8.0.2', '10.8.0.1'), { code: 'local_only' }, 'a phone over WireGuard');
+});
 test('local relay rejects missing token, foreign origins and rebinding hosts', async () => {
   const s = await openServer({ hosts: ['my-pc.tailnet.ts.net'] });
   try {
@@ -177,6 +223,8 @@ test('local relay rejects missing token, foreign origins and rebinding hosts', a
     assert.equal(foreign.status, 403);
     assert.equal(await foreign.text(), '', 'a foreign origin learns nothing');
     assert.equal(await hostStatus(s.url, 'attacker.example'), 403);
+    assert.equal(s.server.address().address, '127.0.0.1', 'by default, this computer only');
+    assert.equal(await hostStatus(s.url, `192.168.0.114:${new URL(s.url).port}`), 403, 'an IP Host needs bind');
     // a name in hosts (a Tailscale address) is let in, from its own https origin
     assert.equal(await hostStatus(s.url, 'my-pc.tailnet.ts.net'), 200);
     assert.equal((await s.call('/api/sample', '{}', { Origin: 'https://my-pc.tailnet.ts.net' })).status, 400);
