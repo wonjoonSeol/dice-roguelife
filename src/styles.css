@@ -3899,7 +3899,16 @@ label.row.opt > input {
   overflow: auto;
 }
 .fp-more {
-  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 6px;
+}
+.fp-flts {
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.fp-flt {
+  font-size: 12.5px;
 }
 .fp-why-head {
   font-size: 11.5px;

@@ -49,8 +49,19 @@ export function showLiveReply(turn, f) {
     ad.lastChild.textContent = f.admin;
   }
   const el = $('#livePrev');
-  if (el && f.narration !== null) el.innerHTML = narrHtml(f.narration);
+  // a redraw would drop a drag or a selection in the box, so the text waits for it (the next piece, or the finished
+  // reply, shows it)
+  if (el && f.narration !== null && !selectingIn(el)) el.innerHTML = narrHtml(f.narration);
 }
+let pressing = false;
+document.addEventListener('pointerdown', e => (pressing = !!(e.target.closest && e.target.closest('#livePrev'))), true);
+// a touch scroll ends in pointercancel, and a switched-away window may never see the pointerup
+for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, () => (pressing = false), true);
+window.addEventListener('blur', () => (pressing = false));
+const selectingIn = el => {
+  const s = document.getSelection();
+  return pressing || (!!s && !s.isCollapsed && el.contains(s.anchorNode));
+};
 export function renderLog(scroll = 'bottom') {
   const log = $('#log');
   const keep = log.scrollTop;

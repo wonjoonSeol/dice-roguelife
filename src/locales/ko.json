@@ -1454,5 +1454,11 @@
   "Pick a world first": "세계를 먼저 고르세요",
   "Deleted {n} {n|set|sets}": "세트 {n}개를 지웠어요",
   "{n} {n|set|sets} couldn't be saved; try again": "세트 {n}개를 저장하지 못했어요. 다시 해 보세요",
-  "Show more ({n} left)": "더 보기 ({n}개 남음)"
+  "Show more ({n} left)": "더 보기 ({n}개 남음)",
+  "This person's group": "이 인물의 소속",
+  "Same gender": "같은 성별",
+  "Any gender": "성별 전체",
+  "Faces and silhouettes": "얼굴과 그림자",
+  "Faces only": "얼굴만",
+  "Silhouettes only": "그림자만"
 }

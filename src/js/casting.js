@@ -149,11 +149,8 @@ export function idConflict(k, ids) {
   const s = setIds(k);
   return s.length > 0 && apart(ids, s);
 }
-// the faces that keep the person's group, unless no real face does
-const ownGroup = (pool, ids) => {
-  const f = pool.filter(k => !idConflict(k, ids));
-  return f.some(k => !isGeneric(k)) ? f : pool;
-};
+// the faces that keep the person's group (its silhouettes among them); never another group's, even when none is left
+const ownGroup = (pool, ids) => pool.filter(k => !idConflict(k, ids));
 // scored from the person's side: how many of their identities this set answers (+12 each, +1 when the kind agrees). A
 // set of another group sinks; one naming only other identities is a small minus; nothing on either side is 0
 function idScore(k, ids) {
@@ -463,12 +460,15 @@ export function castCandidates(who, K = 12) {
 function bestGeneric(who) {
   const w = worldId(),
     g = genderKey(who.gender);
-  const gen = Object.keys(charSets()).filter(k => isGeneric(k) && fitsWorld(metaOf(k), w) && fitsGender(k, g));
+  const { look, role, ids } = describe(who, false);
+  const gen = ownGroup(
+    Object.keys(charSets()).filter(k => isGeneric(k) && fitsWorld(metaOf(k), w) && fitsGender(k, g)),
+    ids,
+  );
   if (!gen.length) return null;
-  const { look, role } = describe(who, false);
   const sc = k => {
     const h = hayWords(k);
-    return overlap(look, h) * 4 + overlap(role, h) * 2 + (genderOf(k) === g ? 1 : 0);
+    return overlap(look, h) * 4 + overlap(role, h) * 2 + (genderOf(k) === g ? 1 : 0) + idScore(k, ids);
   };
   const top = Math.max(...gen.map(sc));
   return pick(gen.filter(k => sc(k) === top));
@@ -655,7 +655,8 @@ function castExtra(who) {
     const faces = share.filter(k => !isGeneric(k) && !idConflict(k, d.ids) && (lh(k) >= 2 || idScore(k, d.ids) > 0)),
       gens = share.filter(k => isGeneric(k) && !idConflict(k, d.ids));
     // a passer-by stays faceless unless a face clearly matches how they were described, or answers to the same faction
-    const pool = faces.length ? faces : gens.length ? gens : share;
+    const pool = faces.length ? faces : gens;
+    if (!pool.length) return null; // only another group's faces: none rather than theirs
     const sc = k => lh(k) * 4 + overlap(d.role, hayWords(k)) * 2 + idScore(k, d.ids);
     const top = Math.max(...pool.map(sc));
     return assign(who.name, pick(pool.filter(x => sc(x) === top)), whyOf(d));
@@ -681,14 +682,13 @@ function castLead(who) {
   );
   if (g) pool = pool.filter(k => fitsGender(k, g)).sort((a, b) => (genderOf(b) === g) - (genderOf(a) === g));
   const d = describe(who, true); // what they look like counts most: 정장, 갑옷, 교복
-  // the person's own group first, from the free faces, then from those a minor may share; another group's only if neither has one
-  const own = list => list.filter(k => !idConflict(k, d.ids));
-  const shared = !pool.length || !own(pool).length ? (want === 'minor' ? sharedForMinor(g, w) : []) : [];
-  pool = own(pool).length ? own(pool) : own(shared).length ? own(shared) : pool.length ? pool : shared;
+  // the person's own group first, from the free faces, then from those a minor may share; never another group's
+  const mine = ownGroup(pool, d.ids);
+  pool = mine.length ? mine : want === 'minor' ? sharedForMinor(g, w, d.ids) : [];
   if (!pool.length) {
-    // nothing else left: anyone may wear a silhouette (it is never retired)
+    // nothing of their own left: a silhouette of their group (it is never retired)
     const k = bestGeneric(who);
-    return k ? assign(who.name, k, { look: [], role: [] }) : null;
+    return k ? assign(who.name, k, whyOf(d)) : null;
   }
   const lookHits = k => overlap(d.look, hayWords(k));
   const score = k => {
@@ -716,7 +716,8 @@ function castLead(who) {
   return assign(who.name, pick(pool.filter(x => score(x) === top)));
 }
 // the library ran out of free faces: anyone but a lead may share one, the least worn first
-function sharedForMinor(g, w) {
+// ids: the person's identities, so another group's faces never take the least-worn places
+function sharedForMinor(g, w, ids = []) {
   const sets = charSets();
   const retired = retiredSets();
   const W = app.state.castW || {};
@@ -728,7 +729,8 @@ function sharedForMinor(g, w) {
         !retired.has(k) &&
         fitsWorld(metaOf(k), w) &&
         fitsGender(k, g) &&
-        holders(k).every(n => W[n] !== 'major'),
+        holders(k).every(n => W[n] !== 'major') &&
+        !idConflict(k, ids),
     )
     .sort((a, b) => holders(a).length - holders(b).length)
     .slice(0, Math.max(1, Math.ceil(sets ? Object.keys(sets).length / 4 : 1)));

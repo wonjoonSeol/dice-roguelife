@@ -70,3 +70,38 @@ test('a silhouette is shared, a face is swapped', async ({ game }) => {
   if (!(swapped['칼자국'] === 'male2' && swapped['도적'] === 'shadow_male')) errs.push('a held face was not swapped');
   expect(errs).toEqual([]);
 });
+
+// the picker's filters: this person's group keeps another sect's face and silhouette out, the kind keeps silhouettes
+test('the face picker filters by group and kind', async ({ game }) => {
+  const { pg, errs } = await game(claudeMock(J), { size: [420, 900] });
+  await pg.waitForTimeout(500);
+  await startLife(pg);
+  await pg.fill('#input', '간다');
+  await pg.press('#input', 'Enter');
+  await pg.waitForFunction('DR.isIdle()&&DR.app.turns.some(t=>t.kind==="ai"&&t.out.narration.includes("장면"))');
+  await pg.evaluate(`(()=>{const px='data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+    const S={plain_m:['young man'],hwasan_m:['faction:정파','faction:화산파'],cheong_m:['faction:정파','faction:청성파'],shadow_male:[],shadow_sapa:['faction:사파']};
+    DR.app.images=Object.entries(S).map(([k,tags],i)=>({id:'f'+i,kind:'char',set:k,name:k+'_neutral',emotion:'neutral',url:px,tags}));
+    for(const k of Object.keys(S))DR.app.setMeta[k]=k.startsWith('shadow')?{gender:'male',tier:'generic'}:{gender:'male'};
+    DR.imagesChanged();DR.setsChanged();
+    DR.app.state.cast={'칼자국':'plain_m'};DR.app.state.castWhy={'칼자국':{look:['faction:화산파'],role:[]}};
+    const t=[...DR.app.turns].reverse().find(t=>t.kind==='ai');t.img={chars:[{id:'f0',npc:'칼자국'}]};DR.renderLog('keep')})();0`);
+  await pg.evaluate("[...document.querySelectorAll('[data-face]')].pop().click();0");
+  await pg.waitForSelector('#castGrid [data-pick]');
+  const grid = () =>
+    pg.$$eval('#castGrid [data-pick]', bs =>
+      bs
+        .map(b => b.dataset.pick)
+        .sort()
+        .join(),
+    );
+  await pg.selectOption('[data-fpf="id"]', 'own');
+  const own = await grid();
+  await pg.selectOption('[data-fpf="id"]', '');
+  await pg.selectOption('[data-fpf="kind"]', 'generic');
+  const gens = await grid();
+  console.log('own group:', own, '| silhouettes:', gens);
+  if (own !== 'hwasan_m,shadow_male') errs.push("this person's group lets another group in: " + own);
+  if (gens !== 'shadow_male,shadow_sapa') errs.push('the kind filter is off: ' + gens);
+  expect(errs).toEqual([]);
+});
