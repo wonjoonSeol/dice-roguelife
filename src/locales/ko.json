@@ -1411,5 +1411,6 @@
   "Reroll ({n} left)": "다시 굴리기 ({n}번 남음)",
   "Born and raised in this world": "이 세계에서 나고 자랐다",
   "Nothing to merge it into: a situation never goes into one under it": "합칠 상황이 없어요: 상황은 제 아래 상황으로 합치지 않아요",
-  "{date} (+{n} {n|day|days})": "{date} (+{n}일)"
+  "{date} (+{n} {n|day|days})": "{date} (+{n}일)",
+  "Show more ({n} left)": "더 보기 ({n}개 남음)"
 }

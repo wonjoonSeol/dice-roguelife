@@ -1342,5 +1342,6 @@
   "Reroll ({n} left)": "振り直す（残り{n}回）",
   "Born and raised in this world": "この世界で生まれ育った",
   "Nothing to merge it into: a situation never goes into one under it": "統合できる状況がありません：状況は自分の下の状況には統合しません",
-  "{date} (+{n} {n|day|days})": "{date}（+{n}日）"
+  "{date} (+{n} {n|day|days})": "{date}（+{n}日）",
+  "Show more ({n} left)": "もっと見る（残り{n}件）"
 }

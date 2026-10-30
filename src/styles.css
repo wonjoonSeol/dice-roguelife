@@ -3736,6 +3736,9 @@ label.row.opt > input {
   max-height: 46vh;
   overflow: auto;
 }
+.fp-more {
+  grid-column: 1 / -1;
+}
 .fp-why-head {
   font-size: 11.5px;
   margin-bottom: 4px;
