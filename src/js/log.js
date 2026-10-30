@@ -1,5 +1,5 @@
 /* ============ log rendering ============ */
-import { $, esc, fmt, MARK_RE, stripMarks, toast } from './util.js';
+import { $, esc, fmt, MARK_LINE_RE, MARK_RE, stripMarks, toast } from './util.js';
 import { T, tIn } from './i18n.js';
 import { choicesOff, storyLang } from './settings.js';
 import { cmdName, EMO_FB, moneyText, normEmo, STAT_LABEL } from './data.js';
@@ -144,14 +144,14 @@ function narrHtml(text) {
 function narrWithImages(o, ti, people, sc) {
   // put portraits and scene changes where the narrator marked them
   const used = new Set();
-  let h = esc(String(o.narration || '').replace(/\n*(\[\[[^\[\]\n]{1,32}\]\])\n*/g, '$1'));
+  let h = esc(String(o.narration || '').replace(MARK_LINE_RE, '$1'));
   const IS = inlineSys(h);
   h = IS.h;
   const P = {};
   for (const p of people) P[p.npc] = p;
   const places = ti.places || [];
   h = h.replace(MARK_RE, (m, at, name) => {
-    name = name.trim();
+    name = unesc(name.trim()); // the text was escaped above; names are looked up (and escaped again) as written
     if (at) {
       const pl = places.find(x => x.name === name);
       const x = pl && turnImg(ti, pl.id);
