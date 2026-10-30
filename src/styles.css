@@ -148,6 +148,16 @@ img {
   max-width: 760px;
   margin: 0 auto;
 }
+/* the images tab is a library to manage, so it takes a wide screen's width; the header stays where the other tabs
+   put it */
+.app:has(#v-images.on) {
+  max-width: 1280px;
+}
+.app:has(#v-images.on) header.top {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
 header.top {
   display: flex;
   align-items: center;
@@ -3051,6 +3061,158 @@ html.discreet .sk {
   align-items: center;
   cursor: pointer;
 }
+/* the character sets as a grid of tiles; the open set's card spans the row under its tile (dense packing lets the
+   tiles after it fill that row first). The bar for the chosen sets sticks to the top while the grid scrolls. */
+.set-flts {
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.set-flt {
+  font-size: 12.5px;
+  max-width: 100%;
+}
+.set-flt.on {
+  border-color: var(--sys);
+  color: var(--sys);
+}
+.set-flt-tags {
+  margin-top: 6px;
+  align-items: center;
+}
+.set-sum {
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+  font-size: 12.5px;
+}
+.set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  grid-auto-flow: row dense;
+  gap: 8px;
+}
+.set-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.set-tile.open {
+  border-color: var(--gold);
+}
+.set-tile.picked {
+  border-color: var(--sys);
+  box-shadow: inset 0 0 0 1px var(--sys);
+}
+.tile-face {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: var(--panel2);
+  cursor: pointer;
+}
+.tile-face img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  object-position: top;
+}
+.tile-n,
+.tile-marks {
+  position: absolute;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 11px;
+}
+.tile-n {
+  right: 6px;
+}
+.tile-marks {
+  left: 6px;
+}
+.tile-pick {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 4px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  line-height: 0;
+  cursor: pointer;
+}
+.tile-pick input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+}
+.tile-text {
+  min-width: 0;
+  padding: 6px 8px 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.tile-role {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tile-ids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+.tile-ids span {
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  color: var(--gold);
+}
+.set-open {
+  grid-column: 1 / -1;
+}
+.set-open .set-card {
+  margin: 0;
+  border-color: var(--gold);
+}
+.set-bulk-box {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.set-bulk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--sys);
+  border-radius: 10px;
+}
+.set-bulk-row {
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+@media (max-width: 560px) {
+  .set-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  }
+}
 .item .t {
   font-weight: 700;
 }
@@ -3892,9 +4054,6 @@ label.row.opt > input {
 }
 .img-search-all {
   margin-top: 8px;
-}
-.img-gap {
-  height: 8px;
 }
 .cover-row {
   gap: 4px;

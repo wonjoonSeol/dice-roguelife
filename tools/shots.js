@@ -485,12 +485,14 @@ const GROUPS = {
     await begin(pg);
     await seedImages(pg);
     await pg.click('[data-tab="images"]');
-    await pg.waitForSelector('.set-card');
+    await pg.waitForSelector('.set-tile');
     await wait(pg, 800);
     await pg.evaluate(() => (document.querySelector('.img-guide').open = true));
     await snapEl(pg, '.img-guide', 'img-help');
     await pg.evaluate(() => (document.querySelector('.img-guide').open = false));
     await snapEl(pg, '.img-toolbar', 'img-toolbar');
+    await pg.click('[data-tile="female1"] .tile-text');
+    await wait(pg, 400);
     await snapEl(pg, '.set-card[data-set="female1"]', 'img-setcard');
     await ctx.close();
 
@@ -498,8 +500,10 @@ const GROUPS = {
     await begin(pg);
     await seedImages(pg);
     await pg.click('[data-tab="images"]');
-    await pg.waitForSelector('.set-card');
+    await pg.waitForSelector('.set-tile');
     await wait(pg, 800);
+    await pg.click('[data-tile="shadow_male"] .tile-text');
+    await wait(pg, 400);
     await snapEl(pg, '.set-card[data-set="shadow_male"]', 'img-shadow-card');
     await snapEl(pg, '.img[data-id="female1_neutral"]', 'img-framecard');
     await ctx.close();
@@ -508,11 +512,13 @@ const GROUPS = {
     await begin(pg);
     await seedImages(pg, true);
     await pg.click('[data-tab="images"]');
-    await pg.waitForSelector('.set-card');
+    await pg.waitForSelector('.set-tile');
     await wait(pg, 1200);
     await pg.setViewportSize({ width: 900, height: 1426 });
     await pg.evaluate(() => document.querySelector('#v-images').scrollTo(0, 0));
     await snap(pg, 'images-pack');
+    await pg.click('[data-tile="female1"] .tile-text');
+    await wait(pg, 400);
     await pg.evaluate(text => {
       const card = document.querySelector('.set-card[data-set="female1"]');
       card.style.position = 'relative';

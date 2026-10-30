@@ -295,6 +295,7 @@ test('editing during an upload does not stop it', async ({ game }) => {
   await pg.waitForFunction('DR.app.images.length>=12', null, { timeout: 30000 });
   const statBefore = await pg.evaluate(() => document.querySelector('#uplStat').textContent);
   // pick a cover (re-renders the tab) and edit a tag in the middle of the upload
+  await pg.click('[data-tile="zed"] .tile-text');
   await pg.click('[data-cover]');
   await pg.waitForTimeout(300);
   const statAfterCover = await pg.evaluate(() => document.querySelector('#uplStat').textContent);

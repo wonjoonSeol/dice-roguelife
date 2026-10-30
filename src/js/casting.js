@@ -72,7 +72,7 @@ const lookToks = (x, common) =>
 // identity tags: key:value names what a person belongs to (faction:사천당가, planet:화성, company:넥슨). The value is kept as written and matched by containment; plain tags describe looks and are matched word by word. The code never lists the keys
 const ID_RE = /^([^\s:：]{1,20})\s*[:：]\s*(\S.*)$/;
 export const isIdTag = t => ID_RE.test(String(t || '').trim());
-const idOf = t => {
+export const idOf = t => {
   const m = ID_RE.exec(String(t || '').trim());
   return m ? { key: m[1].toLowerCase(), val: m[2].trim() } : null;
 };
