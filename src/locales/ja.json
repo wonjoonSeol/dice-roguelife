@@ -1385,5 +1385,11 @@
   "Pick a world first": "先に世界を選んでください",
   "Deleted {n} {n|set|sets}": "{n}セットを削除しました",
   "{n} {n|set|sets} couldn't be saved; try again": "{n}セットを保存できませんでした。もう一度試してください",
-  "Show more ({n} left)": "もっと見る（残り{n}件）"
+  "Show more ({n} left)": "もっと見る（残り{n}件）",
+  "This person's group": "この人物の所属",
+  "Same gender": "同じ性別",
+  "Any gender": "性別：すべて",
+  "Faces and silhouettes": "顔とシルエット",
+  "Faces only": "顔のみ",
+  "Silhouettes only": "シルエットのみ"
 }

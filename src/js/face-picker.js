@@ -25,8 +25,12 @@ import {
   castFor,
   castScorer,
   holderOf,
+  idConflict,
+  idOf,
+  isGeneric,
   isIdTag,
   presentOf,
+  setIds,
   speakerOf,
   toEnglishTags,
   wordSet,
@@ -42,6 +46,7 @@ import { renderLog } from './log.js';
 //   why, clues   the clues kept for them (app.state.castWhy) and the same as one list
 //   sets, q      the usable character sets and the search text
 //   shown        how many of the matching sets the grid shows ("Show more" adds a page)
+//   ids, flt     the person's identities (from the clues) and the grid's filters: affiliation, gender, kind
 //   score        castScorer for these clues
 function openPicker(npc, ti) {
   const cur = app.state.cast[npc];
@@ -57,6 +62,8 @@ function openPicker(npc, ti) {
     sets: charSets(),
     q: '',
     shown: FACE_PAGE,
+    ids: [...why.look, ...why.role].filter(isIdTag).map(idOf).filter(Boolean),
+    flt: { id: '', gender: 'same', kind: '' },
     score: null,
   };
   p.score = scorer(p);
@@ -102,7 +109,9 @@ function pickerHtml(p) {
     <div class="row fp-tools"><button class="btn" id="castAuto">${T('Pick again automatically')}</button>${p.cur ? `<button class="btn ghost" id="castOff">${T('Retire this set')}</button>` : ''}<button class="btn ghost" id="castNone">${T('No face')}</button></div>
     <p class="muted fp-hint">${T('Faces that match the clues come first (✓ count). A face with a name tag is in use by someone else, so picking it swaps the two; ✝ marks the face of someone who died and cannot be used.')}</p>
     <input id="castQ" placeholder="${T('Search by name, role or tag')}" class="fp-search">
+    ${filtersHtml(p)}
     <div id="castGrid" class="fp-grid"></div>
+    <div id="castMoreBox"></div>
     <div class="row actions"><button class="btn" data-close>${T('Close')}</button></div>`;
 }
 // the clues, and the current face's tags (green where a clue meets one): a tag can be removed, or added by typing
@@ -155,14 +164,49 @@ function drawWhy(p) {
 // adds one). Sets labeled other (기타) are offered to anyone here: the player choosing by hand may want a beast's face
 // that casting never gives
 const FACE_PAGE = 24;
+// a set's identities as casting reads them (every frame, the key in lower case), as "key:value"
+const idTagsOf = k => setIds(k).map(i => i.key + ':' + i.val);
+// a faction shows by its value, any other kind with its key, so faction:화산 and house:화산 stay apart
+const idLabel = t => (t.startsWith('faction:') ? t.slice(8) : t);
+// the grid's filters: affiliation (this person's group, none, or one the library uses), gender, faces or silhouettes
+function filtersHtml(p) {
+  const n = new Map();
+  for (const k of Object.keys(p.sets))
+    if (fitsWorld(app.setMeta[k] || {}, p.w)) for (const t of new Set(idTagsOf(k))) n.set(t, (n.get(t) || 0) + 1);
+  const tags = [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const sel = (f, opts) =>
+    `<select data-fpf="${f}" class="set-select fp-flt" aria-label="${esc(opts[0][1])}">${opts
+      .filter(Boolean)
+      .map(([v, l]) => `<option value="${esc(v)}" ${p.flt[f] === v ? 'selected' : ''}>${esc(l)}</option>`)
+      .join('')}</select>`;
+  return `<div class="row fp-flts">${sel('id', [
+    ['', T('Affiliation: all')],
+    p.ids.length && ['own', T("This person's group")],
+    ['-', T('No affiliation')],
+    ...tags.map(([t, c]) => [t, `${idLabel(t)} (${c})`]),
+  ])}${sel('gender', [
+    ['same', T('Same gender')],
+    ['all', T('Any gender')],
+  ])}${sel('kind', [
+    ['', T('Faces and silhouettes')],
+    ['face', T('Faces only')],
+    ['generic', T('Silhouettes only')],
+  ])}</div>`;
+}
 function drawGrid(p) {
-  const { npc, cur, g, w, sets, q } = p;
+  const { npc, cur, g, w, sets, q, flt, ids } = p;
   const all = Object.keys(sets)
     .filter(
       k =>
         k !== cur &&
         fitsWorld(app.setMeta[k] || {}, w) &&
-        (!g || !genderOf(k) || genderOf(k) === g || (app.setMeta[k] || {}).gender === 'other'),
+        (flt.gender === 'all' || !g || !genderOf(k) || genderOf(k) === g || (app.setMeta[k] || {}).gender === 'other'),
+    )
+    .filter(k => !flt.kind || (flt.kind === 'generic') === isGeneric(k))
+    .filter(
+      k =>
+        !flt.id ||
+        (flt.id === 'own' ? !idConflict(k, ids) : flt.id === '-' ? !idTagsOf(k).length : idTagsOf(k).includes(flt.id)),
     )
     .filter(k => {
       if (!q) return true;
@@ -187,11 +231,11 @@ function drawGrid(p) {
       return `<button type="button" data-pick="${esc(k)}" ${rt ? `disabled title="${T('The face of someone who died in this life; it cannot be used again')}"` : ''} class="fp-cell">${f ? `<img src="${imgUrl(f.id)}" loading="lazy" alt="" class="fp-thumb${o ? ' taken' : ''}">` : '<span class="fp-thumb"></span>'}${o ? `<span class="fp-badge">${rt ? '✝ ' : ''}${esc(o)}</span>` : ''}<span class="fp-label">${esc(m.charName || k)}${hits ? ` <b class="fp-hits">✓${hits}</b>` : ''}</span></button>`;
     })
     .join('');
-  $('#castGrid').innerHTML =
-    (cells || `<p class="muted empty">${T('No matching sets.')}</p>`) +
-    (left
-      ? `<button type="button" class="btn ghost fp-more" id="castMore">${T('Show more ({n} left)', { n: left })}</button>`
-      : '');
+  $('#castGrid').innerHTML = cells || `<p class="muted empty">${T('No matching sets.')}</p>`;
+  // under the grid, not inside its scroll, so it shows without scrolling to the end
+  $('#castMoreBox').innerHTML = left
+    ? `<button type="button" class="btn ghost fp-more" id="castMore">${T('Show more ({n} left)', { n: left })}</button>`
+    : '';
   $('#castGrid')
     .querySelectorAll('[data-pick]:not([disabled])')
     .forEach(b => (b.onclick = () => applyFace(p, b.dataset.pick)));
@@ -387,6 +431,14 @@ export let openCast = async function openCast(npc, ti) {
       drawGrid(p);
     }, 200);
   };
+  document.querySelectorAll('[data-fpf]').forEach(
+    s =>
+      (s.onchange = () => {
+        p.flt[s.dataset.fpf] = s.value;
+        p.shown = FACE_PAGE;
+        drawGrid(p);
+      }),
+  );
   $('#castAuto').onclick = () => pickAgain(p);
   const off = $('#castOff');
   if (off) off.onclick = () => retireSet(p);

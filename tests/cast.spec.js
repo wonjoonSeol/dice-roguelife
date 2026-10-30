@@ -229,8 +229,8 @@ test('cast', async ({ game }) => {
 });
 
 // A person's faction rules out another group's face on every casting path. The library itself says 정파 goes with
-// 화산파 (one set carries both), so a 정파 face and a faction-free one stay; with only other groups left, a lead still
-// gets a real face. Each filter is checked where the -30 alone would not do it
+// 화산파 (one set carries both), so a 정파 face and a faction-free one stay; with only other groups left, a lead gets a
+// silhouette, and never one of another group. Each filter is checked where the -30 alone would not do it
 test('casting keeps the faction', async ({ game }) => {
   const { pg, errs } = await game(claudeMock(), { size: [420, 900] });
   await pg.waitForSelector('#rollBtn');
@@ -285,7 +285,15 @@ test('casting keeps the faction', async ({ game }) => {
     const extra = DR.castFor(who('화산 노복', 'extra'));
     load({ hwasan_f: sets.hwasan_f, cheong_elder: sets.cheong_elder, shadow_male: [] });
     const only = DR.castCandidates(who('학송 장로', 'major'), 12);
-    return { cands, both, clan, lead, extra, only };
+    // only another sect's real face, and a 사파 silhouette that matches all eight look words: the plain silhouette
+    load({
+      hwasan_f: sets.hwasan_f,
+      cheong_elder: sets.cheong_elder,
+      shadow_male: [],
+      shadow_sapa: ['faction:사파', ...LOOKS],
+    });
+    const lone = DR.castFor(who('학송 장로', 'major', [...LOOKS, 'faction:화산파']));
+    return { cands, both, clan, lead, extra, only, lone };
   });
   console.log('faction casting:', JSON.stringify(got));
   const other = k => k === 'cheong_elder' || k === 'mudang_m';
@@ -299,6 +307,11 @@ test('casting keeps the faction', async ({ game }) => {
   check(errs, 'a one-letter value keeps its own face', got.clan.includes('tang_m'));
   check(errs, 'the word-scored lead skips another sect even with eight look matches', got.lead === 'young_plain');
   check(errs, 'an extra takes a silhouette over another sect', got.extra === 'shadow_male');
-  check(errs, 'with only another sect left, a lead is still offered its real face', got.only.includes('cheong_elder'));
+  check(
+    errs,
+    'with only another sect left, a lead is offered a silhouette, not that sect',
+    !got.only.includes('cheong_elder') && got.only.includes('shadow_male'),
+  );
+  check(errs, "a lead's silhouette is never another group's, whatever its looks", got.lone === 'shadow_male');
   expect(errs).toEqual([]);
 });
