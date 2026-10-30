@@ -35,7 +35,7 @@ import {
 } from './images.js';
 import { legacyEncodings, readZip } from './zip.js';
 import { WORLD_EXT } from './world-ext.js';
-import { capTags, isGeneric, isIdTag, setIds, setTier, TIERS_CAST, toEnglishTags } from './casting.js';
+import { capTags, idOf, isGeneric, isIdTag, setIds, setTier, TIERS_CAST, toEnglishTags } from './casting.js';
 import { baseName, exportPack } from './images-export.js';
 import { setStat, statText } from './stat.js';
 import { groupSimilar, similar, visualSig } from './image-sim.js';
@@ -53,6 +53,7 @@ import {
   sitKey,
   sitKeyOf,
   sitLabel,
+  sitVer,
   tagsToSits,
 } from './situations.js';
 import { bindSituations, setSitsHtml, sitDictHtml, sitPickerHtml } from './situations-view.js';
@@ -79,19 +80,18 @@ export async function renderImages() {
     noteIgnored('images-view: asset usage', e);
   }
   const canAuto = platform.limits && platform.limits.images;
-  const sets = charSetsAll();
   const orphan = usage ? Math.max(0, usage.files - app.images.length) : 0;
   box.innerHTML =
     imagesHeaderHtml(usage, orphan, canAuto) +
     '\n' +
-    setsSectionHtml(sets) +
+    setsSectionHtml() +
     '\n' +
     sitDictHtml() +
     openingsSectionHtml() +
     allImagesSectionHtml();
   bindSituations(box, { redraw: renderImages, job: exclusiveJob });
   bindImagesToolbar(box);
-  box.querySelectorAll('[data-set]').forEach(bindSetCard);
+  bindSetsSection();
   box.querySelectorAll('[data-opening]').forEach(bindOpeningCard);
   bindImgGrid();
 }
@@ -117,50 +117,172 @@ function imagesHeaderHtml(usage, orphan, canAuto) {
     ${canAuto && platform.sample ? `<button class="btn" id="autoTag">${T('Auto-sort')}</button>` : ''}<button class="btn" id="dedupe">${T('Clean up duplicates')}</button><button class="btn" id="expPack" title="${T('Download a zip of the images under their upload names, with tags.json')}">${T('Export pack')}</button><button class="btn" id="expTags" title="${T('Download tags.json only, without images')}">${T('Export tags only')}</button><button class="btn" id="saveMan" title="${T('Save so a copy of this app can restore the image list on its own')}">${T('Save list for copies')}</button><button class="btn" id="tagsEn" title="${T('Turn Korean and other non-English tags into English')}">${T('Tags to English')}</button><button class="btn" id="idTags" title="${T('Pull affiliations such as sects, houses and companies out of set descriptions as identity tags (faction:name). Shows the list before applying')}">${T('Find faction tags')}</button><button class="btn danger" id="wipeAll">${T('Delete all')}</button><span class="muted img-upl-stat" id="uplStat">${esc(statText())}</span></div>`;
 }
 
-function setsSectionHtml(sets) {
-  return `   <div class="sec"><h4>${T('Character sets ({n})', { n: Object.keys(sets).length })}</h4>
-    <div class="row img-search"><input id="setQ" value="${esc(setQuery)}" placeholder="${T('Search sets, names, roles, tags')}" class="search-pill"><button class="btn ghost sort-toggle" id="setSort">${setRecent ? T('Newest first') : T('Upload order')}</button></div><div class="img-gap"></div>
-    ${setListHtml(sets)}</div>`;
+/* ---- character sets: search and filters, a grid of tiles, the open one's full card under its row, and changes to
+   every chosen set at once ---- */
+let setQuery = '',
+  setPage = 0,
+  setSort = 'upload',
+  openSet = null,
+  lastPick = null,
+  shownSets = [];
+const SET_PER = 60;
+const picked = new Set();
+const NO_FILTERS = () => ({ id: '', world: '', gender: '', tier: '', sit: '', state: '', missing: '', tags: [] });
+let setFlt = NO_FILTERS();
+const SET_SORTS = {
+  upload: N_('Upload order'),
+  recent: N_('Newest first'),
+  name: N_('Name'),
+  count: N_('Most images'),
+};
+// what each filter keeps; '-' is "none of it"
+const listFlt = key => (f, v) => (v === '-' ? !f[key].length : f[key].includes(v));
+const SET_FILTERS = {
+  id: listFlt('ids'),
+  world: listFlt('ws'),
+  gender: (f, v) => genderOf(f.k) === v,
+  tier: (f, v) => (v === 'generic' ? isGeneric(f.k) : !isGeneric(f.k) && setTier(f.k) === v),
+  sit: listFlt('sits'),
+  state: (f, v) => ({ on: !f.m.off, off: !!f.m.off, named: !!f.m.charName, profile: !!f.m.profile })[v],
+  missing: (f, v) => ({ gender: !genderOf(f.k), role: !f.m.role, looks: !f.looks.length })[v],
+};
+// what a set's frames say, kept per frame list (charSetsAll makes new lists when the pictures change) and dictionary;
+// the set card is read fresh, since its edits keep the lists
+const framesSay = new WeakMap();
+function setFacts(k, imgs) {
+  let d = framesSay.get(imgs);
+  if (!d || d.v !== sitVer()) {
+    const tags = [...new Set(imgs.flatMap(x => x.tags || []))];
+    d = {
+      v: sitVer(),
+      tags,
+      ids: tags.filter(isIdTag),
+      looks: tags.filter(t => !isIdTag(t) && !isSystemTag(t)),
+      sits: [...new Set(imgs.flatMap(frameSits))],
+      newest: imgs.reduce((m, x) => (String(x.createdAt || '') > m ? String(x.createdAt || '') : m), ''),
+    };
+    framesSay.set(imgs, d);
+  }
+  const m = app.setMeta[k] || {};
+  return { ...d, k, imgs, m, ws: worldsOf(m) };
 }
-
-// the character sets matching the search, one page of cards and the pager
-function setListHtml(sets) {
+function setMatch(f) {
+  for (const [name, keep] of Object.entries(SET_FILTERS)) if (setFlt[name] && !keep(f, setFlt[name])) return false;
+  if (setFlt.tags.some(t => !f.tags.some(x => x.toLowerCase() === t.toLowerCase()))) return false;
   const q = setQuery.trim().toLowerCase();
-  let all = Object.entries(sets).filter(([k, imgs]) => {
-    if (!q) return true;
-    const m = app.setMeta[k] || {};
-    const sits = [...new Set(imgs.flatMap(frameSits))];
-    return [
-      k,
-      m.charName,
-      m.role,
-      ...(m.aliases || []),
-      ...worldsOf(m),
-      ...imgs.flatMap(x => x.tags || []),
-      ...sits,
-      ...sits.map(sitLabel),
-    ]
+  return (
+    !q ||
+    [f.k, f.m.charName, f.m.role, ...(f.m.aliases || []), ...f.ws, ...f.tags, ...f.sits, ...f.sits.map(sitLabel)]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
-      .includes(q);
-  });
-  if (setRecent) {
-    const newest = imgs => imgs.reduce((m, x) => (String(x.createdAt || '') > m ? String(x.createdAt || '') : m), '');
-    all = [...all].sort((a, b) => newest(b[1]).localeCompare(newest(a[1])));
-  }
-  const pages = Math.max(1, Math.ceil(all.length / SET_PER));
-  if (setPage >= pages) setPage = pages - 1;
-  const list = all.slice(setPage * SET_PER, (setPage + 1) * SET_PER);
-  const pager =
-    all.length > SET_PER
-      ? `<div class="row pager"><button class="btn ghost" data-spg="-1" ${setPage === 0 ? 'disabled' : ''}>${T('Previous')}</button><span class="muted pager-count">${T('{page} / {pages} ({n})', { page: setPage + 1, pages, n: all.length })}</span><button class="btn ghost" data-spg="1" ${setPage >= pages - 1 ? 'disabled' : ''}>${T('Next')}</button></div>`
-      : '';
-  return (
-    (list.length ? '' : `<p class="muted empty">${T('No results.')}</p>`) +
-    list.map(([k, imgs]) => setCardHtml(k, imgs)).join('') +
-    pager
+      .includes(q)
   );
+}
+function sortSets(list) {
+  if (setSort === 'name') return [...list].sort((a, b) => a.k.localeCompare(b.k));
+  if (setSort === 'count') return [...list].sort((a, b) => b.imgs.length - a.imgs.length);
+  if (setSort === 'recent') return [...list].sort((a, b) => b.newest.localeCompare(a.newest));
+  return list;
+}
+const byCount = list => {
+  const n = new Map();
+  for (const v of list) n.set(v, (n.get(v) || 0) + 1);
+  return [...n].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(b[0]));
+};
+const optionsHtml = (cur, first, opts) =>
+  `<option value="">${first}</option>` +
+  opts.map(([v, n]) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(n)}</option>`).join('');
+const fltSel = (f, first, opts) =>
+  `<select data-sflt="${f}" class="set-select set-flt${setFlt[f] ? ' on' : ''}" aria-label="${esc(first)}">${optionsHtml(setFlt[f], first, opts)}</select>`;
+const idVal = t => (idOf(t) || { val: t }).val;
+const WORLD_OPTS = () => WORLDS.map(w => [w.id, T(w.name)]);
+const GENDER_OPTS = () => [GENDER.FEMALE, GENDER.MALE, GENDER.OTHER].map(g => [g, T(GENDER_LABEL[g])]);
+const CAST_OPTS = () => [
+  ['major', T('Major character')],
+  ['minor', T('Supporting')],
+  ['extra', T('Extra')],
+  ['generic', T('Silhouette only')],
+];
+function setFiltersHtml(all) {
+  const ids = byCount(all.flatMap(f => f.ids)).map(([t, n]) => [t, `${idVal(t)} (${n})`]);
+  const sits = byCount(all.flatMap(f => f.sits)).map(([s, n]) => [s, `${sitLabel(s)} (${n})`]);
+  return `<div class="row set-flts">${[
+    fltSel('id', T('Affiliation: all'), [['-', T('No affiliation')], ...ids]),
+    fltSel('world', T('World: all'), [['-', T('None picked (every world)')], ...WORLD_OPTS()]),
+    fltSel('gender', T('Gender: all'), GENDER_OPTS()),
+    fltSel('tier', T('Casting: all'), CAST_OPTS()),
+    fltSel('sit', T('Situation: all'), [['-', T('No situation')], ...sits]),
+    fltSel('state', T('State: all'), [
+      ['on', T('In use')],
+      ['off', T('Retired')],
+      ['named', T('Has a fixed name')],
+      ['profile', T('Has a profile')],
+    ]),
+    fltSel('missing', T('Missing: any'), [
+      ['gender', T('No gender set')],
+      ['role', T('No role')],
+      ['looks', T('No looks tags')],
+    ]),
+  ].join('')}</div>
+    <div class="seg set-flt-tags"><input id="setTagQ" list="setTagList" placeholder="${T('Filter by tag (Enter)')}" class="set-tag-input">${setFlt.tags.map(t => `<button type="button" data-untag="${esc(t)}" aria-pressed="true" class="chip-sm set-tag">${esc(t)} ✕</button>`).join('')}<datalist id="setTagList">${byCount(
+      all.flatMap(f => f.tags),
+    )
+      .map(([t]) => `<option value="${esc(t)}">`)
+      .join('')}</datalist></div>`;
+}
+
+function setsSectionHtml() {
+  const sets = charSetsAll();
+  const all = Object.entries(sets).map(([k, imgs]) => setFacts(k, imgs));
+  for (const k of picked) if (!sets[k]) picked.delete(k);
+  if (openSet && !sets[openSet]) openSet = null;
+  const shown = sortSets(all.filter(setMatch));
+  shownSets = shown.map(f => f.k);
+  const filtered = setQuery.trim() || Object.values(setFlt).some(v => v.length);
+  return `   <div class="sec" id="setSec"><h4>${T('Character sets ({n})', { n: all.length })}</h4>
+    <div class="row img-search"><input id="setQ" value="${esc(setQuery)}" placeholder="${T('Search sets, names, roles, tags')}" class="search-pill"><select id="setSort" class="set-select" aria-label="${T('Sort')}">${Object.entries(
+      SET_SORTS,
+    )
+      .map(([v, n]) => `<option value="${v}" ${setSort === v ? 'selected' : ''}>${T(n)}</option>`)
+      .join('')}</select></div>
+    ${setFiltersHtml(all)}
+    <div class="row set-sum"><span class="muted">${T('{n} of {all} sets', { n: shown.length, all: all.length })}</span><button class="btn ghost" id="setPickAll" ${shown.length ? '' : 'disabled'}>${T('Select these {n}', { n: shown.length })}</button>${filtered ? `<button class="btn ghost" id="setFltReset">${T('Clear filters')}</button>` : ''}</div>
+    <div id="setBulkBox" class="set-bulk-box">${bulkBarHtml()}</div>
+    ${setGridHtml(shown)}</div>`;
+}
+
+// one page of tiles; the open set's full card spans the row under its tile (the grid packs densely, so the tiles after
+// it fill that row first)
+function setGridHtml(shown) {
+  const pages = Math.max(1, Math.ceil(shown.length / SET_PER));
+  if (setPage >= pages) setPage = pages - 1;
+  const list = shown.slice(setPage * SET_PER, (setPage + 1) * SET_PER);
+  if (!list.length) return `<p class="muted empty">${T('No results.')}</p>`;
+  const pager =
+    shown.length > SET_PER
+      ? `<div class="row pager"><button class="btn ghost" data-spg="-1" ${setPage === 0 ? 'disabled' : ''}>${T('Previous')}</button><span class="muted pager-count">${T('{page} / {pages} ({n})', { page: setPage + 1, pages, n: shown.length })}</span><button class="btn ghost" data-spg="1" ${setPage >= pages - 1 ? 'disabled' : ''}>${T('Next')}</button></div>`
+      : '';
+  return `<div class="set-grid">${list
+    .map(f => setTileHtml(f) + (f.k === openSet ? openCardHtml(f.k, f.imgs) : ''))
+    .join('')}</div>${pager}`;
+}
+const openCardHtml = (k, imgs) => `<div class="set-open">${setCardHtml(k, imgs)}</div>`;
+function setTileHtml({ k, imgs, m, ids }) {
+  const face = setCover(k, imgs);
+  const marks = [isGeneric(k) && T('Silhouette'), m.off && T('Retired')].filter(Boolean);
+  return `<div class="set-tile${k === openSet ? ' open' : ''}${picked.has(k) ? ' picked' : ''}" data-tile="${esc(k)}"><button type="button" class="tile-face" aria-expanded="${k === openSet}" title="${T('Edit')}"><img src="${imgUrl(face.id)}" loading="lazy" decoding="async" alt=""><span class="tile-n">${imgs.length}</span>${marks.length ? `<span class="tile-marks">${marks.map(esc).join(', ')}</span>` : ''}</button><label class="tile-pick" title="${T('Select')}"><input type="checkbox" data-pickset ${picked.has(k) ? 'checked' : ''}></label><div class="tile-text"><b>${esc(k)}</b>${m.charName ? ` <span class="char-name">${esc(m.charName)}</span>` : ''}<div class="muted tile-role">${esc(m.role || '')}</div>${ids.length ? `<div class="tile-ids">${ids.map(t => `<span class="chip-sm">${esc(idVal(t))}</span>`).join('')}</div>` : ''}</div></div>`;
+}
+
+// what to do with the chosen sets; they stay chosen while the filters change
+function bulkBarHtml() {
+  if (!picked.size) return '';
+  const shown = new Set(shownSets);
+  const hidden = [...picked].filter(k => !shown.has(k)).length;
+  return `<div class="set-bulk"><div class="row set-bulk-row"><b>${T('{n} selected', { n: picked.size })}</b>${hidden ? `<span class="muted">${T('({n} not shown by the filters)', { n: hidden })}</span>` : ''}<button class="btn ghost" data-bulk="clear">${T('Clear selection')}</button></div>
+    <div class="row set-bulk-row"><input id="bulkTag" list="setTagList" placeholder="${T('Tag')}" class="set-tag-input"><button class="btn" data-bulk="tagAdd">${T('Add tag')}</button><button class="btn" data-bulk="tagDel">${T('Remove tag')}</button></div>
+    <div class="row set-bulk-row"><select id="bulkWorld" class="set-select">${optionsHtml('', T('World'), WORLD_OPTS())}</select><button class="btn" data-bulk="worldAdd">${T('Add world')}</button><button class="btn" data-bulk="worldDel">${T('Remove world')}</button><select data-bulkset="gender" class="set-select">${optionsHtml('', T('Change gender'), [['auto', T('Gender: auto')], ...GENDER_OPTS()])}</select><select data-bulkset="tier" class="set-select">${optionsHtml('', T('Change casting'), [['auto', T('Casting: auto')], ...CAST_OPTS()])}</select></div>
+    <div class="row set-bulk-row"><button class="btn" data-bulk="off">${T('Retire')}</button><button class="btn" data-bulk="on">${T('Use again')}</button><button class="btn danger" data-bulk="del">${T('Delete')}</button></div></div>`;
 }
 
 // one set card: cover, faces, gender, role, standing, fixed name, tags and worlds
@@ -169,31 +291,15 @@ function setCardHtml(k, imgs) {
   const face = setCover(k, imgs);
   return `<div class="item set-card" data-set="${esc(k)}"><div class="set-head"><div class="who"><img src="${imgUrl(face.id)}" data-big="${face.id}" data-cap="${esc(k + (m.charName ? ' · ' + m.charName : ''))}" loading="lazy" decoding="async" alt=""><div class="names"><b>${esc(k)}</b>${m.charName ? ` <span class="char-name">· ${esc(m.charName)}</span>` : ''}<div class="muted role">${esc(m.role || '')}</div></div></div><div class="muted flags"><span class="count">${T('{n} {n|image|images}', { n: imgs.length })}</span><label title="${T('Use as a faceless shared image. Many extras share it; it never goes to supporting or major characters')}"><input type="checkbox" data-sgen ${isGeneric(k) ? 'checked' : ''} ${(app.setMeta[k] || {}).charName ? `disabled title="${T('A picture with a name on it is never used as a silhouette')}"` : isGeneric(k) && (app.setMeta[k] || {}).tier !== 'generic' ? `disabled title="${T('A silhouette by its file name (shadow_)')}"` : ''}>${T('Silhouette')}</label><label><input type="checkbox" data-soff ${m.off ? 'checked' : ''}>${T('Retired')}</label></div></div>
      ${imgs.length > 1 ? `<div class="row cover-row"><span class="muted cover-label">${T('Cover:')}</span>${imgs.map(x => `<button type="button" data-cover="${x.id}" title="${esc(x.emotion || '')}" class="cover-pick${x.id === face.id ? ' on' : ''}"><img src="${imgUrl(x.id)}" loading="lazy" alt="" class="cover-thumb"></button>`).join('')}</div>` : ''}
-     <div class="row set-row"><select data-sf="gender" class="set-select">${[
-       ['', T('Gender: auto')],
-       [GENDER.FEMALE, T(GENDER_LABEL.female)],
-       [GENDER.MALE, T(GENDER_LABEL.male)],
-       [GENDER.OTHER, T(GENDER_LABEL.other)],
-     ]
-       .map(([v, n]) => `<option value="${v}" ${(m.gender || '') === v ? 'selected' : ''}>${n}</option>`)
-       .join('')}</select>
+     <div class="row set-row"><select data-sf="gender" class="set-select">${optionsHtml(m.gender || '', T('Gender: auto'), GENDER_OPTS())}</select>
      <input data-sf="role" value="${esc(m.role || '')}" placeholder="${T('Role, mood (e.g. knight, cold)')}" class="set-input"></div>
-     <div class="row set-row"><select data-sf="tier" class="set-select" title="${T('Casting: sets with many expressions go to major characters, single images to extras')}">${[
-       [
-         '',
-         T('Casting: auto ({tier})', {
-           tier: T({ extra: N_('Extra'), minor: N_('Supporting'), major: N_('Major') }[setTier(k)]),
-         }),
-       ],
-       ['major', T('Major character')],
-       ['minor', T('Supporting')],
-       ['extra', T('Extra')],
-       ['generic', T('Silhouette only')],
-     ]
-       .map(([v, n]) => `<option value="${v}" ${(m.tier || '') === v ? 'selected' : ''}>${n}</option>`)
-       .join(
-         '',
-       )}</select><input data-sf="charName" value="${esc(m.charName || '')}" maxlength="20" placeholder="${T('Fixed name (if the picture has a name on it)')}" class="set-input"><button class="btn ghost" data-srename title="${T("Renaming a set renames every frame and the open save's casting")}">${T('Rename')}</button><input data-sf="aliases" value="${esc((m.aliases || []).join(', '))}" placeholder="${T('Other names (comma separated)')}" class="set-input set-input-narrow"></div><div class="set-row">${worldChips(worldsOf(m), 'data-sw')}</div>
+     <div class="row set-row"><select data-sf="tier" class="set-select" title="${T('Casting: sets with many expressions go to major characters, single images to extras')}">${optionsHtml(
+       m.tier || '',
+       T('Casting: auto ({tier})', {
+         tier: T({ extra: N_('Extra'), minor: N_('Supporting'), major: N_('Major') }[setTier(k)]),
+       }),
+       CAST_OPTS(),
+     )}</select><input data-sf="charName" value="${esc(m.charName || '')}" maxlength="20" placeholder="${T('Fixed name (if the picture has a name on it)')}" class="set-input"><button class="btn ghost" data-srename title="${T("Renaming a set renames every frame and the open save's casting")}">${T('Rename')}</button><input data-sf="aliases" value="${esc((m.aliases || []).join(', '))}" placeholder="${T('Other names (comma separated)')}" class="set-input set-input-narrow"></div><div class="set-row">${worldChips(worldsOf(m), 'data-sw')}</div>
      <div class="seg set-tags">${(() => {
        const all = [...new Set(imgs.flatMap(x => x.tags || []))];
        return [...all.filter(isIdTag), ...all.filter(t => !isIdTag(t))]
@@ -228,18 +334,9 @@ function openingCardHtml(k, frames) {
 // the retire switch and the world chips apply to every frame of the sequence
 function bindOpeningCard(card) {
   const frames = () => openingSets()[card.dataset.opening] || [];
-  const save = async (list, change) => {
-    list.forEach(change);
-    try {
-      await IMGX.flush(list.map(x => x.id));
-    } catch (err) {
-      toast(T('Save failed: {err}', { err: err.code || err.message }));
-      logErr('img', err);
-    }
-  };
   const off = card.querySelector('[data-ooff]');
   off.onchange = () =>
-    save(frames(), x => {
+    saveFrames(frames(), x => {
       if (off.checked) x.off = true;
       else delete x.off;
     });
@@ -252,7 +349,7 @@ function bindOpeningCard(card) {
         if (ws.has(b.dataset.ow)) ws.delete(b.dataset.ow);
         else ws.add(b.dataset.ow);
         card.querySelectorAll('[data-ow]').forEach(y => y.setAttribute('aria-pressed', String(ws.has(y.dataset.ow))));
-        save(list, x => setWorlds(x, [...ws]));
+        saveFrames(list, x => setWorlds(x, [...ws]));
       }),
   );
 }
@@ -315,39 +412,6 @@ function bindImagesToolbar(box) {
     );
   };
   bindPager();
-  box.querySelectorAll('[data-spg]').forEach(
-    b =>
-      (b.onclick = () => {
-        setPage += +b.dataset.spg;
-        renderImages();
-      }),
-  );
-  const ss = $('#setSort');
-  if (ss)
-    ss.onclick = () => {
-      setRecent = !setRecent;
-      setPage = 0;
-      renderImages();
-    };
-  let sqt = null;
-  const sq = $('#setQ');
-  if (sq) {
-    sq.oninput = e => {
-      clearTimeout(sqt);
-      sqt = setTimeout(() => {
-        setQuery = e.target.value;
-        setPage = 0;
-        const pos = e.target.selectionStart;
-        renderImages().then(() => {
-          const n = $('#setQ');
-          if (n) {
-            n.focus();
-            n.setSelectionRange(pos, pos);
-          }
-        });
-      }, 300);
-    };
-  }
   let qt = null;
   $('#imgQ').oninput = e => {
     clearTimeout(qt);
@@ -374,10 +438,18 @@ const SET_FIELDS = {
       .filter(Boolean)
       .slice(0, 6),
   charName: v => v.slice(0, 20) || undefined,
+  gender: v => v || undefined,
   tier: v => v || undefined,
 };
-// changes one set card and saves it; resolves true when saved (a failure is told, and logged)
-async function saveSetMeta(k, change) {
+// '' is auto. A set with a name on its pictures is never a silhouette (isGeneric), so it keeps its standing
+function setField(m, f, raw) {
+  const v = SET_FIELDS[f] ? SET_FIELDS[f](raw) : raw;
+  if (f === 'tier' && v === 'generic' && m.charName) return;
+  if (v === undefined) delete m[f];
+  else m[f] = v;
+}
+// changes one set card and saves it; resolves true when saved (a failure is logged, and told unless quiet)
+async function saveSetMeta(k, change, quiet = false) {
   const m = (app.setMeta[k] = app.setMeta[k] || {});
   change(m);
   setsChanged();
@@ -386,6 +458,7 @@ async function saveSetMeta(k, change) {
     return true;
   } catch (err) {
     logErr('set', err);
+    if (quiet) return false;
     if (KEY_RE.test(k)) toast(T('Save failed: {err}', { err: err.code || err.message }));
     else
       toast(
@@ -409,16 +482,9 @@ function bindSetCard(card) {
           else delete m.profile;
         })),
   );
-  card.querySelectorAll('[data-sf]').forEach(
-    el =>
-      (el.onchange = () =>
-        saveSetMeta(k, m => {
-          const f = el.dataset.sf;
-          const v = SET_FIELDS[f] ? SET_FIELDS[f](el.value.trim()) : el.value.trim();
-          if (v === undefined) delete m[f];
-          else m[f] = v;
-        })),
-  );
+  card
+    .querySelectorAll('[data-sf]')
+    .forEach(el => (el.onchange = () => saveSetMeta(k, m => setField(m, el.dataset.sf, el.value.trim()))));
   card.querySelectorAll('[data-cover]').forEach(
     b =>
       (b.onclick = async () => {
@@ -460,22 +526,7 @@ function bindSetCard(card) {
   card.querySelectorAll('[data-stag]').forEach(
     b =>
       (b.onclick = async () => {
-        const t = b.dataset.stag;
-        let fail = null;
-        for (const x of storyImages().filter(i => i.kind === 'char' && (i.set || i.name) === k)) {
-          if ((x.tags || []).includes(t)) {
-            x.tags = x.tags.filter(v => v !== t);
-            try {
-              await IMGDOC(x.id).set(x);
-            } catch (err) {
-              fail = err;
-            }
-          }
-        }
-        if (fail) {
-          toast(T('Save failed: {err}', { err: fail.code || fail.message }));
-          logErr('tag', fail);
-        }
+        await dropSetTag([k], [b.dataset.stag]);
         renderImages();
       }),
   );
@@ -484,23 +535,9 @@ function bindSetCard(card) {
     add.onkeydown = async e => {
       if (e.key !== 'Enter' || e.isComposing) return;
       e.preventDefault();
-      let t = add.value.trim();
-      if (!t) return;
+      if (!add.value.trim()) return;
       add.disabled = true;
-      t = (await toEnglishTags([t]))[0];
-      let fail = null;
-      for (const x of storyImages().filter(i => i.kind === 'char' && (i.set || i.name) === k)) {
-        x.tags = capTags([...(x.tags || []), t]);
-        try {
-          await IMGDOC(x.id).set(x);
-        } catch (err) {
-          fail = err;
-        }
-      }
-      if (fail) {
-        toast(T('Save failed: {err}', { err: fail.code || fail.message }));
-        logErr('tag', fail);
-      }
+      await addSetTag([k], add.value);
       renderImages();
     };
   card.querySelectorAll('[data-sw]').forEach(
@@ -518,14 +555,244 @@ function bindSetCard(card) {
       }),
   );
 }
+// these frames, changed and written once per index page; false (told) when the write failed
+async function saveFrames(list, change) {
+  list.forEach(change);
+  try {
+    await IMGX.flush(list.map(x => x.id));
+    return true;
+  } catch (err) {
+    toast(T('Save failed: {err}', { err: err.code || err.message }));
+    logErr('img', err);
+    return false;
+  }
+}
+const framesOf = keys => {
+  const sets = charSetsAll();
+  return keys.flatMap(k => sets[k] || []);
+};
+// only the frames the change touches are written
+async function addSetTag(keys, tag) {
+  const t = (await toEnglishTags([tag.trim()]))[0];
+  return saveFrames(
+    framesOf(keys).filter(x => !(x.tags || []).includes(t)),
+    x => (x.tags = capTags([...(x.tags || []), t])),
+  );
+}
+function dropSetTag(keys, tags) {
+  const ts = new Set(tags);
+  return saveFrames(
+    framesOf(keys).filter(x => (x.tags || []).some(v => ts.has(v))),
+    x => (x.tags = x.tags.filter(v => !ts.has(v))),
+  );
+}
+// the chosen sets and every picture in them; false when not confirmed or not saved
+async function deleteSets(keys) {
+  const olds = framesOf(keys);
+  const msg = T('Delete {sets} {sets|set|sets} and their {n} {n|image|images}? This cannot be undone.', {
+    sets: keys.length,
+    n: olds.length,
+  });
+  if (!(await askConfirm(msg))) return false;
+  const ids = new Set(olds.map(x => x.id));
+  app.images = app.images.filter(x => !ids.has(x.id));
+  try {
+    await IMGX.dropMany([...ids]);
+  } catch (err) {
+    app.images.push(...olds);
+    toast(T('Save failed: {err}', { err: err.code || err.message }));
+    logErr('images', err);
+    return false;
+  }
+  await deleteFiles(olds);
+  await dropSetCards(keys);
+  for (const k of keys) delete app.setMeta[k];
+  setsChanged();
+  setStat('');
+}
+
+function redrawSets() {
+  const sec = $('#setSec');
+  if (!sec) return;
+  sec.outerHTML = setsSectionHtml();
+  bindSetsSection();
+}
+function showPicks() {
+  document.querySelectorAll('[data-tile]').forEach(el => {
+    const on = picked.has(el.dataset.tile);
+    el.classList.toggle('picked', on);
+    el.querySelector('[data-pickset]').checked = on;
+  });
+  $('#setBulkBox').innerHTML = bulkBarHtml();
+  bindBulk();
+}
+function bindSetsSection() {
+  const sec = $('#setSec');
+  if (!sec) return;
+  sec.querySelectorAll('[data-set]').forEach(bindSetCard);
+  const again = () => {
+    setPage = 0;
+    redrawSets();
+  };
+  sec.querySelectorAll('[data-sflt]').forEach(
+    s =>
+      (s.onchange = () => {
+        setFlt[s.dataset.sflt] = s.value;
+        again();
+      }),
+  );
+  $('#setSort').onchange = e => {
+    setSort = e.target.value;
+    again();
+  };
+  $('#setTagQ').onkeydown = e => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    e.preventDefault();
+    const t = e.target.value.trim();
+    if (t && !setFlt.tags.includes(t)) setFlt.tags.push(t);
+    again();
+    $('#setTagQ').focus();
+  };
+  sec.querySelectorAll('[data-untag]').forEach(
+    b =>
+      (b.onclick = () => {
+        setFlt.tags = setFlt.tags.filter(t => t !== b.dataset.untag);
+        again();
+      }),
+  );
+  const reset = $('#setFltReset');
+  if (reset)
+    reset.onclick = () => {
+      setFlt = NO_FILTERS();
+      setQuery = '';
+      again();
+    };
+  $('#setPickAll').onclick = () => {
+    shownSets.forEach(k => picked.add(k));
+    showPicks();
+  };
+  sec.querySelectorAll('[data-spg]').forEach(
+    b =>
+      (b.onclick = () => {
+        setPage += +b.dataset.spg;
+        redrawSets();
+        $('#setSec').scrollIntoView({ block: 'start' });
+      }),
+  );
+  sec.querySelectorAll('[data-tile]').forEach(el => {
+    const k = el.dataset.tile;
+    // shift picks every shown set between this one and the one picked before
+    el.querySelector('[data-pickset]').onclick = e => {
+      const i = shownSets.indexOf(k),
+        j = shownSets.indexOf(lastPick);
+      const keys = e.shiftKey && i >= 0 && j >= 0 ? shownSets.slice(Math.min(i, j), Math.max(i, j) + 1) : [k];
+      for (const x of keys)
+        if (e.target.checked) picked.add(x);
+        else picked.delete(x);
+      lastPick = k;
+      showPicks();
+    };
+    // only the card moves: the rest of the section stays as drawn
+    const open = () => {
+      sec.querySelector('.set-open')?.remove();
+      sec.querySelectorAll('.set-tile.open').forEach(t => {
+        t.classList.remove('open');
+        t.querySelector('.tile-face').setAttribute('aria-expanded', 'false');
+      });
+      openSet = openSet === k ? null : k;
+      if (!openSet) return;
+      el.classList.add('open');
+      el.querySelector('.tile-face').setAttribute('aria-expanded', 'true');
+      el.insertAdjacentHTML('afterend', openCardHtml(k, charSetsAll()[k] || []));
+      bindSetCard(el.nextElementSibling.querySelector('[data-set]'));
+    };
+    el.querySelector('.tile-face').onclick = open;
+    el.querySelector('.tile-text').onclick = open;
+  });
+  let sqt = null;
+  $('#setQ').oninput = e => {
+    clearTimeout(sqt);
+    sqt = setTimeout(() => {
+      setQuery = e.target.value;
+      const pos = e.target.selectionStart;
+      again();
+      const n = $('#setQ');
+      n.focus();
+      n.setSelectionRange(pos, pos);
+    }, 300);
+  };
+  bindBulk();
+}
+function bindBulk() {
+  const bar = $('#setBulkBox');
+  if (!bar) return;
+  // fn resolves false when it stopped (and said why), or with what to say instead of the count. Only a delete waits for
+  // (and holds) the image job lock, as a card's own edits do during an upload
+  const run = async (fn, done = n => T('Changed {n} {n|set|sets}', { n })) => {
+    const keys = [...picked];
+    const r = await fn(keys);
+    if (r === false) return;
+    toast(typeof r === 'string' ? r : done(keys.length), typeof r === 'string' ? 6000 : undefined);
+    renderImages();
+  };
+  // a set the change leaves as it was is not written; a set name that can never be saved is told as such
+  const meta = change =>
+    run(async keys => {
+      const failed = [];
+      await inParallel(keys, 8, async k => {
+        const was = JSON.stringify(app.setMeta[k] || {});
+        const next = JSON.parse(was);
+        change(next);
+        if (JSON.stringify(next) !== was && !(await saveSetMeta(k, change, true))) failed.push(k);
+      });
+      const bad = failed.find(k => !KEY_RE.test(k));
+      if (bad)
+        return T(
+          'The set name "{set}" has Korean letters or symbols, so it can\'t be saved. Give it an English name with "Rename" on the set card',
+          { set: bad },
+        );
+      if (failed.length) return T("{n} {n|set|sets} couldn't be saved; try again", { n: failed.length });
+    });
+  const need = (el, msg) => {
+    const v = el.value.trim();
+    if (!v) toast(msg);
+    return v;
+  };
+  const tag = fn => {
+    const t = need($('#bulkTag'), T('Type a tag first'));
+    if (t) run(keys => fn(keys, t));
+  };
+  const world = fn => {
+    const w = need($('#bulkWorld'), T('Pick a world first'));
+    if (w) meta(m => setWorlds(m, fn(worldsOf(m), w)));
+  };
+  const act = {
+    clear: () => {
+      picked.clear();
+      showPicks();
+    },
+    tagAdd: () => tag(addSetTag),
+    // the tag as typed, or as adding the same text would have stored it (spelling fixed, Korean in English)
+    tagDel: () => tag(async (keys, t) => dropSetTag(keys, [t, ...(await toEnglishTags([t]))])),
+    worldAdd: () => world((ws, w) => [...new Set([...ws, w])]),
+    worldDel: () => world((ws, w) => ws.filter(x => x !== w)),
+    off: () => meta(m => (m.off = true)),
+    on: () => meta(m => delete m.off),
+    del: () => exclusiveJob(T('Delete'), () => run(deleteSets, n => T('Deleted {n} {n|set|sets}', { n }))),
+  };
+  bar.querySelectorAll('[data-bulk]').forEach(b => (b.onclick = act[b.dataset.bulk]));
+  bar.querySelectorAll('[data-bulkset]').forEach(
+    s =>
+      (s.onchange = () => {
+        if (s.value) meta(m => setField(m, s.dataset.bulkset, s.value === 'auto' ? '' : s.value));
+      }),
+  );
+}
+
 let imgQuery = '',
   imgPage = 0,
   imgRecent = true;
 const IMG_PER = 60;
-let setQuery = '',
-  setPage = 0,
-  setRecent = false;
-const SET_PER = 10;
 function imgGrid() {
   const q = imgQuery.trim().toLowerCase();
   let all = app.images
@@ -991,11 +1258,7 @@ async function retireImages(redirect, say = () => {}) {
     for (const u of undo) if (u.store) await u.store().catch(err => logErr('images', err));
     throw e;
   }
-  let n = 0;
-  await inParallel(olds, 6, async x => {
-    say(++n, olds.length);
-    await deleteAsset(x.id);
-  });
+  await deleteFiles(olds, say);
   return olds.length;
 }
 const retireFailed = e => {
@@ -1375,6 +1638,8 @@ async function renameSet(oldK) {
     if (ch) await persist();
   }
   toast(T('{from} → {to}: renamed {n} {n|frame|frames}', { from: oldK, to: key, n: imgs.length }), 4000);
+  if (openSet === oldK) openSet = key;
+  if (picked.delete(oldK)) picked.add(key);
   renderImages();
 }
 async function idTagsFromDesc() {
@@ -1838,6 +2103,20 @@ async function wipeAllImages() {
     toast(T('Error: {err}', { err: (e && (e.code || e.message)) || e }), 5000);
   }
 }
+// delete stored files, six at a time, telling the count
+async function deleteFiles(list, say = (i, n) => setStat(T('Deleting {i}/{n}', { i, n }))) {
+  let n = 0;
+  await inParallel(list, 6, async x => {
+    say(++n, list.length);
+    await deleteAsset(x.id);
+  });
+}
+const dropSetCards = keys =>
+  inParallel(keys, 8, k =>
+    SETDOC(k)
+      .delete()
+      .catch(e => noteIgnored('images-view: SETDOC.delete', e)),
+  );
 // delete one stored file; a failed delete is tried again twice, then skipped
 async function deleteAsset(id) {
   for (let i = 0; ; i++) {
@@ -1869,17 +2148,9 @@ async function wipeAllImagesInner() {
   if (!(await askConfirm(T('Delete all {n} images in storage and the list? This cannot be undone.', { n: total }))))
     return;
   if ((await askPrompt(T('Type {n} to confirm', { n: total }))) !== String(total)) return;
-  let n = 0;
-  await inParallel(list, 6, async a => {
-    setStat(T('Deleting {i}/{n}', { i: ++n, n: total }));
-    await deleteAsset(a.id);
-  });
+  await deleteFiles(list);
   await IMGX.clear().catch(e => noteIgnored('images-view: IMGX.clear', e));
-  await inParallel(Object.keys(app.setMeta), 8, k =>
-    SETDOC(k)
-      .delete()
-      .catch(e => noteIgnored('images-view: SETDOC.delete', e)),
-  );
+  await dropSetCards(Object.keys(app.setMeta));
   app.images = [];
   app.setMeta = {};
   app.settings.dupMap = {};
