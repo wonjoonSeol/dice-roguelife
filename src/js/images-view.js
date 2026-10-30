@@ -146,8 +146,8 @@ const SET_FILTERS = {
   state: (f, v) => ({ on: !f.m.off, off: !!f.m.off, named: !!f.m.charName, profile: !!f.m.profile })[v],
   missing: (f, v) => ({ gender: !genderOf(f.k), role: !f.m.role, looks: !f.looks.length })[v],
 };
-// what a set's frames say, kept per frame list (charSetsAll makes new lists when the pictures change) and dictionary;
-// the set card is read fresh, since its edits keep the lists
+// what a set's frames say, kept per frame list (a new list comes whenever the pictures change) and dictionary.
+// The set card is read fresh, since its edits keep the lists
 const framesSay = new WeakMap();
 function setFacts(k, imgs) {
   let d = framesSay.get(imgs);
