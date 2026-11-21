@@ -1,6 +1,6 @@
 /* ============ prompt ============ */
 import PR_DEFAULT from '../../prompts.json' with { type: 'json' };
-import { kb, stripMarks, utf8Bytes } from './util.js';
+import { kb, narrText, stripMarks, utf8Bytes } from './util.js';
 import { askOf, cmdIs, moneyText, powerGrade } from './data.js';
 import { ADDON, GENDER_LABEL, SCENARIO_WORLD, SKILL_SRC, STANCE_LABEL, STYLE } from './enums.js';
 import { LIMITS } from './limits.js';
@@ -905,7 +905,7 @@ export async function callNarrator(text, cmd, turn) {
     // prompt size stats are diagnostics only
   }
   const onText = turn.onText; // what to do with the reply as it streams (turn.js streamedReply)
-  const ok = o => o && (String(o.narration || '').trim().length > 0 || o.widget);
+  const ok = o => o && (narrText(o.narration).trim() || o.widget);
   const signal = turn.abort && turn.abort.signal;
   try {
     const o = normalize(

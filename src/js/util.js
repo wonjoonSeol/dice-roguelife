@@ -87,10 +87,57 @@ export const MARK_RE = /\[\[\s*(@?)([^\[\]\n]{1,200}?)\s*\]\]/g;
 // a mark on its own line, with the blank lines around it
 export const MARK_LINE_RE = /\n*(\[\[[^\[\]\n]{1,200}\]\])\n*/g;
 
+// a system window in narration: [ ... ], 【 world news 】, 〈 or 《 a constellation 》 (log.js shows these as windows)
+export const SYS_BOX = String.raw`\[[^\[\]\n]{2,140}\]|【[^【】\n]{2,180}】|〈[^〈〉\n]{2,180}〉|《[^《》\n]{2,180}》`;
+const WINDOW_LINE_RE = new RegExp(String.raw`^[ \t]*(?:${SYS_BOX})[ \t]*$`);
+const MARK_ONLY_RE = /^[ \t]*\[\[[^\[\]\n]{1,200}\]\][ \t]*$/;
+// list items, table rows and quotes keep their single breaks
+const LIST_LINE_RE = /^[ \t]*(?:(?:[-*+•]|\d{1,3}[.)])[ \t]|[|>])/;
+// prose ends a sentence, a line of speech or a sound; stat lines (이름: 민지), headings and windows don't
+const PROSE_END_RE = /[.!?…。！？"”'’」』)~-][ \t]*$/;
+// a markdown comment line ([//]: # (...)), which chat-site prompts ask for and markdown never shows
+const MD_COMMENT_RE = /^[ \t]*\[[^\[\]\n]*\]:[ \t]*(?:#|<>)[ \t]*(?:\(.*\)|".*"|'.*')?[ \t]*$/;
+// one still streaming in: the last line so far
+const MD_COMMENT_START_RE = /^[ \t]*\[[^\[\]\n]*\]:[ \t]*(?:#|<>)[ \t]*[("']/;
+const isProse = line => PROSE_END_RE.test(line) && !LIST_LINE_RE.test(line);
+// a blank line between two lines of text; marks are skipped, and windows end the run (a correction adds one before)
+const hasParagraphs = lines => {
+  let text = false,
+    gap = false;
+  for (const line of lines) {
+    if (MARK_ONLY_RE.test(line)) continue;
+    if (!line.trim()) gap = text;
+    else if (WINDOW_LINE_RE.test(line)) text = gap = false;
+    else if (text && gap) return true;
+    else {
+      text = true;
+      gap = false;
+    }
+  }
+  return false;
+};
+// some models write no blank lines: then a break between two lines of prose becomes one (lists and windows keep theirs)
+export const tidyNarration = t => {
+  const all = String(t || '').split(/\r\n?|\n/);
+  const lines = [];
+  all.forEach((line, i) => {
+    if (MD_COMMENT_RE.test(line) || (i === all.length - 1 && MD_COMMENT_START_RE.test(line))) return;
+    if (!line.trim() && (!lines.length || !lines.at(-1).trim())) return; // one blank line at most, none on top
+    lines.push(line);
+  });
+  while (lines.length && !lines.at(-1).trim()) lines.pop();
+  if (!lines.length) return '';
+  lines.push(lines.pop().trimEnd());
+  if (hasParagraphs(lines)) return lines.join('\n');
+  return lines.reduce((out, line, i) => out + (isProse(lines[i - 1]) && isProse(line) ? '\n\n' : '\n') + line);
+};
+
 export const stripMarks = t =>
   String(t || '')
     .replace(MARK_RE, '')
     .replace(/\n{3,}/g, '\n\n');
+// narration as plain text: tidied, without marks, and no blank line where a leading mark was
+export const narrText = t => stripMarks(tidyNarration(t)).replace(/^\s*\n/, '');
 
 // the functions above that tests may replace (window.DR.mock): each setter swaps the binding every caller uses
 export const mocks = {
