@@ -1,5 +1,5 @@
 /* ============ log rendering ============ */
-import { $, esc, fmt, MARK_LINE_RE, MARK_RE, stripMarks, toast } from './util.js';
+import { $, esc, fmt, MARK_LINE_RE, MARK_RE, narrText, SYS_BOX, tidyNarration, toast } from './util.js';
 import { T, tIn } from './i18n.js';
 import { choicesOff, storyLang } from './settings.js';
 import { cmdName, EMO_FB, moneyText, normEmo, STAT_LABEL } from './data.js';
@@ -102,8 +102,7 @@ export function renderLog(scroll = 'bottom') {
     if (lb) log.scrollTop = Math.max(0, lb.offsetTop - log.offsetTop - 8);
   }
 }
-const SYS_LINE_RE =
-  /(?:^|\n+)[ \t]*(\[[^\[\]\n]{2,140}\]|【[^【】\n]{2,180}】|〈[^〈〉\n]{2,180}〉|《[^《》\n]{2,180}》)[ \t]*(?=\n|$)/g;
+const SYS_LINE_RE = new RegExp(String.raw`(?:^|\n+)[ \t]*(${SYS_BOX})[ \t]*(?=\n|$)`, 'g');
 const unesc = x =>
   x
     .replace(/&quot;/g, '"')
@@ -150,14 +149,18 @@ const fmtText = h =>
     )
     .join('');
 function narrHtml(text) {
-  return fmtText(inlineSys(esc(stripMarks(text))).h);
+  return fmtText(inlineSys(esc(narrText(text))).h);
 }
 function narrWithImages(o, ti, people, sc) {
   // put portraits and scene changes where the narrator marked them
   const used = new Set();
-  let h = esc(String(o.narration || '').replace(MARK_LINE_RE, '$1'));
-  const IS = inlineSys(h);
-  h = IS.h;
+  // windows first, while a mark beside one still leaves it on its own line
+  const IS = inlineSys(esc(tidyNarration(o.narration)));
+  // \u0001 holds a line break beside a mark: a picture or window there takes it, else it stays a paragraph break
+  let h = IS.h.replace(
+    MARK_LINE_RE,
+    (m, mark) => (m[0] === '\n' ? '\u0001' : '') + mark + (m.at(-1) === '\n' ? '\u0001' : ''),
+  );
   const P = {};
   for (const p of people) P[p.npc] = p;
   const places = ti.places || [];
@@ -175,6 +178,10 @@ function narrWithImages(o, ti, people, sc) {
     used.add(name);
     return `\u0000<div class="castrow n1 inl"><figure><img class="char" alt="" data-big="${esc(p.x.id)}" data-cap="${esc(name)}" src="${imgUrl(p.x.id)}"><figcaption>${esc(name)}</figcaption></figure></div>\u0000`;
   });
+  h = h
+    .replace(/(\u0000?)\u0001+(\u0000?)([ \t]*)/g, (m, a, b, s) => (a || b ? a + b + s : '\n\n'))
+    .replace(/^\n+/, '')
+    .trimEnd();
   // people the narrator didn't mark: after the first paragraph that names them, else after the first line of dialogue
   const figOf = p =>
     `\u0000<div class="castrow n1 inl"><figure><img class="char" alt="" data-big="${esc(p.x.id)}" data-cap="${esc(p.npc)}" src="${imgUrl(p.x.id)}"><figcaption>${esc(p.npc)}</figcaption></figure></div>\u0000`;
@@ -471,7 +478,7 @@ function renderTurnInner(t, isLast) {
     : '';
   return `<div class="turn"><div class="ai">${img}<div class="body">${head}${obj}${er}
     ${o.admin && adminOn() ? adminLine(o) : ''}
-    ${o.narration ? `<div class="narr">${NW.html}</div>` : o.widget ? '' : `<p class="muted empty-reply">${T('(Empty reply) Press Rewrite below')}</p>`}
+    ${NW.html ? `<div class="narr">${NW.html}</div>` : o.widget ? '' : `<p class="muted empty-reply">${T('(Empty reply) Press Rewrite below')}</p>`}
     ${o.lang_note ? `<p class="langnote">${esc(o.lang_note)}</p>` : ''}
     ${(() => {
       const seen = new Set((NW.sysShown || []).map(sysCore));

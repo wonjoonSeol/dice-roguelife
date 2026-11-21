@@ -1,6 +1,6 @@
 /* ============ saves view ============ */
 import { host } from './host.js';
-import { $, clone, esc, noteIgnored, nowIso, stripMarks, toast, uid } from './util.js';
+import { $, clone, esc, narrText, noteIgnored, nowIso, toast, uid } from './util.js';
 import {
   dget,
   dset,
@@ -123,7 +123,8 @@ function mdTurn(t, mine) {
   const o = t.out || {};
   let s = '';
   if (o.admin) s += `> **ADMIN:** ${o.admin}\n\n`;
-  if (o.narration) s += stripMarks(o.narration).trim() + '\n\n';
+  const narration = narrText(o.narration).trim();
+  if (narration) s += narration + '\n\n';
   if (o.system && o.system.length) s += o.system.map(x => '`' + x + '`').join(' ') + '\n\n';
   const w = widgetOf(o.widget);
   if (w) s += w.markdown(o.widget);

@@ -51,7 +51,7 @@
 | `host.js`, `host-claude.js` | 호스트 어댑터: 게임이 쓰는 기능의 계약과 claude.ai 아티팩트 구현(아래 "호스트 어댑터") |
 | `i18n.js` | 화면 언어(`uiLang`), 번역(`T`, `Tc`, `tIn`, `N_`), 고정 글자 번역(`translateStatic`) |
 | `enums.js` | 저장하고 비교하는 값(성별, 출신, 게임 모드, 성좌 관계, 스킬 출처, 무공 칸)과 그 이름, 옛 저장의 한국어 값(`LEGACY`) |
-| `util.js` | 정직한 주사위(`rnd`는 `crypto.getRandomValues`), 공용 도우미(`$`, `esc`, `clone`, `toast`, `noteIgnored`, `cutLine`, `sha256Hex`), 서술 표시(`MARK_RE`) |
+| `util.js` | 정직한 주사위(`rnd`는 `crypto.getRandomValues`), 공용 도우미(`$`, `esc`, `clone`, `toast`, `noteIgnored`, `cutLine`, `sha256Hex`), 서술 표시(`MARK_RE`, `tidyNarration`: 화면과 내보내기에서만 마크다운 주석 줄을 숨기고, 빈 줄 없이 쓴 답은 서술 줄 사이를 문단으로 나눕니다. 서술자에게 보내는 기록은 `stripMarks`만 거쳐 주석이 남고, 그 주석이 계속 모델을 이끕니다) |
 | `data.js` | 데이터 테이블: 등급과 확률(`rollTier`, `tierRank`), 세계, 종족, 신분, 재능(힘이 필요한 것과 힘 없는 세계 전용은 `inPool`이 세계의 `mundane`으로 가름), 명령어(`CMDS`, 특성 표 `COMMAND_TYPES`와 `cmdIs`), 감정 |
 | `world-ext.js`, `murim.js` | 세계 애드온: 일부 세계만 가진 체계(아래 "세계 애드온"). `murim.js`는 무림의 것(경지 `REALMS`, 내공, 무공) |
 | `limits.js` | 남기는 양(`LIMITS`): 답 하나의 글자 수와 항목 수, 저장이 평생 들고 있는 양(`kept`), 한 답이 움직일 수 있는 양(`move`) |
